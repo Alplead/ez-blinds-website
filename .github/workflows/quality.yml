@@ -1,0 +1,78 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'scripts/**'
+      - '.devcontainer/**'
+      - '.github/workflows/**'
+      - '.github/release-install/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Check PHP syntax
+        run: |
+          find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Check Visual QA JavaScript syntax
+        run: node --check scripts/visual-qa.mjs
+
+      - name: Check link crawler JavaScript syntax
+        run: node --check scripts/link-check.mjs
+
+      - name: Check SEO audit JavaScript syntax
+        run: node --check scripts/seo-audit.mjs
+
+      - name: Check host readiness JavaScript syntax
+        run: node --check scripts/host-readiness.mjs
+
+      - name: Check Owner UI acceptance checker syntax
+        run: bash -n scripts/check-owner-ui-acceptance.sh
+
+      - name: Check mail delivery probe syntax
+        run: bash -n scripts/mail-delivery-probe.sh
+
+      - name: Check media readiness PHP syntax
+        run: php -l scripts/media-library-readiness.php
+
+      - name: Check staging media acceptance syntax
+        run: bash -n scripts/staging-media-acceptance.sh
+
+      - name: Check real-media visual QA JavaScript syntax
+        run: node --check scripts/real-media-visual-qa.mjs
+
+      - name: Build and validate deployment bundle
+        run: |
+          bash -n scripts/build-release-bundle.sh
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+          test -s .release/ezb-theme.zip
+          test -s .release/ezb-core.zip
+          test -s .release/SHA256SUMS
+          (cd .release && sha256sum -c SHA256SUMS)
+
+      - name: Prevent development query URLs in public theme source
+        run: |
+          if grep -R -n -F 'ezb_page=' wp-content/themes/ezb-theme; then
+            echo "Theme source must use pretty public URLs; ezb_page is development transport only."
+            exit 1
+          fi

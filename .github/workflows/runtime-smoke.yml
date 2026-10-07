@@ -1,0 +1,798 @@
+name: Runtime Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - '.devcontainer/**'
+      - 'scripts/bootstrap*.sh'
+      - 'scripts/link-check.mjs'
+      - 'scripts/seo-audit.mjs'
+      - 'scripts/host-readiness.mjs'
+      - 'scripts/media-library-readiness.php'
+      - 'scripts/check-owner-ui-acceptance.sh'
+      - 'scripts/mail-delivery-probe.sh'
+      - 'scripts/staging-media-acceptance.sh'
+      - '.github/workflows/runtime-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wordpress-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Start the same Compose stack used by Codespaces
+        run: docker compose -f .devcontainer/docker-compose.yml up -d --wait db wordpress
+
+      - name: Run the same bootstrap used by Codespaces
+        run: |
+          docker compose -f .devcontainer/docker-compose.yml run --rm bootstrap | tee /tmp/bootstrap.log
+          grep -q EZB_BOOTSTRAP_OK /tmp/bootstrap.log
+
+      - name: Verify rendered pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
+            code="$(curl -LsS -o /tmp/page.html -w '%{http_code}' "http://127.0.0.1:8080$path")"
+            echo "$path -> HTTP $code"
+            test "$code" = "200"
+          done
+
+      - name: Crawl internal pretty URLs for broken links
+        shell: bash
+        run: |
+          set -euo pipefail
+          EZB_BASE_URL=http://127.0.0.1:8080 EZB_LINK_CHECK_MAX=120 node scripts/link-check.mjs | tee /tmp/link-check.log
+          grep -q 'EZB_LINK_CHECK_PASS' /tmp/link-check.log
+
+      - name: Verify WordPress sitemap readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update blog_public 1 --allow-root >/dev/null
+
+          code="$(curl -sS -o /tmp/wp-sitemap.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap.xml')"
+          test "$code" = "200"
+          grep -q 'wp-sitemap-posts-page-1.xml' /tmp/wp-sitemap.xml
+          grep -q 'wp-sitemap-posts-ezb_project-1.xml' /tmp/wp-sitemap.xml
+
+          code="$(curl -sS -o /tmp/wp-sitemap-pages.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap-posts-page-1.xml')"
+          test "$code" = "200"
+          grep -q '/roller-blinds/' /tmp/wp-sitemap-pages.xml
+          grep -q '/retractable-flyscreens/' /tmp/wp-sitemap-pages.xml
+          grep -q '/advice/' /tmp/wp-sitemap-pages.xml
+          grep -q '/contact/' /tmp/wp-sitemap-pages.xml
+
+          code="$(curl -sS -o /tmp/wp-sitemap-projects.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap-posts-ezb_project-1.xml')"
+          test "$code" = "200"
+          grep -q '/projects/retractable-flyscreen-large-opening/' /tmp/wp-sitemap-projects.xml
+          grep -q '/projects/retractable-flyscreen-indoor-outdoor-opening/' /tmp/wp-sitemap-projects.xml
+          ! grep -q 'owner-editability-test' /tmp/wp-sitemap-projects.xml
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update blog_public 0 --allow-root >/dev/null
+
+      - name: Verify owner-editable SEO descriptions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            if ( ! post_type_supports( "page", "excerpt" ) ) {
+              fwrite( STDERR, "Page excerpts are not enabled.\n" );
+              exit( 1 );
+            }
+          ' --allow-root
+
+          curl -LsS 'http://127.0.0.1:8080/' -o /tmp/seo-home.html
+          test "$(grep -o 'name="description"' /tmp/seo-home.html | wc -l)" -eq 1
+          grep -q 'content="Melbourne window furnishings"' /tmp/seo-home.html
+
+          curl -LsS 'http://127.0.0.1:8080/roller-blinds/' -o /tmp/seo-roller.html
+          test "$(grep -o 'name="description"' /tmp/seo-roller.html | wc -l)" -eq 1
+          grep -q 'Roller blinds are a practical starting point for many rooms' /tmp/seo-roller.html
+          grep -Eq '<title>[^<]*Roller Blinds[^<]*EZ Blinds' /tmp/seo-roller.html
+          ! grep -q 'ezb_page=' /tmp/seo-roller.html
+
+          curl -LsS 'http://127.0.0.1:8080/projects/retractable-flyscreen-large-opening/' -o /tmp/seo-project.html
+          test "$(grep -o 'name="description"' /tmp/seo-project.html | wc -l)" -eq 1
+          grep -q 'Development case-study shell' /tmp/seo-project.html
+
+          curl -LsS 'http://127.0.0.1:8080/contact/' -o /tmp/seo-contact.html
+          test "$(grep -o 'name="description"' /tmp/seo-contact.html | wc -l)" -eq 0
+
+          curl -sS 'http://127.0.0.1:8080/?ezb_page=roller-blinds' -o /tmp/seo-query-roller.html
+          test "$(grep -o 'name="description"' /tmp/seo-query-roller.html | wc -l)" -eq 1
+          grep -q 'Roller blinds are a practical starting point for many rooms' /tmp/seo-query-roller.html
+
+      - name: Audit title and canonical structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          EZB_BASE_URL=http://127.0.0.1:8080 node scripts/seo-audit.mjs | tee /tmp/seo-audit.log
+          grep -q 'EZB_SEO_AUDIT_PASS' /tmp/seo-audit.log
+
+      - name: Verify reusable host readiness contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          EZB_BASE_URL=http://127.0.0.1:8080 \
+          EZB_ALLOW_HTTP=1 \
+          EZB_EXPECT_INDEXABLE=0 \
+          EZB_EXPECT_REDIRECTS=0 \
+          node scripts/host-readiness.mjs | tee /tmp/host-readiness.log
+          grep -q 'EXTERNAL_MAIL_DELIVERY=MANUAL_GATE' /tmp/host-readiness.log
+          grep -q 'EZB_HOST_READINESS_PASS' /tmp/host-readiness.log
+
+      - name: Verify prototype records exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=privacy-vs-daylight --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=retractable-flyscreen-suitability --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=when-motorisation-makes-sense --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=prototype-roller-blinds-project --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=retractable-flyscreen-large-opening --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=retractable-flyscreen-indoor-outdoor-opening --field=ID --allow-root | grep -q .
+          OWNER_TEST_ID="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=owner-editability-test --post_status=draft --field=ID --allow-root | head -1)"
+          test -n "$OWNER_TEST_ID"
+          test "$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post get "$OWNER_TEST_ID" --field=post_status --allow-root)" = "draft"
+
+      - name: Verify forwarded host URL handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -D /tmp/headers.txt -o /tmp/forwarded.html             -H 'Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Proto: https'             http://127.0.0.1:8080/advice/
+          grep -q 'preview-8080.app.github.dev' /tmp/forwarded.html
+          ! grep -q 'localhost/advice' /tmp/headers.txt
+
+      - name: Verify active preview host stays canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -D /tmp/preview-headers.txt -o /tmp/preview-body.html             -H 'Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Proto: https'             http://127.0.0.1:8080/advice/privacy-vs-daylight/
+          ! grep -qi 'location: http://localhost' /tmp/preview-headers.txt
+          ! grep -qi 'location: https://localhost' /tmp/preview-headers.txt
+
+      - name: Verify development URL bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsS http://127.0.0.1:8080/ -o /tmp/home-bridge.html
+          grep -q 'id="ezb-codespaces-url-bridge"' /tmp/home-bridge.html
+
+      - name: Verify development prototype router
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in products roller-blinds sheer-curtains plantation-shutters retractable-flyscreens motorised-blinds projects advice privacy-vs-daylight retractable-flyscreen-suitability when-motorisation-makes-sense service-areas about contact; do
+            code="$(curl -sS -o /tmp/prototype.html -w '%{http_code}' "http://127.0.0.1:8080/?ezb_page=$key")"
+            echo "$key -> HTTP $code"
+            test "$code" = "200"
+          done
+          grep -q 'id="ezb-codespaces-url-bridge"' /tmp/prototype.html
+
+      - name: Verify prototype links are server-rewritten
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "http://127.0.0.1:8080/?ezb_page=advice" -o /tmp/advice-router.html
+          grep -q 'ezb_page=products' /tmp/advice-router.html
+          grep -q 'ezb_page=advice' /tmp/advice-router.html
+          grep -q 'ezb_page=about' /tmp/advice-router.html
+          ! grep -q 'href="http://localhost' /tmp/advice-router.html
+          ! grep -q 'href="https://localhost' /tmp/advice-router.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=projects" -o /tmp/projects-router.html
+          grep -q 'ezb_page=project' /tmp/projects-router.html
+          grep -q 'prototype-roller-blinds-project' /tmp/projects-router.html
+          ! grep -q 'owner-editability-test' /tmp/projects-router.html
+
+      - name: Verify prototype query routes load theme assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "http://127.0.0.1:8080/?ezb_page=advice" -o /tmp/query-advice.html
+          grep -q 'ezb-theme-style-css' /tmp/query-advice.html
+          grep -q 'id="ezb-codespaces-url-bridge"' /tmp/query-advice.html
+          grep -q '<meta name="viewport"' /tmp/query-advice.html
+
+      - name: Verify dropdown navigation and prototype media cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "http://127.0.0.1:8080/" -o /tmp/home-nav.html
+          grep -q 'Products' /tmp/home-nav.html
+          grep -q 'Roller Blinds' /tmp/home-nav.html
+          grep -q 'Projects' /tmp/home-nav.html
+          grep -q 'Advice' /tmp/home-nav.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=products" -o /tmp/products-cards.html
+          grep -q 'ezb-card-media' /tmp/products-cards.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=projects" -o /tmp/projects-cards.html
+          grep -q 'ezb-card-media--project' /tmp/projects-cards.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=advice" -o /tmp/advice-cards.html
+          grep -q 'ezb-card-media--advice' /tmp/advice-cards.html
+
+      - name: Verify genuine-media slot fallbacks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          check_slot() {
+            label="$1"
+            url="$2"
+            file="/tmp/media-$label.html"
+            echo "Checking media slot: $label -> $url"
+            curl -sS "$url" -o "$file"
+
+            if ! grep -q 'REAL EZ PROJECT MEDIA' "$file"; then
+              echo "MISSING REAL EZ PROJECT MEDIA marker on $label"
+              grep -o -E 'ezb-media[^"< ]*|REAL EZ[^<]*' "$file" | head -30 || true
+              exit 1
+            fi
+
+            if ! grep -q 'ezb-media-slot' "$file"; then
+              echo "MISSING ezb-media-slot wrapper on $label"
+              grep -o -E 'ezb-media[^"< ]*|REAL EZ[^<]*' "$file" | head -30 || true
+              exit 1
+            fi
+          }
+
+          check_slot roller "http://127.0.0.1:8080/?ezb_page=roller-blinds"
+          check_slot shutters "http://127.0.0.1:8080/?ezb_page=plantation-shutters"
+          check_slot rfs "http://127.0.0.1:8080/?ezb_page=retractable-flyscreens"
+
+      - name: Verify WebP derivative resolves by source stem
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > '/tmp/IMAG3884~2.webp' && wp media import '/tmp/IMAG3884~2.webp' --porcelain --allow-root"
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/media-webp.html
+          grep -q 'ezb-media-slot__image' /tmp/media-webp.html
+          ! grep -q 'Roller Blinds — real EZ project media' /tmp/media-webp.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > '/tmp/EZ blinds and shutters Retractable Flyscreen S 01.webp' && wp media import '/tmp/EZ blinds and shutters Retractable Flyscreen S 01.webp' --porcelain --allow-root"
+          curl -sS "http://127.0.0.1:8080/?ezb_page=retractable-flyscreens" -o /tmp/media-rfs-webp.html
+          grep -q 'ezb-media-slot__image' /tmp/media-rfs-webp.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=project&ezb_project=retractable-flyscreen-large-opening" -o /tmp/project-media-webp.html
+          grep -q 'ezb-project-gallery' /tmp/project-media-webp.html
+          grep -q 'ezb-project-gallery__image' /tmp/project-media-webp.html
+          grep -q 'Visual grouping only; project facts remain unverified.' /tmp/project-media-webp.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=project&ezb_project=retractable-flyscreen-indoor-outdoor-opening" -o /tmp/project-media-group-b.html
+          grep -q 'ezb-project-gallery' /tmp/project-media-group-b.html
+          test "$(grep -o 'ezb-project-gallery__placeholder' /tmp/project-media-group-b.html | wc -l)" -eq 3
+          grep -q 'Only the visual grouping is treated as verified at this stage.' /tmp/project-media-group-b.html
+
+      - name: Verify real-media aspect-aware gallery fit rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $cases = array(
+              array( 1200, 1602, "contain" ),
+              array( 1500, 2000, "contain" ),
+              array( 2000, 774, "contain" ),
+              array( 2000, 1500, "cover" ),
+              array( 1920, 1080, "cover" ),
+              array( 1600, 1200, "cover" ),
+            );
+            foreach ( $cases as $case ) {
+              $actual = ezb_product_gallery_fit_mode( $case[0], $case[1] );
+              if ( $actual !== $case[2] ) {
+                fwrite( STDERR, "fit-mode mismatch for " . $case[0] . "x" . $case[1] . ": " . $actual . PHP_EOL );
+                exit( 1 );
+              }
+            }
+            echo "EZB_MEDIA_ASPECT_FIT_PASS" . PHP_EOL;
+          ' --allow-root
+
+      - name: Verify media library readiness checker contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap \
+            eval-file /opt/ezb-scripts/media-library-readiness.php --allow-root >/tmp/media-readiness-negative.log 2>&1; then
+            echo "Empty development Media Library unexpectedly passed the 25-asset readiness check."
+            exit 1
+          fi
+          grep -q 'EZB_MEDIA_READINESS_FAIL' /tmp/media-readiness-negative.log
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc '
+            set -eu
+            DATA="UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA="
+            for name in \
+              "PXL_20231017_045427584~2.webp" \
+              "IMAG3884~2.webp" \
+              "IMG_4689.webp" \
+              "EZ blinds and shutters Retractable Flyscreen S 01.webp" \
+              "EZ blinds and shutters Retractable Flyscreen S 02.webp" \
+              "EZ blinds and shutters Retractable Flyscreen S 03.webp" \
+              "IMAG3550.webp" \
+              "IMAG3554.webp" \
+              "IMAG3558.webp" \
+              "EZ blinds and shutters Roller blinds 01.webp" \
+              "EZ blinds and shutters Roller blinds 02.webp" \
+              "EZ blinds and shutters Roller blinds 03.webp" \
+              "EZ blinds and shutters Roller blinds 06.webp" \
+              "EZ blinds and shutters Roller blinds 07.webp" \
+              "EZ blinds and shutters Roller blinds 08.webp" \
+              "EZ blinds and shutters Plantation shutters 01.webp" \
+              "EZ blinds and shutters Plantation shutters  11.webp" \
+              "EZ blinds and shutters Plantation shutters  14.webp" \
+              "EZ blinds and shutters Plantation shutters  18.webp" \
+              "EZ blinds and shutters Retractable Flyscreen S 04.webp" \
+              "IMAG4409.webp" \
+              "IMAG4430.webp" \
+              "IMAG4641 (2).webp" \
+              "IMAG6334.webp" \
+              "IMAG6475.webp"; do
+              printf "%s" "$DATA" | base64 -d > "/tmp/$name"
+              wp media import "/tmp/$name" --allow-root --porcelain >/dev/null
+            done
+          '
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap \
+            eval-file /opt/ezb-scripts/media-library-readiness.php --allow-root | tee /tmp/media-readiness-positive.log
+
+          grep -q 'EZB_MEDIA_LIBRARY_READINESS_PASS' /tmp/media-readiness-positive.log
+          grep -q 'expected_assets=25' /tmp/media-readiness-positive.log
+          grep -q 'resolved_unique_attachments=25' /tmp/media-readiness-positive.log
+          grep -q 'media_budget=max_2500px,max_750KB_per_source_webp' /tmp/media-readiness-positive.log
+          grep -q 'REAL_IMAGE_VISUAL_QA=MANUAL_GATE' /tmp/media-readiness-positive.log
+          test "$(grep -c '^MEDIA_OK|' /tmp/media-readiness-positive.log)" -eq 25
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/media-gallery-roller.html
+          test "$(grep -o 'ezb-product-gallery__image' /tmp/media-gallery-roller.html | wc -l)" -eq 6
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=sheer-curtains" -o /tmp/media-gallery-sheer.html
+          grep -q 'ezb-media-slot__image' /tmp/media-gallery-sheer.html
+          ! grep -q 'ezb-product-gallery__image' /tmp/media-gallery-sheer.html
+          ! grep -q 'PXL_20240329' /tmp/media-gallery-sheer.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=plantation-shutters" -o /tmp/media-gallery-shutters.html
+          test "$(grep -o 'ezb-product-gallery__image' /tmp/media-gallery-shutters.html | wc -l)" -eq 4
+          ! grep -q 'Plantation shutters  03' /tmp/media-gallery-shutters.html
+          ! grep -q 'Plantation shutters  05' /tmp/media-gallery-shutters.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=retractable-flyscreens" -o /tmp/media-gallery-rfs.html
+          test "$(grep -o 'ezb-product-gallery__image' /tmp/media-gallery-rfs.html | wc -l)" -eq 10
+
+      - name: Verify Owner UI acceptance checker contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if bash scripts/check-owner-ui-acceptance.sh >/tmp/owner-ui-negative.log 2>&1; then
+            echo "Untouched acceptance draft unexpectedly passed the manual marker check."
+            exit 1
+          fi
+          grep -q 'OWNER_UI_ACCEPTANCE_PENDING' /tmp/owner-ui-negative.log
+
+          ORIGINAL_CONTENT="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list \
+            --post_type=ezb_project \
+            --name=owner-editability-test \
+            --post_status=draft \
+            --field=post_content \
+            --allow-root | head -1)"
+
+          TEST_ID="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list \
+            --post_type=ezb_project \
+            --name=owner-editability-test \
+            --post_status=draft \
+            --field=ID \
+            --allow-root | head -1)"
+          test -n "$TEST_ID"
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post update "$TEST_ID" \
+            --post_content="$ORIGINAL_CONTENT<p>OWNER-UI-ACCEPTED</p>" \
+            --allow-root >/dev/null
+
+          bash scripts/check-owner-ui-acceptance.sh | tee /tmp/owner-ui-positive.log
+          grep -q 'EZB_OWNER_UI_ACCEPTANCE_PASS' /tmp/owner-ui-positive.log
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post update "$TEST_ID" \
+            --post_content="$ORIGINAL_CONTENT" \
+            --post_status=draft \
+            --allow-root >/dev/null
+
+          if bash scripts/check-owner-ui-acceptance.sh >/tmp/owner-ui-restored.log 2>&1; then
+            echo "Restored acceptance draft unexpectedly retained the manual marker."
+            exit 1
+          fi
+          grep -q 'OWNER_UI_ACCEPTANCE_PENDING' /tmp/owner-ui-restored.log
+
+      - name: Verify owner-editable product introduction
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/product-intro-seeded.html
+          grep -q 'Roller blinds are a practical starting point for many rooms' /tmp/product-intro-seeded.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            PAGE_ID=\$(wp post list --post_type=page --name=roller-blinds --field=ID --allow-root | head -1)
+            test -n \"\$PAGE_ID\"
+            wp post update \"\$PAGE_ID\" --post_excerpt='Owner roller intro proof.' --allow-root >/dev/null
+          "
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/product-intro-query-owner.html
+          grep -q '<p class="ezb-lede">Owner roller intro proof.</p>' /tmp/product-intro-query-owner.html
+
+          curl -LsS "http://127.0.0.1:8080/roller-blinds/" -o /tmp/product-intro-pretty-owner.html
+          grep -q '<p class="ezb-lede">Owner roller intro proof.</p>' /tmp/product-intro-pretty-owner.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            PAGE_ID=\$(wp post list --post_type=page --name=roller-blinds --field=ID --allow-root | head -1)
+            wp post update \"\$PAGE_ID\" --post_excerpt='Roller blinds are a practical starting point for many rooms because the design is visually simple and the choice can be matched to privacy, glare and light-control needs.' --allow-root >/dev/null
+          "
+
+      - name: Verify owner-editable Featured Image override
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > /tmp/owner-featured-roller.webp
+            ATTACHMENT_ID=\$(wp media import /tmp/owner-featured-roller.webp --porcelain --allow-root)
+            PAGE_ID=\$(wp post list --post_type=page --name=roller-blinds --field=ID --allow-root | head -1)
+            wp post meta update \"\$PAGE_ID\" _thumbnail_id \"\$ATTACHMENT_ID\" --allow-root >/dev/null
+          "
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/owner-featured-roller.html
+          grep -q 'owner-featured-roller' /tmp/owner-featured-roller.html
+          grep -q 'ezb-media-slot__image' /tmp/owner-featured-roller.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > /tmp/owner-project-featured.webp
+            ATTACHMENT_ID=\$(wp media import /tmp/owner-project-featured.webp --porcelain --allow-root)
+            PROJECT_ID=\$(wp post create --post_type=ezb_project --post_status=publish --post_title='Owner Editable Project Proof' --post_name=owner-editable-project-proof --post_content='<p>Owner editable project body proof.</p>' --porcelain --allow-root)
+            wp post meta update \"\$PROJECT_ID\" _thumbnail_id \"\$ATTACHMENT_ID\" --allow-root >/dev/null
+          "
+          curl -sS "http://127.0.0.1:8080/?ezb_page=project&ezb_project=owner-editable-project-proof" -o /tmp/owner-project-proof.html
+          grep -q 'Owner Editable Project Proof' /tmp/owner-project-proof.html
+          grep -q 'Owner editable project body proof.' /tmp/owner-project-proof.html
+          grep -q 'owner-project-featured' /tmp/owner-project-proof.html
+          grep -q 'ezb-project-gallery__image' /tmp/owner-project-proof.html
+
+      - name: Verify owner-published Project appears without code
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "http://127.0.0.1:8080/?ezb_page=projects" -o /tmp/projects-dynamic-owner.html
+          grep -q 'Owner Editable Project Proof' /tmp/projects-dynamic-owner.html
+          grep -q 'owner-project-featured' /tmp/projects-dynamic-owner.html
+          grep -q 'Retractable Flyscreen' /tmp/projects-dynamic-owner.html
+          grep -q 'Indoor / Outdoor Flyscreen' /tmp/projects-dynamic-owner.html
+          ! grep -q 'owner-editability-test' /tmp/projects-dynamic-owner.html
+          ! grep -q 'prototype-retractable-flyscreen-project' /tmp/projects-dynamic-owner.html
+
+      - name: Verify query-route shortcodes execute
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "http://127.0.0.1:8080/?ezb_page=contact" -o /tmp/contact-query.html
+          grep -q 'name="ezb_quote_nonce"' /tmp/contact-query.html
+          grep -q 'name="name"' /tmp/contact-query.html
+          grep -q 'name="product"' /tmp/contact-query.html
+
+      - name: Verify quote form contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsS http://127.0.0.1:8080/contact/ -o /tmp/contact.html
+          grep -q 'name="ezb_quote_nonce"' /tmp/contact.html
+          grep -q 'name="name"' /tmp/contact.html
+          grep -q 'name="phone"' /tmp/contact.html
+          grep -q 'name="email"' /tmp/contact.html
+          grep -q 'name="product"' /tmp/contact.html
+          grep -q 'name="message"' /tmp/contact.html
+
+      - name: Verify owner-editable product FAQs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/faq-seeded.html
+          grep -q 'Should the blind sit inside or outside the window opening?' /tmp/faq-seeded.html
+          grep -q 'Can roller blinds be motorised?' /tmp/faq-seeded.html
+          grep -q 'wp-block-details' /tmp/faq-seeded.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            PAGE_ID=\$(wp post list --post_type=page --name=roller-blinds --field=ID --allow-root | head -1)
+            test -n \"\$PAGE_ID\"
+            wp post update \"\$PAGE_ID\"               --post_content='<!-- wp:details --><details><summary>Owner editable FAQ proof?</summary><!-- wp:paragraph --><p>This FAQ was changed through WordPress Page content without changing the product template.</p><!-- /wp:paragraph --></details><!-- /wp:details -->'               --allow-root >/dev/null
+          "
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/faq-owner-edited.html
+          grep -q 'Owner editable FAQ proof?' /tmp/faq-owner-edited.html
+          grep -q 'This FAQ was changed through WordPress Page content without changing the product template.' /tmp/faq-owner-edited.html
+          ! grep -q 'Should the blind sit inside or outside the window opening?' /tmp/faq-owner-edited.html
+
+      - name: Verify owner-published Advice appears without code
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            ADVICE_PARENT_ID=\$(wp post list --post_type=page --name=advice --field=ID --allow-root | head -1)
+            test -n \"\$ADVICE_PARENT_ID\"
+            wp post create               --post_type=page               --post_status=publish               --post_title='Owner Advice Publishing Proof'               --post_name=owner-advice-publishing-proof               --post_parent=\"\$ADVICE_PARENT_ID\"               --post_excerpt='Owner-published advice excerpt.'               --post_content='<p>Owner-published advice body proof.</p>'               --porcelain               --allow-root
+          " > /tmp/owner-advice-id.txt
+          test -s /tmp/owner-advice-id.txt
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=advice" -o /tmp/advice-dynamic.html
+          grep -q 'Privacy vs daylight: where should you start?' /tmp/advice-dynamic.html
+          grep -q 'What makes an opening suitable for a retractable flyscreen?' /tmp/advice-dynamic.html
+          grep -q 'When does motorisation make sense?' /tmp/advice-dynamic.html
+          grep -q 'Owner Advice Publishing Proof' /tmp/advice-dynamic.html
+          grep -q 'Owner-published advice excerpt.' /tmp/advice-dynamic.html
+          grep -q '/advice/owner-advice-publishing-proof/' /tmp/advice-dynamic.html
+
+          code="$(curl -LsS -o /tmp/owner-advice-page.html -w '%{http_code}' 'http://127.0.0.1:8080/advice/owner-advice-publishing-proof/')"
+          test "$code" = "200"
+          grep -q 'Owner Advice Publishing Proof' /tmp/owner-advice-page.html
+          grep -q 'Owner-published advice body proof.' /tmp/owner-advice-page.html
+          grep -q '<main' /tmp/owner-advice-page.html
+          grep -q 'wp--skip-link--target' /tmp/owner-advice-page.html
+
+      - name: Verify owner-editable site CTA settings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sS "http://127.0.0.1:8080/" -o /tmp/cta-default.html
+          grep -q 'Ready to talk through your windows?' /tmp/cta-default.html
+          grep -q 'Free Measure &amp; Quote' /tmp/cta-default.html
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            wp option update ezb_cta_heading 'Owner CTA heading proof' --allow-root >/dev/null
+            wp option update ezb_cta_body 'Owner CTA body proof.' --allow-root >/dev/null
+            wp option update ezb_cta_button_label 'Owner CTA button proof' --allow-root >/dev/null
+            wp option update ezb_public_phone '+61 400 000 000' --allow-root >/dev/null
+            wp option update ezb_public_email 'owner-cta@example.com' --allow-root >/dev/null
+          "
+
+          echo "CTA options after update:"
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
+            for key in ezb_cta_heading ezb_cta_body ezb_cta_button_label ezb_public_phone ezb_public_email; do
+              printf '%s=' "\$key"
+              wp option get "\$key" --allow-root
+            done
+          "
+
+          curl -sS "http://127.0.0.1:8080/" -o /tmp/cta-owner.html
+          echo "Rendered CTA evidence:"
+          grep -o -E 'Owner CTA[^<]*|tel:[^"]+|mailto:[^"]+|href="[^"]*contact[^"]*"' /tmp/cta-owner.html || true
+
+          grep -q 'Owner CTA heading proof' /tmp/cta-owner.html
+          grep -q 'Owner CTA body proof.' /tmp/cta-owner.html
+          grep -q 'Owner CTA button proof' /tmp/cta-owner.html
+          grep -q 'tel:+61400000000' /tmp/cta-owner.html
+          grep -q 'mailto:owner-cta@example.com' /tmp/cta-owner.html
+          grep -q 'contact/' /tmp/cta-owner.html
+
+      - name: Verify quote form submission contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc '
+            mkdir -p /var/www/html/wp-content/mu-plugins
+            printf "%s\n" "<?php" "add_filter( '\''pre_wp_mail'\'', function ( \$return, \$atts ) { \$to = is_array( \$atts['\''to'\'' ] ) ? implode( '\'', '\'', \$atts['\''to'\'' ] ) : \$atts['\''to'\'' ]; file_put_contents( '\''/tmp/ezb-ci-mail-to.txt'\'', \$to ); return true; }, 10, 2 );" > /var/www/html/wp-content/mu-plugins/ezb-ci-mail.php
+          '
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ezb_quote_recipient_email 'quotes-ci@example.com' --allow-root >/dev/null
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=contact" -o /tmp/contact-submit.html
+          NONCE="$(grep -o 'name="ezb_quote_nonce" value="[^"]*"' /tmp/contact-submit.html | sed -E 's/.*value="([^"]*)"/\1/' | head -1)"
+          test -n "$NONCE"
+
+          VALID_CODE="$(curl -sS -o /tmp/valid-submit-body.html -D /tmp/valid-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Form Test'             --data-urlencode 'email=ci-form@example.com'             --data-urlencode 'suburb=Melbourne 3000'             --data-urlencode 'product=Roller Blinds'             --data-urlencode 'message=Runtime submission contract test.')"
+          test "$VALID_CODE" = "302"
+          grep -qi 'location: .*quote_status=sent' /tmp/valid-submit-headers.txt
+          test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "quotes-ci@example.com"
+
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ezb_quote_recipient_email '' --allow-root >/dev/null
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update admin_email 'admin-fallback@example.com' --allow-root >/dev/null
+
+          FALLBACK_CODE="$(curl -sS -o /tmp/fallback-submit-body.html -D /tmp/fallback-submit-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Recipient Fallback' \
+            --data-urlencode 'email=ci-fallback@example.com' \
+            --data-urlencode 'product=Other / Not sure' \
+            --data-urlencode 'message=Recipient fallback contract test.')"
+          test "$FALLBACK_CODE" = "302"
+          grep -qi 'location: .*quote_status=sent' /tmp/fallback-submit-headers.txt
+          test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "admin-fallback@example.com"
+
+          ERROR_CODE="$(curl -sS -o /tmp/error-submit-body.html -D /tmp/error-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Missing Contact')"
+          test "$ERROR_CODE" = "302"
+          grep -qi 'location: .*quote_status=error' /tmp/error-submit-headers.txt
+
+          HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'website=bot-filled-this'             --data-urlencode 'name=Bot')"
+          test "$HONEYPOT_CODE" = "302"
+          grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
+
+          INVALID_NONCE_CODE="$(curl -sS -o /tmp/invalid-nonce-body.html -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode 'ezb_quote_nonce=invalid-nonce'             --data-urlencode 'name=Bad Nonce'             --data-urlencode 'phone=0400000000')"
+          test "$INVALID_NONCE_CODE" = "403"
+          grep -q 'Invalid request' /tmp/invalid-nonce-body.html
+
+      - name: Verify reusable mail delivery probe contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          EZB_BASE_URL=http://127.0.0.1:8080 \
+          EZB_ALLOW_HTTP=1 \
+          EZB_MAIL_PROBE_TOKEN=EZB-CI-MAIL-PROBE \
+          bash scripts/mail-delivery-probe.sh | tee /tmp/mail-probe.log
+          grep -q 'EZB_MAIL_PROBE_SUBMISSION_PASS' /tmp/mail-probe.log
+          grep -q 'token=EZB-CI-MAIL-PROBE' /tmp/mail-probe.log
+          grep -q 'MAILBOX_CONFIRMATION_REQUIRED' /tmp/mail-probe.log
+
+      - name: Verify pretty URL canonical emission
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sS             -H 'Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Host: preview-8080.app.github.dev'             -H 'X-Forwarded-Proto: https'             'http://127.0.0.1:8080/roller-blinds/'             -o /tmp/canonical-roller.html
+
+          grep -q 'rel="canonical"' /tmp/canonical-roller.html
+          grep -Fq 'https://preview-8080.app.github.dev/roller-blinds/' /tmp/canonical-roller.html
+          grep -Fq 'https://preview-8080.app.github.dev/wp-content/themes/ezb-theme/style.css' /tmp/canonical-roller.html
+          grep -Fq 'https://preview-8080.app.github.dev/wp-content/themes/ezb-theme/assets/js/site.js' /tmp/canonical-roller.html
+          ! grep -Fq 'https://localhost' /tmp/canonical-roller.html
+          ! grep -Fq 'http://localhost' /tmp/canonical-roller.html
+          ! grep -Fq 'https://127.0.0.1' /tmp/canonical-roller.html
+          ! grep -Fq 'http://127.0.0.1' /tmp/canonical-roller.html
+          ! grep -q 'ezb_page=roller-blinds' /tmp/canonical-roller.html
+
+      - name: Verify provisional legacy redirect registry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REDIRECT_MAP="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $allowed_statuses = array( "verified_redirect", "owner_decision" );
+            $registry = ezb_legacy_redirect_registry();
+            $verified = 0;
+            $decisions = 0;
+
+            foreach ( $registry as $source => $entry ) {
+              if ( $source !== ezb_normalise_request_path( $source ) ) {
+                fwrite( STDERR, "non-normalised redirect source: " . $source . PHP_EOL );
+                exit( 1 );
+              }
+
+              $status = isset( $entry["status"] ) ? $entry["status"] : "";
+              $target = isset( $entry["target"] ) ? $entry["target"] : "";
+
+              if ( ! in_array( $status, $allowed_statuses, true ) ) {
+                fwrite( STDERR, "invalid redirect status: " . $source . " => " . $status . PHP_EOL );
+                exit( 1 );
+              }
+
+              if ( "verified_redirect" === $status ) {
+                $verified++;
+                if ( "" === $target || $source === $target ) {
+                  fwrite( STDERR, "verified redirect must have a non-self target: " . $source . PHP_EOL );
+                  exit( 1 );
+                }
+              }
+
+              if ( "owner_decision" === $status ) {
+                $decisions++;
+                if ( "" !== $target ) {
+                  fwrite( STDERR, "owner_decision must not carry a redirect target: " . $source . PHP_EOL );
+                  exit( 1 );
+                }
+              }
+
+              echo $source . "|" . $status . "|" . $target . "|" . ezb_legacy_redirect_target( $source ) . PHP_EOL;
+            }
+
+            echo "COUNTS|verified=" . $verified . "|owner_decision=" . $decisions . PHP_EOL;
+          ' --allow-root)"
+
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/retractable-fly-screen/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/|verified_redirect|/projects/|/projects/'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/page/2/|verified_redirect|/projects/|/projects/'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/category/roller-blinds/|verified_redirect|/roller-blinds/|/roller-blinds/'
+
+          for source in \
+            /roman-blinds/ \
+            /panel-guide-blinds/ \
+            /venetian-blinds/ \
+            /portfolio/venetian-blinds/ \
+            /2018/02/04/roller-blinds-showcase/ \
+            /2018/02/04/plantation-shutters-showcase/ \
+            /2018/02/04/roman-blinds-showcase/ \
+            /2018/02/04/panel-guide-blinds-showcase/ \
+            /2018/02/04/venetian-blinds-showcase/ \
+            /2018/10/06/retractable-fly-screen-showcase/; do
+            printf '%s\n' "$REDIRECT_MAP" | grep -Fxq "$source|owner_decision||"
+          done
+
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq 'COUNTS|verified=4|owner_decision=10'
+
+          # Development must not actually issue the launch redirects.
+          code="$(curl -sS -o /tmp/dev-legacy-route.html -w '%{http_code}' 'http://127.0.0.1:8080/portfolio/')"
+          test "$code" != "301"
+
+      - name: Verify fail-closed development indexing protection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Simulate an accidental database change that would normally allow indexing.
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update blog_public 1 --allow-root >/dev/null
+
+          curl -sS -D /tmp/dev-robots-headers.txt "http://127.0.0.1:8080/?ezb_page=products" -o /tmp/dev-robots-page.html
+          grep -qi '^x-robots-tag:.*noindex' /tmp/dev-robots-headers.txt
+          { grep -qi 'name="robots"' /tmp/dev-robots-page.html || grep -qi "name='robots'" /tmp/dev-robots-page.html; }
+          grep -qi 'noindex' /tmp/dev-robots-page.html
+          grep -qi 'nofollow' /tmp/dev-robots-page.html
+
+          curl -sS "http://127.0.0.1:8080/robots.txt" -o /tmp/dev-robots.txt
+          grep -Fxq 'User-agent: *' /tmp/dev-robots.txt
+          grep -Fxq 'Disallow: /' /tmp/dev-robots.txt
+
+          # Restore the normal development database setting.
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update blog_public 0 --allow-root >/dev/null
+
+      - name: Verify development safety and accessibility markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          BLOG_PUBLIC="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option get blog_public --allow-root)"
+          echo "blog_public=$BLOG_PUBLIC"
+          test "$BLOG_PUBLIC" = "0"
+
+          curl -LsS http://127.0.0.1:8080/ -o /tmp/home.html
+          grep -q 'Skip to content' /tmp/home.html
+          grep -q 'wp--skip-link--target' /tmp/home.html
+          grep -q '<main' /tmp/home.html
+
+      - name: Verify visual interaction script is loaded
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsS http://127.0.0.1:8080/ -o /tmp/home-motion.html
+          grep -q 'ezb-theme-site-js' /tmp/home-motion.html
+          grep -Eq 'assets/js/site\.js\?ver=' /tmp/home-motion.html
+
+      - name: Verify theme stylesheet is loaded
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsS http://127.0.0.1:8080/ -o /tmp/home-style.html
+          grep -q 'ezb-theme-style-css' /tmp/home-style.html
+          grep -Eq 'style\.css\?ver=' /tmp/home-style.html
+
+      - name: Show service state
+        if: always()
+        run: docker compose -f .devcontainer/docker-compose.yml ps
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f .devcontainer/docker-compose.yml logs --no-color db wordpress bootstrap
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f .devcontainer/docker-compose.yml down -v

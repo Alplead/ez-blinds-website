@@ -1,0 +1,70 @@
+name: Release Install Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'scripts/build-release-bundle.sh'
+      - 'scripts/release-install-smoke.sh'
+      - '.github/release-install/**'
+      - '.github/workflows/release-install-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Build release bundle
+        run: |
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+
+      - name: Start clean WordPress staging stack
+        run: docker compose -f .github/release-install/docker-compose.yml up -d --wait release-db release-wordpress
+
+      - name: Install release ZIPs into clean WordPress
+        run: |
+          docker compose -f .github/release-install/docker-compose.yml run --rm release-bootstrap | tee /tmp/release-install.log
+          grep -q 'EZB_RELEASE_INSTALL_PASS' /tmp/release-install.log
+
+      - name: Verify installed site responds
+        run: |
+          set -euo pipefail
+          code="$(curl -LsS -o /tmp/release-home.html -w '%{http_code}' http://127.0.0.1:8081/)"
+          test "$code" = "200"
+          grep -q 'ezb-theme-style-css' /tmp/release-home.html
+          grep -q 'Ready to talk through your windows?' /tmp/release-home.html
+          grep -q 'Free Measure &amp; Quote' /tmp/release-home.html
+          ! grep -q 'ezb_page=' /tmp/release-home.html
+
+      - name: Publish verified release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezb-release-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .release/ezb-theme.zip
+            .release/ezb-core.zip
+            .release/RELEASE_METADATA.txt
+            .release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show release stack logs on failure
+        if: failure()
+        run: docker compose -f .github/release-install/docker-compose.yml logs --no-color release-db release-wordpress release-bootstrap
+
+      - name: Tear down release stack
+        if: always()
+        run: docker compose -f .github/release-install/docker-compose.yml down -v
