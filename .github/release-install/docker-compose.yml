@@ -1,0 +1,61 @@
+services:
+  release-db:
+    image: mariadb:11
+    restart: "no"
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_ROOT_PASSWORD: root
+    volumes:
+      - release_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  release-wordpress:
+    image: wordpress:php8.3-apache
+    restart: "no"
+    depends_on:
+      release-db:
+        condition: service_healthy
+    ports:
+      - "8081:80"
+    environment:
+      WORDPRESS_DB_HOST: release-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: "1"
+      WP_ENVIRONMENT_TYPE: staging
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'staging');
+    volumes:
+      - release_wp_data:/var/www/html
+
+  release-bootstrap:
+    image: wordpress:cli
+    user: "0:0"
+    restart: "no"
+    depends_on:
+      release-db:
+        condition: service_healthy
+      release-wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: release-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WP_ENVIRONMENT_TYPE: staging
+    volumes:
+      - release_wp_data:/var/www/html
+      - ../../.release:/release:ro
+      - ../../scripts/release-install-smoke.sh:/opt/ezb-release-install-smoke.sh:ro
+    entrypoint: ["/bin/sh", "/opt/ezb-release-install-smoke.sh"]
+
+volumes:
+  release_db_data:
+  release_wp_data:
