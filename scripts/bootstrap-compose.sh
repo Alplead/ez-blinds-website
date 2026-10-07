@@ -11,9 +11,14 @@ until [ -f wp-config.php ]; do
   sleep 2
 done
 
-mkdir -p wp-content/uploads
-chown -R 33:33 wp-content/uploads
-chmod 775 wp-content/uploads
+repair_upload_permissions() {
+  mkdir -p wp-content/uploads
+  chown -R 33:33 wp-content/uploads
+  find wp-content/uploads -type d -exec chmod 775 {} +
+  find wp-content/uploads -type f -exec chmod 664 {} +
+}
+
+repair_upload_permissions
 
 echo "Waiting for database..."
 i=0
@@ -64,5 +69,6 @@ fi
 
 wp rewrite structure '/%postname%/' --allow-root >/dev/null
 wp rewrite flush --hard --allow-root >/dev/null
+repair_upload_permissions
 
 echo "EZB_BOOTSTRAP_OK"
