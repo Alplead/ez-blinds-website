@@ -179,22 +179,22 @@ function ezb_print_social_metadata() {
 		return;
 	}
 
-	printf( "<meta property="og:title" content="%s">\n", esc_attr( $title ) );
-	printf( "<meta property="og:type" content="%s">\n", esc_attr( $type ) );
-	printf( "<meta property="og:url" content="%s">\n", esc_url( $url ) );
-	printf( "<meta property="og:site_name" content="%s">\n", esc_attr( get_bloginfo( 'name' ) ) );
+	printf( '<meta property="og:title" content="%s">' . "\n", esc_attr( $title ) );
+	printf( '<meta property="og:type" content="%s">' . "\n", esc_attr( $type ) );
+	printf( '<meta property="og:url" content="%s">' . "\n", esc_url( $url ) );
+	printf( '<meta property="og:site_name" content="%s">' . "\n", esc_attr( get_bloginfo( 'name' ) ) );
 
 	if ( '' !== $description ) {
-		printf( "<meta property="og:description" content="%s">\n", esc_attr( $description ) );
-		printf( "<meta name="twitter:description" content="%s">\n", esc_attr( $description ) );
+		printf( '<meta property="og:description" content="%s">' . "\n", esc_attr( $description ) );
+		printf( '<meta name="twitter:description" content="%s">' . "\n", esc_attr( $description ) );
 	}
 
 	if ( '' !== $image ) {
-		printf( "<meta property="og:image" content="%s">\n", esc_url( $image ) );
+		printf( '<meta property="og:image" content="%s">' . "\n", esc_url( $image ) );
 	}
 
-	printf( "<meta name="twitter:card" content="%s">\n", esc_attr( $image ? 'summary_large_image' : 'summary' ) );
-	printf( "<meta name="twitter:title" content="%s">\n", esc_attr( $title ) );
+	printf( '<meta name="twitter:card" content="%s">' . "\n", esc_attr( $image ? 'summary_large_image' : 'summary' ) );
+	printf( '<meta name="twitter:title" content="%s">' . "\n", esc_attr( $title ) );
 }
 add_action( 'wp_head', 'ezb_print_social_metadata', 21 );
 
