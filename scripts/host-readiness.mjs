@@ -7,6 +7,7 @@ const base = new URL(rawBase);
 const allowHttp = process.env.EZB_ALLOW_HTTP === '1';
 const expectIndexable = process.env.EZB_EXPECT_INDEXABLE !== '0';
 const expectRedirects = process.env.EZB_EXPECT_REDIRECTS !== '0';
+const allowDevTransport = process.env.EZB_ALLOW_DEV_TRANSPORT === '1';
 
 if (base.protocol !== 'https:' && !allowHttp) {
   throw new Error('host readiness requires HTTPS unless EZB_ALLOW_HTTP=1');
@@ -92,7 +93,7 @@ for (const path of canonicalRoutes) {
   }
 
   const html = await response.text();
-  if (html.includes('ezb_page=')) {
+  if (html.includes('ezb_page=') && !allowDevTransport) {
     failures.push(`${path} leaked development ezb_page transport into public HTML`);
   }
 
@@ -187,7 +188,8 @@ if (expectRedirects) {
 }
 
 console.log(`EZB_HOST_READINESS base=${base.href}`);
-console.log(`mode indexable=${expectIndexable ? 'yes' : 'no'} redirects=${expectRedirects ? 'yes' : 'no'}`);
+console.log(`mode indexable=${expectIndexable ? 'yes' : 'no'} redirects=${expectRedirects ? 'yes' : 'no'} devTransport=${allowDevTransport ? 'allowed' : 'rejected'}`);
+if (allowDevTransport) notes.push('development ezb_page transport explicitly allowed for prototype runtime only');
 for (const note of notes) console.log(`NOTE ${note}`);
 
 if (failures.length) {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/']);
 
-async function check({ name, indexable = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', redirectPath = '', expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', redirectPath = '', expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -33,7 +33,7 @@ async function check({ name, indexable = false, missingNoindexPath = '', forceNo
   let result;
   try {
     result = await new Promise((resolve, reject) => {
-      const env = { ...process.env, EZB_BASE_URL: `http://127.0.0.1:${server.address().port}/`, EZB_ALLOW_HTTP: '1', EZB_EXPECT_INDEXABLE: indexable ? '1' : '0', EZB_EXPECT_REDIRECTS: '0' };
+      const env = { ...process.env, EZB_BASE_URL: `http://127.0.0.1:${server.address().port}/`, EZB_ALLOW_HTTP: '1', EZB_EXPECT_INDEXABLE: indexable ? '1' : '0', EZB_EXPECT_REDIRECTS: '0', EZB_ALLOW_DEV_TRANSPORT: allowDevTransport ? '1' : '0' };
       const child = spawn(process.execPath, [script], { env });
       let output = '';
       child.stdout.on('data', data => { output += data.toString(); });
@@ -55,7 +55,8 @@ async function check({ name, indexable = false, missingNoindexPath = '', forceNo
 await check({ name: 'staging all seven routes noindex' });
 await check({ name: 'secondary route missing noindex rejected', missingNoindexPath: '/contact/', expectedError: '/contact/ lacks noindex protection' });
 await check({ name: 'staging dev query leak rejected', leakPath: '/advice/', expectedError: '/advice/ leaked development' });
+await check({ name: 'prototype runtime explicit dev transport opt-in', allowDevTransport: true, leakPath: '/advice/' });
 await check({ name: 'indexable release mode clean', indexable: true });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=6');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=7');

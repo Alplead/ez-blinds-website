@@ -188,6 +188,7 @@ jobs:
           EZB_ALLOW_HTTP=1 \
           EZB_EXPECT_INDEXABLE=0 \
           EZB_EXPECT_REDIRECTS=0 \
+          EZB_ALLOW_DEV_TRANSPORT=1 \
           node scripts/host-readiness.mjs | tee /tmp/host-readiness.log
           grep -q 'EXTERNAL_MAIL_DELIVERY=MANUAL_GATE' /tmp/host-readiness.log
           grep -q 'EZB_HOST_READINESS_PASS' /tmp/host-readiness.log
