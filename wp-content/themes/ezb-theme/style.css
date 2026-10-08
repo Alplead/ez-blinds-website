@@ -1262,3 +1262,53 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 		transition: none !important;
 	}
 }
+
+
+/* Product-to-Blog internal guide link */
+.ezb-related-guide {
+	border-top: 1px solid rgba(179, 138, 73, 0.24);
+	border-bottom: 1px solid rgba(179, 138, 73, 0.24);
+	background: linear-gradient(135deg, #fcfaf6 0%, #f5ede2 100%);
+}
+
+.ezb-related-guide__inner {
+	max-width: 900px;
+	padding: clamp(30px, 5vw, 52px);
+	border-left: 2px solid var(--ezb-gold);
+}
+
+.ezb-related-guide__inner h2 {
+	margin-top: 0;
+	margin-bottom: 14px;
+}
+
+.ezb-related-guide__inner > p:not(.ezb-eyebrow) {
+	max-width: 760px;
+	color: var(--ezb-muted);
+}
+
+.ezb-related-guide__link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	color: var(--ezb-accent-dark);
+	font-weight: 750;
+	text-decoration-color: rgba(179, 138, 73, 0.55);
+	text-underline-offset: 0.22em;
+}
+
+.ezb-related-guide__link::after {
+	content: "→";
+	transition: transform 180ms ease;
+}
+
+.ezb-related-guide__link:hover::after,
+.ezb-related-guide__link:focus-visible::after {
+	transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ezb-related-guide__link::after {
+		transition: none;
+	}
+}
