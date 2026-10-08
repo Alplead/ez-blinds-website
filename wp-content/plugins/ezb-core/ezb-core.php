@@ -36,7 +36,7 @@ function ezb_current_meta_description() {
 
 	$description = '';
 
-	if ( $post instanceof WP_Post && in_array( $post->post_type, array( 'page', 'ezb_project' ), true ) ) {
+	if ( $post instanceof WP_Post && in_array( $post->post_type, array( 'page', 'post', 'ezb_project' ), true ) ) {
 		$description = trim( wp_strip_all_tags( $post->post_excerpt ) );
 	}
 
@@ -442,6 +442,56 @@ function ezb_seed_starter_blog_posts() {
 	}
 }
 add_action( 'init', 'ezb_seed_starter_blog_posts', 34 );
+
+/**
+ * Connect active product pages to one useful Blog guide without duplicating
+ * the full article on the sales page. If the guide does not exist, render
+ * nothing so production can fail closed until content is approved.
+ */
+function ezb_related_guide_map() {
+	return array(
+		'roller-blinds'          => 'roller-blinds-blockout-vs-sunscreen',
+		'sheer-curtains'         => 'sheer-curtains-privacy-layering',
+		'plantation-shutters'    => 'plantation-shutters-before-you-choose',
+		'retractable-flyscreens' => 'retractable-flyscreens-opening-suitability',
+		'motorised-blinds'       => 'motorised-blinds-when-worth-it',
+	);
+}
+
+add_shortcode(
+	'ezb_related_guide',
+	function ( $atts ) {
+		$atts = shortcode_atts(
+			array( 'product' => '' ),
+			$atts,
+			'ezb_related_guide'
+		);
+
+		$product = sanitize_title( $atts['product'] );
+		$map     = ezb_related_guide_map();
+
+		if ( ! isset( $map[ $product ] ) ) {
+			return '';
+		}
+
+		$article = get_page_by_path( $map[ $product ], OBJECT, 'post' );
+		if ( ! $article || 'publish' !== $article->post_status ) {
+			return '';
+		}
+
+		$excerpt = trim( wp_strip_all_tags( $article->post_excerpt ) );
+
+		return sprintf(
+			'<section class="ezb-section ezb-shell ezb-related-guide"><div class="ezb-related-guide__inner"><p class="ezb-eyebrow">%1$s</p><h2>%2$s</h2>%3$s<p><a class="ezb-related-guide__link" href="%4$s">%5$s</a></p></div></section>',
+			esc_html__( 'Related guide', 'ezb-core' ),
+			esc_html( get_the_title( $article ) ),
+			'' !== $excerpt ? '<p>' . esc_html( $excerpt ) . '</p>' : '',
+			esc_url( get_permalink( $article ) ),
+			esc_html__( 'Read the guide', 'ezb-core' )
+		);
+	}
+);
+
 
 
 /**
