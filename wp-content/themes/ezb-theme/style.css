@@ -1403,3 +1403,16 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 	border-color: rgba(179, 138, 73, 0.58);
 	background: #fff;
 }
+
+
+/* Helpful 404 */
+.ezb-error-page {
+	max-width: 920px;
+	padding-block: clamp(72px, 10vw, 128px);
+	text-align: left;
+}
+
+.ezb-error-page .wp-block-buttons {
+	margin-top: 28px;
+	gap: 12px;
+}
