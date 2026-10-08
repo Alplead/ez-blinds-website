@@ -87,10 +87,13 @@ for (const path of canonicalRoutes) {
   if (finalUrl.origin !== base.origin) {
     failures.push(`${path} redirected off-origin to ${finalUrl.href}`);
   }
+  if (finalUrl.pathname !== requested.pathname || finalUrl.search || finalUrl.hash) {
+    failures.push(`${path} resolved to unexpected route ${finalUrl.pathname}${finalUrl.search}${finalUrl.hash}`);
+  }
 
   const html = await response.text();
-  if (expectIndexable && html.includes('ezb_page=')) {
-    failures.push(`${path} leaked development ezb_page transport into release-mode HTML`);
+  if (html.includes('ezb_page=')) {
+    failures.push(`${path} leaked development ezb_page transport into public HTML`);
   }
 
   const canonicals = extractCanonical(html);
@@ -111,17 +114,15 @@ for (const path of canonicalRoutes) {
     }
   }
 
-  if (path === '/') {
-    const xRobots = (response.headers.get('x-robots-tag') || '').toLowerCase();
-    const robotsMeta = metaRobots(html).join(',');
+  // Every required route must honour the indexing contract, not only Home.
+  const xRobots = (response.headers.get('x-robots-tag') || '').toLowerCase();
+  const robotsMeta = metaRobots(html).join(',');
+  const hasNoindex = xRobots.includes('noindex') || robotsMeta.includes('noindex');
 
-    if (expectIndexable) {
-      if (xRobots.includes('noindex') || robotsMeta.includes('noindex')) {
-        failures.push('home is unexpectedly noindex in indexable mode');
-      }
-    } else if (!xRobots.includes('noindex') && !robotsMeta.includes('noindex')) {
-      failures.push('home lacks noindex protection in non-indexable mode');
-    }
+  if (expectIndexable && hasNoindex) {
+    failures.push(`${path} is unexpectedly noindex in indexable mode`);
+  } else if (!expectIndexable && !hasNoindex) {
+    failures.push(`${path} lacks noindex protection in non-indexable mode`);
   }
 }
 
