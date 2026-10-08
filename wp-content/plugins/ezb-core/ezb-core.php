@@ -25,6 +25,17 @@ add_action(
 );
 
 /**
+ * Yield SEO/social metadata to a dedicated SEO plugin if one is activated
+ * later. This keeps the custom baseline useful now without creating duplicate
+ * tags when Rank Math, Yoast or SEOPress takes over.
+ */
+function ezb_external_seo_plugin_active() {
+	return defined( 'RANK_MATH_VERSION' ) ||
+		defined( 'WPSEO_VERSION' ) ||
+		defined( 'SEOPRESS_VERSION' );
+}
+
+/**
  * Emit a lightweight meta description from existing Owner-editable content.
  *
  * Singular Pages and Projects use their excerpt when present. The front page
@@ -48,7 +59,7 @@ function ezb_current_meta_description() {
 }
 
 function ezb_print_meta_description() {
-	if ( is_admin() ) {
+	if ( is_admin() || ezb_external_seo_plugin_active() ) {
 		return;
 	}
 
@@ -69,7 +80,7 @@ add_action( 'wp_head', 'ezb_print_meta_description', 2 );
  * WordPress. Do not invent address, reviews, pricing or local-business claims.
  */
 function ezb_print_structured_data() {
-	if ( is_admin() ) {
+	if ( is_admin() || ezb_external_seo_plugin_active() ) {
 		return;
 	}
 
@@ -134,13 +145,67 @@ function ezb_print_structured_data() {
 }
 add_action( 'wp_head', 'ezb_print_structured_data', 20 );
 
+/**
+ * Baseline Open Graph / Twitter metadata for current public routes.
+ * A dedicated SEO plugin automatically supersedes this output.
+ */
+function ezb_print_social_metadata() {
+	if ( is_admin() || ezb_external_seo_plugin_active() || is_404() ) {
+		return;
+	}
+
+	$title       = wp_get_document_title();
+	$description = ezb_current_meta_description();
+	$url         = '';
+	$type        = is_singular( 'post' ) ? 'article' : 'website';
+	$image       = '';
+
+	if ( is_front_page() ) {
+		$url = home_url( '/' );
+	} elseif ( is_singular() ) {
+		$url = get_permalink();
+	} elseif ( is_post_type_archive( 'ezb_project' ) ) {
+		$url = get_post_type_archive_link( 'ezb_project' );
+	}
+
+	if ( is_singular() ) {
+		$image_id = get_post_thumbnail_id();
+		if ( $image_id ) {
+			$image = (string) wp_get_attachment_image_url( $image_id, 'full' );
+		}
+	}
+
+	if ( '' === trim( $title ) || ! $url ) {
+		return;
+	}
+
+	printf( "<meta property="og:title" content="%s">\n", esc_attr( $title ) );
+	printf( "<meta property="og:type" content="%s">\n", esc_attr( $type ) );
+	printf( "<meta property="og:url" content="%s">\n", esc_url( $url ) );
+	printf( "<meta property="og:site_name" content="%s">\n", esc_attr( get_bloginfo( 'name' ) ) );
+
+	if ( '' !== $description ) {
+		printf( "<meta property="og:description" content="%s">\n", esc_attr( $description ) );
+		printf( "<meta name="twitter:description" content="%s">\n", esc_attr( $description ) );
+	}
+
+	if ( '' !== $image ) {
+		printf( "<meta property="og:image" content="%s">\n", esc_url( $image ) );
+	}
+
+	printf( "<meta name="twitter:card" content="%s">\n", esc_attr( $image ? 'summary_large_image' : 'summary' ) );
+	printf( "<meta name="twitter:title" content="%s">\n", esc_attr( $title ) );
+}
+add_action( 'wp_head', 'ezb_print_social_metadata', 21 );
+
+
 
 /**
  * WordPress core emits rel=canonical for singular content but not for the
  * Projects CPT archive. Add the archive self-canonical only for that route.
  */
 function ezb_print_project_archive_canonical() {
-	if ( ! is_post_type_archive( 'ezb_project' ) ) {
+	if ( ezb_external_seo_plugin_active() || ! is_post_type_archive( 'ezb_project' ) ) {
 		return;
 	}
 
