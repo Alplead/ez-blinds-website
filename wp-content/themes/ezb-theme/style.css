@@ -1366,3 +1366,40 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 		margin-inline: auto;
 	}
 }
+
+
+/* Blog article next steps */
+.ezb-blog-next-step {
+	margin-top: clamp(42px, 7vw, 72px);
+	padding: clamp(24px, 4vw, 36px);
+	border-top: 1px solid rgba(179, 138, 73, 0.42);
+	border-bottom: 1px solid rgba(179, 138, 73, 0.24);
+	background: #fbf7f0;
+}
+
+.ezb-blog-next-step__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.ezb-blog-next-step__link {
+	display: inline-flex;
+	padding: 0.78rem 1rem;
+	border: 1px solid var(--ezb-accent);
+	border-radius: 999px;
+	color: var(--ezb-accent-dark);
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.ezb-blog-next-step__link:hover,
+.ezb-blog-next-step__link:focus-visible {
+	background: var(--ezb-accent);
+	color: #fff;
+}
+
+.ezb-blog-next-step__link--secondary {
+	border-color: rgba(179, 138, 73, 0.58);
+	background: #fff;
+}
