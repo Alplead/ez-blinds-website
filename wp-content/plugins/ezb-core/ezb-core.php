@@ -2180,9 +2180,11 @@ add_shortcode(
 				'large',
 				false,
 				array(
-					'class'   => 'ezb-media-slot__image',
-					'alt'     => $candidate['alt'],
-					'loading' => 'lazy',
+					'class'         => 'ezb-media-slot__image',
+					'alt'           => $candidate['alt'],
+					'loading'       => 'eager',
+					'fetchpriority' => 'high',
+					'decoding'      => 'async',
 				)
 			);
 		}
