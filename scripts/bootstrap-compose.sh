@@ -13,6 +13,8 @@ done
 
 repair_upload_permissions() {
   mkdir -p wp-content/uploads
+  current_subdir="$(date +%Y/%m)"
+  mkdir -p "wp-content/uploads/$current_subdir"
   chown -R 33:33 wp-content/uploads
   find wp-content/uploads -type d -exec chmod 775 {} +
   find wp-content/uploads -type f -exec chmod 664 {} +
@@ -30,6 +32,11 @@ done
 
 if ! wp core is-installed --allow-root >/dev/null 2>&1; then
   wp core install --allow-root     --url="http://localhost:8080"     --title="EZ Blinds & Shutters"     --admin_user="ezbdev"     --admin_password="dev-only-change-me"     --admin_email="dev@example.invalid"     --skip-email
+fi
+
+CURRENT_CORE_VERSION="$(wp core version --allow-root)"
+if [ "$CURRENT_CORE_VERSION" != "7.1.3" ]; then
+  wp core update --version=7.1.3 --force --allow-root
 fi
 
 wp theme activate ezb-theme --allow-root
