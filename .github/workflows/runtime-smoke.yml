@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /blog/ /roller-blinds-blockout-vs-sunscreen/ /sheer-curtains-privacy-layering/ /plantation-shutters-before-you-choose/ /retractable-flyscreens-opening-suitability/ /motorised-blinds-when-worth-it/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
+          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /blog/ /roller-blinds-blockout-vs-sunscreen/ /sheer-curtains-privacy-layering/ /plantation-shutters-before-you-choose/ /retractable-flyscreen-track-threshold-planning/ /motorised-blinds-power-control-planning/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
             code="$(curl -LsS -o /tmp/page.html -w '%{http_code}' "http://127.0.0.1:8080$path")"
             echo "$path -> HTTP $code"
             test "$code" = "200"
@@ -67,6 +67,7 @@ jobs:
           code="$(curl -sS -o /tmp/wp-sitemap.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap.xml')"
           test "$code" = "200"
           grep -q 'wp-sitemap-posts-page-1.xml' /tmp/wp-sitemap.xml
+          grep -q 'wp-sitemap-posts-post-1.xml' /tmp/wp-sitemap.xml
           grep -q 'wp-sitemap-posts-ezb_project-1.xml' /tmp/wp-sitemap.xml
 
           code="$(curl -sS -o /tmp/wp-sitemap-pages.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap-posts-page-1.xml')"
@@ -75,6 +76,12 @@ jobs:
           grep -q '/retractable-flyscreens/' /tmp/wp-sitemap-pages.xml
           grep -q '/advice/' /tmp/wp-sitemap-pages.xml
           grep -q '/contact/' /tmp/wp-sitemap-pages.xml
+
+          code="$(curl -sS -o /tmp/wp-sitemap-posts.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap-posts-post-1.xml')"
+          test "$code" = "200"
+          grep -q '/roller-blinds-blockout-vs-sunscreen/' /tmp/wp-sitemap-posts.xml
+          grep -q '/retractable-flyscreen-track-threshold-planning/' /tmp/wp-sitemap-posts.xml
+          grep -q '/motorised-blinds-power-control-planning/' /tmp/wp-sitemap-posts.xml
 
           code="$(curl -sS -o /tmp/wp-sitemap-projects.xml -w '%{http_code}' 'http://127.0.0.1:8080/wp-sitemap-posts-ezb_project-1.xml')"
           test "$code" = "200"
@@ -113,9 +120,28 @@ jobs:
           curl -LsS 'http://127.0.0.1:8080/contact/' -o /tmp/seo-contact.html
           test "$(grep -o 'name="description"' /tmp/seo-contact.html | wc -l)" -eq 0
 
+          curl -LsS 'http://127.0.0.1:8080/roller-blinds-blockout-vs-sunscreen/' -o /tmp/seo-blog.html
+          test "$(grep -o 'name="description"' /tmp/seo-blog.html | wc -l)" -eq 1
+          grep -q 'A practical starting guide to privacy, glare, daylight and room use' /tmp/seo-blog.html
+
           curl -sS 'http://127.0.0.1:8080/?ezb_page=roller-blinds' -o /tmp/seo-query-roller.html
           test "$(grep -o 'name="description"' /tmp/seo-query-roller.html | wc -l)" -eq 1
           grep -q 'Roller blinds are a practical starting point for many rooms' /tmp/seo-query-roller.html
+
+      - name: Verify conservative structured data
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -LsS 'http://127.0.0.1:8080/' -o /tmp/schema-home.html
+          grep -q 'application/ld+json' /tmp/schema-home.html
+          grep -q '"@type":"WebSite"' /tmp/schema-home.html
+
+          curl -LsS 'http://127.0.0.1:8080/roller-blinds-blockout-vs-sunscreen/' -o /tmp/schema-blog.html
+          grep -q 'application/ld+json' /tmp/schema-blog.html
+          grep -q '"@type":"BlogPosting"' /tmp/schema-blog.html
+          grep -q '"publisher":{"@type":"Organization"' /tmp/schema-blog.html
+          ! grep -q '"@type":"LocalBusiness"' /tmp/schema-blog.html
 
       - name: Audit title and canonical structure
         shell: bash
@@ -143,6 +169,8 @@ jobs:
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=privacy-vs-daylight --field=ID --allow-root | grep -q .
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=retractable-flyscreen-suitability --field=ID --allow-root | grep -q .
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --name=when-motorisation-makes-sense --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=post --name=retractable-flyscreen-track-threshold-planning --field=ID --allow-root | grep -q .
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=post --name=motorised-blinds-power-control-planning --field=ID --allow-root | grep -q .
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=prototype-roller-blinds-project --field=ID --allow-root | grep -q .
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=retractable-flyscreen-large-opening --field=ID --allow-root | grep -q .
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=ezb_project --name=retractable-flyscreen-indoor-outdoor-opening --field=ID --allow-root | grep -q .
@@ -230,7 +258,7 @@ jobs:
 
           curl -sS "http://127.0.0.1:8080/?ezb_page=blog" -o /tmp/blog-index.html
           grep -q 'Blockout or sunscreen roller blinds' /tmp/blog-index.html
-          grep -q 'Is your doorway suitable for a retractable flyscreen?' /tmp/blog-index.html
+          grep -q 'Retractable flyscreen tracks and thresholds: what should you check?' /tmp/blog-index.html
           grep -q 'ezb-blog-card' /tmp/blog-index.html
 
       - name: Verify genuine-media slot fallbacks
