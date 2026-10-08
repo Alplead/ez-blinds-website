@@ -128,7 +128,7 @@ function ezb_print_structured_data() {
 	);
 
 	printf(
-		"<script type="application/ld+json">%s</script>\n",
+		'<script type="application/ld+json">%s</script>' . "\n",
 		wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
 	);
 }
