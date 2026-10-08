@@ -46,6 +46,33 @@ fi
 
 echo "EZB_MEDIA_IMPORT_START count=25"
 
+verify_attachment_bytes() {
+  local source_file="$1"
+  local attachment_id="$2"
+  local base="$3"
+  local expected_file_sha
+  local attached_path
+  local actual_file_sha
+
+  expected_file_sha="$(sha256sum "$source_file" | awk '{print $1}')"
+  attached_path="$(wp eval "echo get_attached_file((int) $attachment_id);" --allow-root)"
+
+  if [[ -z "$attached_path" || ! -f "$attached_path" ]]; then
+    echo "Attachment file is missing for $base (id=$attachment_id)." >&2
+    exit 9
+  fi
+
+  actual_file_sha="$(sha256sum "$attached_path" | awk '{print $1}')"
+  if [[ "$actual_file_sha" != "$expected_file_sha" ]]; then
+    echo "Attachment checksum mismatch for $base (id=$attachment_id)." >&2
+    echo "expected=$expected_file_sha" >&2
+    echo "actual=$actual_file_sha" >&2
+    exit 10
+  fi
+
+  echo "MEDIA_SHA256_OK|$base|id=$attachment_id|sha256=$actual_file_sha"
+}
+
 for file in "${WEBPS[@]}"; do
   base="$(basename "$file")"
   stem="${base%.*}"
@@ -55,6 +82,7 @@ for file in "${WEBPS[@]}"; do
   )"
 
   if [[ "$existing_id" =~ ^[1-9][0-9]*$ ]]; then
+    verify_attachment_bytes "$file" "$existing_id" "$base"
     echo "MEDIA_SKIP_EXISTING|$base|id=$existing_id"
     continue
   fi
@@ -65,6 +93,7 @@ for file in "${WEBPS[@]}"; do
     exit 8
   fi
 
+  verify_attachment_bytes "$file" "$imported_id" "$base"
   echo "MEDIA_IMPORTED|$base|id=$imported_id"
 done
 
