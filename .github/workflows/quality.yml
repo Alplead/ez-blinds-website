@@ -57,6 +57,12 @@ jobs:
       - name: Check staging media acceptance syntax
         run: bash -n scripts/staging-media-acceptance.sh
 
+      - name: Test staging media SHA guard
+        run: |
+          bash -n scripts/test-staging-media-sha-guard.sh
+          bash scripts/test-staging-media-sha-guard.sh | tee /tmp/media-sha-guard.log
+          grep -q 'EZB_STAGING_MEDIA_SHA_GUARD_TEST_PASS cases=7' /tmp/media-sha-guard.log
+
       - name: Check real-media visual QA JavaScript syntax
         run: node --check scripts/real-media-visual-qa.mjs
 
