@@ -663,16 +663,16 @@ jobs:
           ! grep -Fq 'http://127.0.0.1' /tmp/canonical-roller.html
           ! grep -q 'ezb_page=roller-blinds' /tmp/canonical-roller.html
 
-      - name: Verify provisional legacy redirect registry
+      - name: Verify legacy redirect and retirement registry
         shell: bash
         run: |
           set -euo pipefail
 
           REDIRECT_MAP="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
-            $allowed_statuses = array( "verified_redirect", "owner_decision" );
+            $allowed_statuses = array( "verified_redirect", "gone" );
             $registry = ezb_legacy_redirect_registry();
             $verified = 0;
-            $decisions = 0;
+            $gone = 0;
 
             foreach ( $registry as $source => $entry ) {
               if ( $source !== ezb_normalise_request_path( $source ) ) {
@@ -696,44 +696,46 @@ jobs:
                 }
               }
 
-              if ( "owner_decision" === $status ) {
-                $decisions++;
+              if ( "gone" === $status ) {
+                $gone++;
                 if ( "" !== $target ) {
-                  fwrite( STDERR, "owner_decision must not carry a redirect target: " . $source . PHP_EOL );
+                  fwrite( STDERR, "gone route must not carry a redirect target: " . $source . PHP_EOL );
                   exit( 1 );
                 }
               }
 
-              echo $source . "|" . $status . "|" . $target . "|" . ezb_legacy_redirect_target( $source ) . PHP_EOL;
+              echo $source . "|" . $status . "|" . $target . "|" . ezb_legacy_redirect_target( $source ) . "|" . ( ezb_legacy_gone_path( $source ) ? "gone" : "" ) . PHP_EOL;
             }
 
-            echo "COUNTS|verified=" . $verified . "|owner_decision=" . $decisions . PHP_EOL;
+            echo "COUNTS|verified=" . $verified . "|gone=" . $gone . PHP_EOL;
           ' --allow-root)"
 
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/retractable-fly-screen/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/|verified_redirect|/projects/|/projects/'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/page/2/|verified_redirect|/projects/|/projects/'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/category/roller-blinds/|verified_redirect|/roller-blinds/|/roller-blinds/'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/retractable-fly-screen/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/|verified_redirect|/projects/|/projects/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/page/2/|verified_redirect|/projects/|/projects/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/category/roller-blinds/|verified_redirect|/roller-blinds/|/roller-blinds/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/02/04/roller-blinds-showcase/|verified_redirect|/roller-blinds/|/roller-blinds/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/02/04/plantation-shutters-showcase/|verified_redirect|/plantation-shutters/|/plantation-shutters/|'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/10/06/retractable-fly-screen-showcase/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|'
 
           for source in \
             /roman-blinds/ \
             /panel-guide-blinds/ \
             /venetian-blinds/ \
             /portfolio/venetian-blinds/ \
-            /2018/02/04/roller-blinds-showcase/ \
-            /2018/02/04/plantation-shutters-showcase/ \
             /2018/02/04/roman-blinds-showcase/ \
             /2018/02/04/panel-guide-blinds-showcase/ \
-            /2018/02/04/venetian-blinds-showcase/ \
-            /2018/10/06/retractable-fly-screen-showcase/; do
-            printf '%s\n' "$REDIRECT_MAP" | grep -Fxq "$source|owner_decision||"
+            /2018/02/04/venetian-blinds-showcase/; do
+            printf '%s\n' "$REDIRECT_MAP" | grep -Fxq "$source|gone|||gone"
           done
 
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq 'COUNTS|verified=4|owner_decision=10'
+          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq 'COUNTS|verified=7|gone=7'
 
-          # Development must not actually issue the launch redirects.
+          # Development preview must not issue launch redirects or 410s.
           code="$(curl -sS -o /tmp/dev-legacy-route.html -w '%{http_code}' 'http://127.0.0.1:8080/portfolio/')"
           test "$code" != "301"
+          code="$(curl -sS -o /tmp/dev-retired-route.html -w '%{http_code}' 'http://127.0.0.1:8080/roman-blinds/')"
+          test "$code" != "410"
 
       - name: Verify fail-closed development indexing protection
         shell: bash

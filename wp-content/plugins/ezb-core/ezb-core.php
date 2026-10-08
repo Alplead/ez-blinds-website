@@ -812,57 +812,55 @@ function ezb_legacy_redirect_registry() {
 			'target' => '/roller-blinds/',
 			'reason' => 'Legacy Roller Blinds category intent maps to the product page.',
 		),
-
-		// Exact public legacy URLs whose final business treatment is not yet approved.
 		'/roman-blinds/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'No approved equivalent product route in the rebuild.',
+			'reason' => 'Owner confirmed Roman Blinds are discontinued and will not be sold.',
 		),
 		'/panel-guide-blinds/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'No approved equivalent product route in the rebuild.',
+			'reason' => 'Owner confirmed Panel Guide / Panel Glide products are discontinued and will not be sold.',
 		),
 		'/venetian-blinds/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'Current business relevance and replacement intent are not yet confirmed.',
+			'reason' => 'Owner confirmed Venetian Blinds are discontinued and will not be sold.',
 		),
 		'/portfolio/venetian-blinds/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'Must map to a grounded replacement Project/product or be retired deliberately.',
+			'reason' => 'Owner confirmed the historic Venetian project should be retired.',
 		),
 		'/2018/02/04/roller-blinds-showcase/' => array(
-			'status' => 'owner_decision',
-			'target' => '',
-			'reason' => 'Legacy showcase needs grounded project/content mapping before cutover.',
+			'status' => 'verified_redirect',
+			'target' => '/roller-blinds/',
+			'reason' => 'Historic Roller Blinds showcase maps to the active Roller Blinds product intent.',
 		),
 		'/2018/02/04/plantation-shutters-showcase/' => array(
-			'status' => 'owner_decision',
-			'target' => '',
-			'reason' => 'Legacy showcase needs grounded project/content mapping before cutover.',
+			'status' => 'verified_redirect',
+			'target' => '/plantation-shutters/',
+			'reason' => 'Historic Plantation Shutters showcase maps to the active product intent.',
 		),
 		'/2018/02/04/roman-blinds-showcase/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'Legacy showcase has no approved replacement route.',
+			'reason' => 'Roman Blinds are discontinued; no truthful replacement product route exists.',
 		),
 		'/2018/02/04/panel-guide-blinds-showcase/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'Legacy showcase has no approved replacement route.',
+			'reason' => 'Panel Guide / Panel Glide products are discontinued; no truthful replacement route exists.',
 		),
 		'/2018/02/04/venetian-blinds-showcase/' => array(
-			'status' => 'owner_decision',
+			'status' => 'gone',
 			'target' => '',
-			'reason' => 'Legacy showcase has no approved replacement route.',
+			'reason' => 'Venetian Blinds are discontinued; no truthful replacement product route exists.',
 		),
 		'/2018/10/06/retractable-fly-screen-showcase/' => array(
-			'status' => 'owner_decision',
-			'target' => '',
-			'reason' => 'Potentially valuable RFS content; exact grounded Project destination still requires mapping.',
+			'status' => 'verified_redirect',
+			'target' => '/retractable-flyscreens/',
+			'reason' => 'Historic retractable-flyscreen showcase maps to the active product intent.',
 		),
 	);
 }
@@ -902,6 +900,43 @@ function ezb_legacy_redirect_target( $request_uri ) {
 
 	return isset( $map[ $path ] ) ? $map[ $path ] : '';
 }
+
+function ezb_legacy_gone_path( $request_uri ) {
+	$path     = ezb_normalise_request_path( $request_uri );
+	$registry = ezb_legacy_redirect_registry();
+
+	return isset( $registry[ $path ]['status'] ) && 'gone' === $registry[ $path ]['status'];
+}
+
+function ezb_apply_retired_legacy_gone() {
+	if ( 'development' === wp_get_environment_type() ) {
+		return;
+	}
+
+	$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'GET';
+	if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) ) {
+		return;
+	}
+
+	$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+	if ( ! ezb_legacy_gone_path( $request_uri ) ) {
+		return;
+	}
+
+	status_header( 410 );
+	nocache_headers();
+
+	if ( 'HEAD' === $method ) {
+		exit;
+	}
+
+	wp_die(
+		esc_html__( 'This product or project has been retired and is no longer offered by EZ Blinds & Shutters.', 'ezb-core' ),
+		esc_html__( 'Content retired', 'ezb-core' ),
+		array( 'response' => 410 )
+	);
+}
+add_action( 'template_redirect', 'ezb_apply_retired_legacy_gone', 0 );
 
 function ezb_apply_verified_legacy_redirects() {
 	if ( 'development' === wp_get_environment_type() ) {
