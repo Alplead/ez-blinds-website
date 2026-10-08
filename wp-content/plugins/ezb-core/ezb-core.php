@@ -616,6 +616,66 @@ add_shortcode(
 
 
 /**
+ * Keep Blog articles connected to the relevant commercial and evergreen
+ * information paths without hard-coding links inside article copy.
+ */
+function ezb_blog_next_step_map() {
+	return array(
+		'roller-blinds-blockout-vs-sunscreen' => array(
+			'product_url'   => '/roller-blinds/',
+			'product_label' => 'Explore Roller Blinds',
+		),
+		'sheer-curtains-privacy-layering' => array(
+			'product_url'   => '/sheer-curtains/',
+			'product_label' => 'Explore Sheer Curtains',
+		),
+		'plantation-shutters-before-you-choose' => array(
+			'product_url'   => '/plantation-shutters/',
+			'product_label' => 'Explore Plantation Shutters',
+		),
+		'retractable-flyscreen-track-threshold-planning' => array(
+			'product_url'   => '/retractable-flyscreens/',
+			'product_label' => 'Explore Retractable Flyscreens',
+			'advice_url'    => '/advice/retractable-flyscreen-suitability/',
+			'advice_label'  => 'Read the suitability guide',
+		),
+		'motorised-blinds-power-control-planning' => array(
+			'product_url'   => '/motorised-blinds/',
+			'product_label' => 'Explore Motorisation',
+			'advice_url'    => '/advice/when-motorisation-makes-sense/',
+			'advice_label'  => 'When motorisation makes sense',
+		),
+	);
+}
+
+add_shortcode(
+	'ezb_blog_next_step',
+	function () {
+		$post = get_post();
+		if ( ! $post || 'post' !== $post->post_type ) {
+			return '';
+		}
+
+		$map = ezb_blog_next_step_map();
+		if ( ! isset( $map[ $post->post_name ] ) ) {
+			return '';
+		}
+
+		$item  = $map[ $post->post_name ];
+		$links = array(
+			'<a class="ezb-blog-next-step__link" href="' . esc_url( home_url( $item['product_url'] ) ) . '">' . esc_html( $item['product_label'] ) . '</a>',
+		);
+
+		if ( ! empty( $item['advice_url'] ) && ! empty( $item['advice_label'] ) ) {
+			$links[] = '<a class="ezb-blog-next-step__link ezb-blog-next-step__link--secondary" href="' . esc_url( home_url( $item['advice_url'] ) ) . '">' . esc_html( $item['advice_label'] ) . '</a>';
+		}
+
+		return '<aside class="ezb-blog-next-step"><p class="ezb-eyebrow">' . esc_html__( 'Useful next step', 'ezb-core' ) . '</p><div class="ezb-blog-next-step__links">' . implode( '', $links ) . '</div></aside>';
+	}
+);
+
+
+/**
  * Render the active Page content in development templates that are processed
  * through the prototype router rather than WordPress's normal block-template
  * context builder.
