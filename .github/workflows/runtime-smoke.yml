@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
+          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /blog/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
             code="$(curl -LsS -o /tmp/page.html -w '%{http_code}' "http://127.0.0.1:8080$path")"
             echo "$path -> HTTP $code"
             test "$code" = "200"
@@ -177,7 +177,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for key in products roller-blinds sheer-curtains plantation-shutters retractable-flyscreens motorised-blinds projects advice privacy-vs-daylight retractable-flyscreen-suitability when-motorisation-makes-sense service-areas about contact; do
+          for key in products roller-blinds sheer-curtains plantation-shutters retractable-flyscreens motorised-blinds projects advice blog privacy-vs-daylight retractable-flyscreen-suitability when-motorisation-makes-sense service-areas about contact; do
             code="$(curl -sS -o /tmp/prototype.html -w '%{http_code}' "http://127.0.0.1:8080/?ezb_page=$key")"
             echo "$key -> HTTP $code"
             test "$code" = "200"
@@ -227,6 +227,11 @@ jobs:
 
           curl -sS "http://127.0.0.1:8080/?ezb_page=advice" -o /tmp/advice-cards.html
           grep -q 'ezb-card-media--advice' /tmp/advice-cards.html
+
+          curl -sS "http://127.0.0.1:8080/?ezb_page=blog" -o /tmp/blog-index.html
+          grep -q 'Blockout or sunscreen roller blinds' /tmp/blog-index.html
+          grep -q 'Is your doorway suitable for a retractable flyscreen?' /tmp/blog-index.html
+          grep -q 'ezb-blog-card' /tmp/blog-index.html
 
       - name: Verify genuine-media slot fallbacks
         shell: bash
