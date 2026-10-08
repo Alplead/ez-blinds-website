@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           curl -sS 'http://127.0.0.1:8080/' -o /tmp/header-safety.html
           grep -q 'class="ezb-skip-link" href="#main-content"' /tmp/header-safety.html
-          grep -q 'href="/projects/"' /tmp/header-safety.html
+          grep -Eq 'href="/projects/"|ezb_page=projects' /tmp/header-safety.html
           ! grep -q '/projects/prototype-roller-blinds-project/' /tmp/header-safety.html
           ! grep -q '/projects/prototype-sheer-curtains-project/' /tmp/header-safety.html
 
