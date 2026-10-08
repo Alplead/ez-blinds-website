@@ -67,6 +67,15 @@ async function fetchPage(path, options = {}) {
   return { requested, response };
 }
 
+const developmentPublicationMarkers = [
+  'Prototype project',
+  'PROJECT PLACEHOLDER',
+  'Development case-study shell',
+  'Working copy for review.',
+  'Development preview only.',
+  'REAL EZ PROJECT MEDIA'
+];
+
 const canonicalRoutes = [
   '/',
   '/roller-blinds/',
@@ -95,6 +104,13 @@ for (const path of canonicalRoutes) {
   const html = await response.text();
   if (html.includes('ezb_page=') && !allowDevTransport) {
     failures.push(`${path} leaked development ezb_page transport into public HTML`);
+  }
+
+  if (expectIndexable) {
+    const marker = developmentPublicationMarkers.find(value => html.includes(value));
+    if (marker) {
+      failures.push(`${path} contains development-only publication marker: ${marker}`);
+    }
   }
 
   const canonicals = extractCanonical(html);

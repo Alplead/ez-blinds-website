@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', redirectPath = '', expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -26,7 +26,8 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     const noindex = forceNoindexPath === pathname || (!indexable && missingNoindexPath !== pathname);
     const html = '<link rel="canonical" href="' + origin + pathname + '">' +
       '<meta name="robots" content="' + (noindex ? 'noindex, nofollow' : 'index, follow') + '">' +
-      (leakPath === pathname ? '<a href="/?ezb_page=roller-blinds">dev</a>' : '');
+      (leakPath === pathname ? '<a href="/?ezb_page=roller-blinds">dev</a>' : '') +
+      (markerPath === pathname ? '<div>Prototype project</div>' : '');
     res.writeHead(200, { 'content-type': 'text/html' }); res.end(html);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -56,7 +57,9 @@ await check({ name: 'staging all seven routes noindex' });
 await check({ name: 'secondary route missing noindex rejected', missingNoindexPath: '/contact/', expectedError: '/contact/ lacks noindex protection' });
 await check({ name: 'staging dev query leak rejected', leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'prototype runtime explicit dev transport opt-in', allowDevTransport: true, leakPath: '/advice/' });
+await check({ name: 'non-indexable development marker tolerated', markerPath: '/projects/' });
 await check({ name: 'indexable release mode clean', indexable: true });
+await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=7');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=9');
