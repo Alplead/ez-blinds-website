@@ -54,13 +54,13 @@ jobs:
       - name: Verify release-mode retired routes and truthful redirects
         run: |
           set -euo pipefail
-          for path in \\
-            /roman-blinds/ \\
-            /panel-guide-blinds/ \\
-            /venetian-blinds/ \\
-            /portfolio/venetian-blinds/ \\
-            /2018/02/04/roman-blinds-showcase/ \\
-            /2018/02/04/panel-guide-blinds-showcase/ \\
+          for path in \
+            /roman-blinds/ \
+            /panel-guide-blinds/ \
+            /venetian-blinds/ \
+            /portfolio/venetian-blinds/ \
+            /2018/02/04/roman-blinds-showcase/ \
+            /2018/02/04/panel-guide-blinds-showcase/ \
             /2018/02/04/venetian-blinds-showcase/; do
             code="$(curl -sS -o /tmp/retired-route.html -w '%{http_code}' "http://127.0.0.1:8081$path")"
             test "$code" = "410"
