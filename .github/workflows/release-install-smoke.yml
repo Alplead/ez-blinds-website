@@ -9,6 +9,8 @@ on:
       - 'wp-content/**'
       - 'scripts/build-release-bundle.sh'
       - 'scripts/release-install-smoke.sh'
+      - 'scripts/host-readiness.mjs'
+      - 'scripts/test-host-readiness-guard.mjs'
       - '.github/release-install/**'
       - '.github/workflows/release-install-smoke.yml'
   workflow_dispatch:

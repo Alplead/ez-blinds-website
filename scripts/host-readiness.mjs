@@ -63,6 +63,12 @@ function metaRobots(html) {
   return values;
 }
 
+
+function xmlLocations(xml) {
+  return [...xml.matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc\s*>/gi)]
+    .map(match => decodeHtml(match[1]));
+}
+
 async function fetchPage(path, options = {}) {
   const requested = new URL(path, base);
   const response = await fetch(requested, {
@@ -173,6 +179,72 @@ if (expectIndexable) {
     }
     if (!sitemap.includes('wp-sitemap-posts-ezb_project-1.xml')) {
       failures.push('sitemap index is missing the Project sitemap');
+    }
+
+    // A clean landing page is insufficient: published starter posts and
+    // prototype Projects can appear in WordPress content sitemaps.
+    // Inspect every indexed Page, Post and Project before declaring a host indexable.
+    const indexLocations = xmlLocations(sitemap);
+    const contentSitemaps = indexLocations.filter(location => {
+      try {
+        return /^\/wp-sitemap-posts-(?:page|post|ezb_project)-\d+\.xml$/.test(new URL(location, base).pathname);
+      } catch {
+        failures.push('sitemap index contains an invalid XML location');
+        return false;
+      }
+    });
+    if (!contentSitemaps.length || contentSitemaps.length > 30) {
+      failures.push('sitemap index has an invalid number of content sitemaps');
+    } else {
+      const checkedPages = new Set();
+      for (const location of contentSitemaps) {
+        const childUrl = new URL(location, base);
+        if (childUrl.origin !== base.origin || childUrl.search || childUrl.hash) {
+          failures.push('content sitemap location is not a clean same-origin URL');
+          continue;
+        }
+        const childResponse = await fetch(childUrl, { redirect: 'manual' });
+        if (childResponse.status !== 200) {
+          failures.push(childUrl.pathname + ' -> expected sitemap HTTP 200, got ' + childResponse.status);
+          continue;
+        }
+        const pageLocations = xmlLocations(await childResponse.text());
+        if (!pageLocations.length || pageLocations.length > 250) {
+          failures.push(childUrl.pathname + ' has an invalid number of content URLs');
+          continue;
+        }
+        for (const pageLocation of pageLocations) {
+          let pageUrl;
+          try {
+            pageUrl = new URL(pageLocation, base);
+          } catch {
+            failures.push(childUrl.pathname + ' contains an invalid content URL');
+            continue;
+          }
+          if (pageUrl.origin !== base.origin || pageUrl.search || pageUrl.hash) {
+            failures.push(childUrl.pathname + ' contains a non-canonical or off-origin content URL');
+            continue;
+          }
+          if (checkedPages.has(pageUrl.href)) continue;
+          checkedPages.add(pageUrl.href);
+          if (checkedPages.size > 300) {
+            failures.push('indexable content audit exceeds the bounded 300-URL safety limit');
+            break;
+          }
+          const pageResponse = await fetch(pageUrl, { redirect: 'manual' });
+          if (pageResponse.status !== 200) {
+            failures.push(pageUrl.pathname + ' -> indexed content expected HTTP 200, got ' + pageResponse.status);
+            continue;
+          }
+          const pageHtml = await pageResponse.text();
+          const marker = developmentPublicationMarkers.find(value => pageHtml.includes(value));
+          if (marker) failures.push(pageUrl.pathname + ' indexed development-only publication marker: ' + marker);
+          if (pageHtml.includes('ezb_page=')) failures.push(pageUrl.pathname + ' indexed development transport leak');
+          const robots = (pageResponse.headers.get('x-robots-tag') || '').toLowerCase() + ',' + metaRobots(pageHtml).join(',');
+          if (robots.includes('noindex')) failures.push(pageUrl.pathname + ' appears in sitemap but is noindex');
+        }
+        if (checkedPages.size > 300) break;
+      }
     }
   }
 } else {

@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
-const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/']);
+const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
 async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', expectedError = '' }) {
   const server = createServer((req, res) => {
@@ -16,7 +16,17 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     }
     if (pathname === '/wp-sitemap.xml') {
       res.writeHead(indexable ? 200 : 404, { 'content-type': 'text/xml' });
-      res.end('wp-sitemap-posts-page-1.xml wp-sitemap-posts-ezb_project-1.xml');
+      res.end('<sitemapindex>' + ['page', 'post', 'ezb_project'].map(type =>
+        '<sitemap><loc>' + origin + '/wp-sitemap-posts-' + type + '-1.xml</loc></sitemap>'
+      ).join('') + '</sitemapindex>');
+      return;
+    }
+    if (/^\/wp-sitemap-posts-(?:page|post|ezb_project)-1\.xml$/.test(pathname)) {
+      const paths = pathname.includes('-page-') ? [...routes].filter(p => !p.includes('prototype-') && !p.includes('blockout-vs-sunscreen')) :
+        pathname.includes('-post-') ? ['/roller-blinds-blockout-vs-sunscreen/'] :
+        ['/projects/prototype-roller-blinds-project/'];
+      res.writeHead(200, { 'content-type': 'text/xml' });
+      res.end('<urlset>' + paths.map(p => '<url><loc>' + origin + p + '</loc></url>').join('') + '</urlset>');
       return;
     }
     if (pathname === redirectPath) { res.writeHead(302, { location: '/' }); res.end(); return; }
@@ -64,4 +74,7 @@ await check({ name: 'indexable dev query leakage rejected', indexable: true, lea
 await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=11');
+await check({ name: 'indexable prototype project in sitemap rejected', indexable: true, markerPath: '/projects/prototype-roller-blinds-project/', expectedError: '/projects/prototype-roller-blinds-project/ indexed development-only publication marker' });
+await check({ name: 'indexable starter blog in sitemap rejected', indexable: true, markerPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development-only publication marker' });
+await check({ name: 'indexable starter blog dev transport rejected', indexable: true, leakPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development transport leak' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=14');
