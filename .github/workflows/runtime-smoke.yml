@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /blog/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
+          for path in / /products/ /roller-blinds/ /sheer-curtains/ /plantation-shutters/ /retractable-flyscreens/ /motorised-blinds/ /projects/ /projects/retractable-flyscreen-large-opening/ /projects/retractable-flyscreen-indoor-outdoor-opening/ /projects/prototype-roller-blinds-project/ /projects/prototype-sheer-curtains-project/ /projects/prototype-retractable-flyscreen-project/ /advice/ /blog/ /roller-blinds-blockout-vs-sunscreen/ /sheer-curtains-privacy-layering/ /plantation-shutters-before-you-choose/ /retractable-flyscreens-opening-suitability/ /motorised-blinds-when-worth-it/ /advice/privacy-vs-daylight/ /advice/retractable-flyscreen-suitability/ /advice/when-motorisation-makes-sense/ /service-areas/ /about/ /contact/; do
             code="$(curl -LsS -o /tmp/page.html -w '%{http_code}' "http://127.0.0.1:8080$path")"
             echo "$path -> HTTP $code"
             test "$code" = "200"
