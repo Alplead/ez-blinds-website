@@ -35,14 +35,14 @@ Evergreen decision-support / pillar content that should remain useful for a long
 - When Motorisation Makes Sense
 
 ### Blog
-Ongoing topical content for practical questions, comparisons, seasonal issues, local Melbourne context and deeper product education. Blog articles should support Product or Advice pages rather than duplicate them.
+Ongoing topical content for practical questions, comparisons, seasonal issues, local Melbourne context and deeper product education. Blog articles should support Product or Advice pages rather than duplicate them. The RFS and Motorisation starter topics were deliberately narrowed after an overlap audit so they do not compete with the existing suitability / decision Advice pages.
 
 Initial development-only article candidates:
 - Blockout or sunscreen roller blinds: where should you start?
 - Sheer curtains, privacy and layering: what changes from day to night?
 - Plantation shutters: what should be checked before you choose them?
-- Is your doorway suitable for a retractable flyscreen?
-- When does motorisation make sense for blinds?
+- Retractable flyscreen tracks and thresholds: what should you check?
+- Motorised blinds: what should you plan for power and control?
 
 ### Service Areas
 Grounded service-area information. Avoid thin suburb-page multiplication.
