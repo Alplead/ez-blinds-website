@@ -46,6 +46,18 @@ jobs:
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
 
+      - name: Test internal-link fail-closed guard
+        run: |
+          node --check scripts/test-link-check-guard.mjs
+          node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=4' /tmp/link-check-guard.log
+
+      - name: Test WordPress template skip-link targets
+        run: |
+          node --check scripts/test-theme-skip-link.mjs
+          node scripts/test-theme-skip-link.mjs | tee /tmp/skip-link.log
+          grep -q 'EZB_SKIP_LINK_TEST_PASS' /tmp/skip-link.log
+
       - name: Check SEO audit JavaScript syntax
         run: node --check scripts/seo-audit.mjs
 

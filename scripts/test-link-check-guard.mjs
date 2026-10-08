@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const script = fileURLToPath(new URL('./link-check.mjs', import.meta.url));
+async function check(name, mode, expectedFailure = '') {
+  const server = createServer((req, res) => {
+    const path = new URL(req.url, 'http://localhost').pathname;
+    if (mode === 'redirect' && path === '/contact/') {
+      res.writeHead(302, { location: '/' }); res.end(); return;
+    }
+    if (path === '/missing/') { res.writeHead(404); res.end('missing'); return; }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    const link = path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
+      path === '/' && mode === 'transport' ? '<a href="/products/?ezb_page=products">Development</a>' : '';
+    res.end('<!doctype html><html><body>' + link + '</body></html>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [script], {
+        env: { ...process.env, EZB_BASE_URL: 'http://127.0.0.1:' + server.address().port + '/', EZB_LINK_CHECK_MAX: '120' }
+      });
+      let output = '';
+      child.stdout.on('data', data => { output += data; });
+      child.stderr.on('data', data => { output += data; });
+      child.on('error', reject);
+      child.on('close', code => resolve({ code, output }));
+    });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+  if (expectedFailure) {
+    assert.notEqual(result.code, 0, name + ': expected failure');
+    assert.ok(result.output.includes(expectedFailure), name + ': wrong failure ' + result.output);
+  } else {
+    assert.equal(result.code, 0, name + ': ' + result.output);
+    assert.ok(result.output.includes('EZB_LINK_CHECK_PASS'));
+  }
+  console.log('PASS ' + name);
+}
+await check('clean internal links', 'clean');
+await check('required route redirect to Home rejected', 'redirect', 'unexpectedly redirected to');
+await check('broken internal link rejected', 'broken', 'HTTP 404');
+await check('development transport link rejected', 'transport', 'development ezb_page links');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=4');

@@ -25,6 +25,7 @@ const seeds = [
 const maxUrls = Number(process.env.EZB_LINK_CHECK_MAX || 120);
 const queue = seeds.map((path) => new URL(path, base).href);
 const queued = new Set(queue);
+const seeded = new Set(queue);
 const checked = new Map();
 const failures = [];
 const devTransportLinks = [];
@@ -90,6 +91,14 @@ while (queue.length) {
   if (finalUrl.origin !== base.origin) {
     failures.push(`${href} unexpectedly redirected off-origin to ${finalUrl.href}`);
     continue;
+  }
+  // A required public entry route must not silently land on Home or another page.
+  if (seeded.has(href)) {
+    const requestedUrl = new URL(href);
+    if (finalUrl.pathname !== requestedUrl.pathname || finalUrl.search !== requestedUrl.search || finalUrl.hash) {
+      failures.push(`${href} unexpectedly redirected to ${finalUrl.href}`);
+      continue;
+    }
   }
 
   const contentType = response.headers.get('content-type') || '';

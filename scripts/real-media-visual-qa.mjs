@@ -43,7 +43,7 @@ try {
         continue;
       }
       const finalUrl = new URL(page.url());
-      if (finalUrl.origin !== base.origin || finalUrl.pathname !== requestedUrl.pathname) {
+      if (finalUrl.origin !== base.origin || finalUrl.pathname !== requestedUrl.pathname || finalUrl.search || finalUrl.hash) {
         failures.push(`${viewportName} ${name}: unexpected navigation to ${finalUrl.href}`);
         continue;
       }
@@ -55,6 +55,9 @@ try {
 
       const heroImages = page.locator('img.ezb-media-slot__image');
       if (await heroImages.count()) {
+        if (await heroImages.first().getAttribute('loading') === 'lazy') {
+          failures.push(`${viewportName} ${name}: hero image should not be lazy-loaded`);
+        }
         const heroOk = await inspectMediaImage(heroImages.first());
         if (!heroOk.complete || heroOk.naturalWidth <= 0 || heroOk.naturalHeight <= 0) {
           failures.push(`${viewportName} ${name}: hero image failed to load`);
