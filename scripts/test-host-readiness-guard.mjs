@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -16,7 +16,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     }
     if (pathname === '/wp-sitemap.xml') {
       res.writeHead(indexable ? 200 : 404, { 'content-type': 'text/xml' });
-      res.end('<sitemapindex>' + ['page', 'post', 'ezb_project'].map(type =>
+      res.end('<sitemapindex>' + ['page', 'post', 'ezb_project'].filter(type => !(missingPostSitemap && type === 'post')).map(type =>
         '<sitemap><loc>' + origin + '/wp-sitemap-posts-' + type + '-1.xml</loc></sitemap>'
       ).join('') + '</sitemapindex>');
       return;
@@ -56,7 +56,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
       res.writeHead(404); res.end('not found'); return;
     }
     const noindex = forceNoindexPath === pathname || (!indexable && missingNoindexPath !== pathname);
-    const html = '<link rel="canonical" href="' + origin + pathname + '">' +
+    const html = '<link rel="canonical" href="' + origin + (badIndexedCanonicalPath === pathname ? '/wrong-article/' : pathname) + '">' +
       '<meta name="robots" content="' + (noindex ? 'noindex, nofollow' : 'index, follow') + '">' +
       (leakPath === pathname ? '<a href="/?ezb_page=roller-blinds">dev</a>' : '') +
       (markerPath === pathname ? '<div>Prototype project</div>' : '');
@@ -99,8 +99,10 @@ await check({ name: 'canonical route redirected to home rejected', redirectPath:
 await check({ name: 'indexable prototype project in sitemap rejected', indexable: true, markerPath: '/projects/prototype-roller-blinds-project/', expectedError: '/projects/prototype-roller-blinds-project/ indexed development-only publication marker' });
 await check({ name: 'indexable starter blog in sitemap rejected', indexable: true, markerPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development-only publication marker' });
 await check({ name: 'indexable starter blog dev transport rejected', indexable: true, leakPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development transport leak' });
+await check({ name: 'indexable missing Post sitemap rejected', indexable: true, missingPostSitemap: true, expectedError: 'sitemap index missing required content sitemap: /wp-sitemap-posts-post-1.xml' });
+await check({ name: 'indexable starter blog wrong canonical rejected', indexable: true, badIndexedCanonicalPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed content canonical mismatch' });
 await check({ name: 'all verified 301 and retired 410 routes', expectRedirects: true });
 await check({ name: 'legacy 301 with query rejected', expectRedirects: true, badRedirectQueryPath: '/portfolio/', expectedError: '/portfolio/ -> expected Location' });
 await check({ name: 'retired URL redirect rejected', expectRedirects: true, badGonePath: '/roman-blinds/', expectedError: '/roman-blinds/ -> expected HTTP 410' });
 await check({ name: 'legacy 302 rejected', expectRedirects: true, redirectPath: '/portfolio/', expectedError: '/portfolio/ -> expected 301' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=18');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=20');

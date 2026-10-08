@@ -196,6 +196,14 @@ if (expectIndexable) {
     if (!contentSitemaps.length || contentSitemaps.length > 30) {
       failures.push('sitemap index has an invalid number of content sitemaps');
     } else {
+      // All three published content families must be represented. Otherwise a
+      // missing Post sitemap could hide unreviewed development starter articles.
+      for (const type of ['page', 'post', 'ezb_project']) {
+        const expectedPath = '/wp-sitemap-posts-' + type + '-1.xml';
+        if (!contentSitemaps.some(location => new URL(location, base).pathname === expectedPath)) {
+          failures.push('sitemap index missing required content sitemap: ' + expectedPath);
+        }
+      }
       const checkedPages = new Set();
       for (const location of contentSitemaps) {
         const childUrl = new URL(location, base);
@@ -237,6 +245,21 @@ if (expectIndexable) {
             continue;
           }
           const pageHtml = await pageResponse.text();
+          // Canonical-route checks alone do not cover blog posts and Projects.
+          // Every index-listed content page must self-canonicalise to its exact URL.
+          const indexedCanonicals = extractCanonical(pageHtml);
+          if (indexedCanonicals.length !== 1) {
+            failures.push(pageUrl.pathname + ' indexed content expected exactly one canonical, found ' + indexedCanonicals.length);
+          } else {
+            try {
+              const indexedCanonical = new URL(indexedCanonicals[0], pageUrl);
+              if (indexedCanonical.href !== pageUrl.href) {
+                failures.push(pageUrl.pathname + ' indexed content canonical mismatch: ' + indexedCanonical.href);
+              }
+            } catch {
+              failures.push(pageUrl.pathname + ' indexed content has malformed canonical');
+            }
+          }
           const marker = developmentPublicationMarkers.find(value => pageHtml.includes(value));
           if (marker) failures.push(pageUrl.pathname + ' indexed development-only publication marker: ' + marker);
           if (pageHtml.includes('ezb_page=')) failures.push(pageUrl.pathname + ' indexed development transport leak');
