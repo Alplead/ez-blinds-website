@@ -720,6 +720,16 @@ jobs:
           test "$INVALID_EMAIL_CODE" = "302"
           grep -qi 'location: .*quote_status=invalid' /tmp/invalid-email-headers.txt
 
+          # A crafted email[] field must be rejected, not crash sanitize_email().
+          ARRAY_EMAIL_CODE="$(curl -sS -o /tmp/array-email-body.html -D /tmp/array-email-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Array Email' \
+            --data-urlencode 'email[]=malformed@example.com')"
+          test "$ARRAY_EMAIL_CODE" = "302"
+          grep -qi 'location: .*quote_status=invalid' /tmp/array-email-headers.txt
+
           HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'website=bot-filled-this'             --data-urlencode 'name=Bot')"
           test "$HONEYPOT_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
