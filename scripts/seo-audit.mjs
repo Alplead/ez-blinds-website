@@ -101,6 +101,10 @@ for (const path of paths) {
     failures.push(`${path} -> unexpected off-origin redirect: ${finalUrl.href}`);
     continue;
   }
+  if (finalUrl.pathname !== requested.pathname || finalUrl.search || finalUrl.hash) {
+    failures.push(`${path} -> unexpected route: ${finalUrl.pathname}${finalUrl.search}${finalUrl.hash}`);
+    continue;
+  }
   const html = await response.text();
   const title = extractTitle(html);
   const canonicals = extractCanonicals(html);
