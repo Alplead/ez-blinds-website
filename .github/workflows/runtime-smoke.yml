@@ -139,6 +139,25 @@ jobs:
           test "$(grep -o 'name="description"' /tmp/seo-query-roller.html | wc -l)" -eq 1
           grep -q 'Roller blinds are a practical starting point for many rooms' /tmp/seo-query-roller.html
 
+      - name: Verify social metadata baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -LsS 'http://127.0.0.1:8080/' -o /tmp/social-home.html
+          test "$(grep -o 'property="og:title"' /tmp/social-home.html | wc -l)" -eq 1
+          test "$(grep -o 'property="og:url"' /tmp/social-home.html | wc -l)" -eq 1
+          test "$(grep -o 'name="twitter:card"' /tmp/social-home.html | wc -l)" -eq 1
+
+          curl -LsS 'http://127.0.0.1:8080/roller-blinds-blockout-vs-sunscreen/' -o /tmp/social-blog.html
+          test "$(grep -o 'property="og:title"' /tmp/social-blog.html | wc -l)" -eq 1
+          grep -q 'property="og:type" content="article"' /tmp/social-blog.html
+          grep -q 'property="og:description"' /tmp/social-blog.html
+          grep -q 'name="twitter:description"' /tmp/social-blog.html
+
+          curl -LsS 'http://127.0.0.1:8080/this-page-should-not-exist-ezb/' -o /tmp/social-404.html
+          ! grep -q 'property="og:title"' /tmp/social-404.html
+
       - name: Verify conservative structured data
         shell: bash
         run: |
