@@ -36,6 +36,13 @@ jobs:
       - name: Check Visual QA JavaScript syntax
         run: node --check scripts/visual-qa.mjs
 
+      - name: Test reduced-motion preference changes
+        run: |
+          node --check wp-content/themes/ezb-theme/assets/js/site.js
+          node --check scripts/test-site-motion.mjs
+          node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
+          grep -q 'EZB_SITE_MOTION_TEST_PASS cases=3' /tmp/site-motion.log
+
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
 

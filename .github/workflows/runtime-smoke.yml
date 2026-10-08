@@ -579,6 +579,8 @@ jobs:
           grep -q 'name="name"' /tmp/contact.html
           grep -q 'name="phone"' /tmp/contact.html
           grep -q 'name="email"' /tmp/contact.html
+          grep -q 'id="ezb-contact-method-note"' /tmp/contact.html
+          grep -q 'aria-describedby="ezb-contact-method-note"' /tmp/contact.html
           grep -q 'name="product"' /tmp/contact.html
           grep -q 'name="message"' /tmp/contact.html
 
@@ -703,7 +705,20 @@ jobs:
 
           ERROR_CODE="$(curl -sS -o /tmp/error-submit-body.html -D /tmp/error-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Missing Contact')"
           test "$ERROR_CODE" = "302"
-          grep -qi 'location: .*quote_status=error' /tmp/error-submit-headers.txt
+          grep -qi 'location: .*quote_status=invalid' /tmp/error-submit-headers.txt
+
+          curl -LsS 'http://127.0.0.1:8080/contact/?quote_status=invalid' -o /tmp/invalid-contact.html
+          grep -q 'Please add your name and either a phone number or an email address.' /tmp/invalid-contact.html
+          grep -q 'role="alert"' /tmp/invalid-contact.html
+
+          INVALID_EMAIL_CODE="$(curl -sS -o /tmp/invalid-email-body.html -D /tmp/invalid-email-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Invalid Email' \
+            --data-urlencode 'email=invalid-email')"
+          test "$INVALID_EMAIL_CODE" = "302"
+          grep -qi 'location: .*quote_status=invalid' /tmp/invalid-email-headers.txt
 
           HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'website=bot-filled-this'             --data-urlencode 'name=Bot')"
           test "$HONEYPOT_CODE" = "302"

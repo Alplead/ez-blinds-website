@@ -250,9 +250,11 @@ add_shortcode(
 		?>
 		<div class="ezb-form-wrap">
 			<?php if ( 'sent' === $status ) : ?>
-				<p class="ezb-form-message ezb-form-message--success"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
+			<?php elseif ( 'invalid' === $status ) : ?>
+				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please add your name and either a phone number or an email address.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'error' === $status ) : ?>
-				<p class="ezb-form-message ezb-form-message--error"><?php esc_html_e( 'Something went wrong. Please check the form and try again.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Something went wrong. Please check the form and try again.', 'ezb-core' ); ?></p>
 			<?php endif; ?>
 			<form class="ezb-quote-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="ezb_quote">
@@ -264,9 +266,10 @@ add_shortcode(
 				<div class="ezb-form-grid">
 					<p><label><?php esc_html_e( 'Name', 'ezb-core' ); ?><br><input type="text" name="name" required></label></p>
 					<p><label><?php esc_html_e( 'Suburb / Postcode', 'ezb-core' ); ?><br><input type="text" name="suburb"></label></p>
-					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone"></label></p>
-					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email"></label></p>
+					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" aria-describedby="ezb-contact-method-note"></label></p>
+					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" aria-describedby="ezb-contact-method-note"></label></p>
 				</div>
+				<p class="ezb-form-note" id="ezb-contact-method-note"><?php esc_html_e( 'Please enter a phone number or email address so we can reply.', 'ezb-core' ); ?></p>
 
 				<p>
 					<label><?php esc_html_e( 'Product', 'ezb-core' ); ?><br>
@@ -326,8 +329,8 @@ function ezb_handle_quote_form() {
 	$product = isset( $_POST['product'] ) ? sanitize_text_field( wp_unslash( $_POST['product'] ) ) : '';
 	$message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
 
-	if ( '' === $name || ( '' === $phone && '' === $email ) ) {
-		wp_safe_redirect( home_url( '/contact/?quote_status=error' ) );
+	if ( '' === $name || ( '' === $phone && ! is_email( $email ) ) ) {
+		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
 		exit;
 	}
 
@@ -2109,6 +2112,7 @@ add_shortcode(
 
 		$group = $galleries[ $product ];
 		$items = '';
+		$count = 0;
 
 		foreach ( $group['images'] as $image ) {
 			$attachment_id = ezb_find_attachment_by_basename( $image['filename'] );
@@ -2128,13 +2132,12 @@ add_shortcode(
 				)
 			);
 			$items .= '</figure>';
+			$count++;
 		}
 
 		if ( '' === $items ) {
 			return '';
 		}
-
-		$count = substr_count( $items, 'ezb-product-gallery__image' );
 
 		return sprintf(
 			'<section class="ezb-section ezb-shell ezb-product-gallery-block" aria-label="%1$s"><div class="wp-block-group alignwide"><p class="ezb-eyebrow">%2$s</p><h2>%3$s</h2><div class="ezb-project-gallery ezb-project-gallery--%4$d">%5$s</div></div></section>',

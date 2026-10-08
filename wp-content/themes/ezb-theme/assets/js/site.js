@@ -1,16 +1,31 @@
 (function () {
 	'use strict';
 
-	var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	var motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+	var videos = document.querySelectorAll('[data-ezb-autoplay-video]');
 
-	document.querySelectorAll('[data-ezb-autoplay-video]').forEach(function (video) {
-		if (reduceMotion) {
+	function stopAutoplayVideos() {
+		videos.forEach(function (video) {
 			video.autoplay = false;
 			video.pause();
-		}
-	});
+		});
+	}
 
-	if (reduceMotion) {
+	function onMotionPreferenceChange(event) {
+		if (!event.matches) return;
+		stopAutoplayVideos();
+		// Reveal all animated items when reduced motion is enabled mid-session.
+		document.documentElement.classList.remove('ezb-motion-ready');
+	}
+
+	if (motionPreference.addEventListener) {
+		motionPreference.addEventListener('change', onMotionPreferenceChange);
+	} else if (motionPreference.addListener) {
+		motionPreference.addListener(onMotionPreferenceChange);
+	}
+
+	if (motionPreference.matches) {
+		stopAutoplayVideos();
 		return;
 	}
 
