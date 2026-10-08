@@ -10,8 +10,5 @@
       "onAutoForward": "openPreview"
     }
   },
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
-  },
-  "postCreateCommand": "php -v && git --version && docker --version"
+  "postCreateCommand": "php -v && git --version"
 }
