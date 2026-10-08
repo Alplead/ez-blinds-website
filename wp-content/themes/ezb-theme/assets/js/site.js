@@ -1,7 +1,16 @@
 (function () {
 	'use strict';
 
-	if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+	var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	document.querySelectorAll('[data-ezb-autoplay-video]').forEach(function (video) {
+		if (reduceMotion) {
+			video.autoplay = false;
+			video.pause();
+		}
+	});
+
+	if (reduceMotion) {
 		return;
 	}
 
