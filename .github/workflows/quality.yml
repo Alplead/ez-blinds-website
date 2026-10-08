@@ -79,6 +79,13 @@ jobs:
       - name: Check real-media visual QA JavaScript syntax
         run: node --check scripts/real-media-visual-qa.mjs
 
+      - name: Test lazy-media visual QA readiness
+        run: |
+          node --check scripts/media-image-readiness.mjs
+          node --check scripts/test-media-image-readiness.mjs
+          node scripts/test-media-image-readiness.mjs | tee /tmp/media-image-readiness.log
+          grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=3' /tmp/media-image-readiness.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh

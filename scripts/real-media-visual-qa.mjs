@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
+import { inspectMediaImage } from './media-image-readiness.mjs';
 
 const rawBase = process.env.EZB_BASE_URL || '';
 if (!rawBase) throw new Error('EZB_BASE_URL is required');
@@ -48,14 +49,12 @@ try {
 
       const heroImages = page.locator('img.ezb-media-slot__image');
       if (await heroImages.count()) {
-        const heroOk = await heroImages.first().evaluate((img) => ({
-          complete: img.complete,
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-          src: img.currentSrc || img.src
-        }));
+        const heroOk = await inspectMediaImage(heroImages.first());
         if (!heroOk.complete || heroOk.naturalWidth <= 0 || heroOk.naturalHeight <= 0) {
           failures.push(`${viewportName} ${name}: hero image failed to load`);
+        }
+        if (!heroOk.alt.trim()) {
+          failures.push(`${viewportName} ${name}: hero image has empty alt text`);
         }
       } else if (name !== 'home' && !isProject) {
         failures.push(`${viewportName} ${name}: expected a real hero image`);
@@ -69,13 +68,7 @@ try {
         }
 
         for (let i = 0; i < count; i += 1) {
-          const state = await gallery.nth(i).evaluate((img) => ({
-            complete: img.complete,
-            naturalWidth: img.naturalWidth,
-            naturalHeight: img.naturalHeight,
-            alt: img.getAttribute('alt') || '',
-            src: img.currentSrc || img.src
-          }));
+          const state = await inspectMediaImage(gallery.nth(i));
           if (!state.complete || state.naturalWidth <= 0 || state.naturalHeight <= 0) {
             failures.push(`${viewportName} ${name}: gallery image ${i + 1} failed to load`);
           }
