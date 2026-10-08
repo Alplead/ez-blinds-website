@@ -36,9 +36,15 @@ try {
 
     for (const [name, path, galleryCount] of routes) {
       const isProject = path.startsWith('/projects/');
-      const response = await page.goto(new URL(path, base).href, { waitUntil: 'networkidle' });
+      const requestedUrl = new URL(path, base);
+      const response = await page.goto(requestedUrl.href, { waitUntil: 'networkidle' });
       if (!response || response.status() !== 200) {
         failures.push(`${viewportName} ${name}: HTTP ${response?.status() ?? 'no response'}`);
+        continue;
+      }
+      const finalUrl = new URL(page.url());
+      if (finalUrl.origin !== base.origin || finalUrl.pathname !== requestedUrl.pathname) {
+        failures.push(`${viewportName} ${name}: unexpected navigation to ${finalUrl.href}`);
         continue;
       }
 
