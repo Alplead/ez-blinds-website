@@ -16,6 +16,11 @@ if (base.protocol !== 'https:' && !allowHttp) {
 const failures = [];
 const notes = [];
 
+// An indexable release must never enable development-only query transport.
+if (expectIndexable && allowDevTransport) {
+  failures.push('indexable mode forbids development ezb_page transport opt-in');
+}
+
 function decodeHtml(value) {
   return value
     .replace(/&amp;/gi, '&')
@@ -102,7 +107,7 @@ for (const path of canonicalRoutes) {
   }
 
   const html = await response.text();
-  if (html.includes('ezb_page=') && !allowDevTransport) {
+  if (html.includes('ezb_page=') && (expectIndexable || !allowDevTransport)) {
     failures.push(`${path} leaked development ezb_page transport into public HTML`);
   }
 

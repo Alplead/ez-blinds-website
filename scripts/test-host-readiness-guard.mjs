@@ -59,7 +59,9 @@ await check({ name: 'staging dev query leak rejected', leakPath: '/advice/', exp
 await check({ name: 'prototype runtime explicit dev transport opt-in', allowDevTransport: true, leakPath: '/advice/' });
 await check({ name: 'non-indexable development marker tolerated', markerPath: '/projects/' });
 await check({ name: 'indexable release mode clean', indexable: true });
+await check({ name: 'indexable opt-in rejected', indexable: true, allowDevTransport: true, expectedError: 'indexable mode forbids development ezb_page transport opt-in' });
+await check({ name: 'indexable dev query leakage rejected', indexable: true, leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=9');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=11');
