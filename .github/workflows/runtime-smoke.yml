@@ -50,6 +50,17 @@ jobs:
             test "$code" = "200"
           done
 
+      - name: Verify 404 fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/404.html -w '%{http_code}' 'http://127.0.0.1:8080/this-page-should-not-exist-ezb/')"
+          test "$code" = "404"
+          grep -q 'That page is no longer here' /tmp/404.html
+          grep -q '/products/' /tmp/404.html
+          grep -q '/advice/' /tmp/404.html
+          grep -q '/contact/' /tmp/404.html
+
       - name: Crawl internal pretty URLs for broken links
         shell: bash
         run: |
