@@ -65,6 +65,77 @@ function ezb_print_meta_description() {
 add_action( 'wp_head', 'ezb_print_meta_description', 2 );
 
 /**
+ * Emit conservative structured data using only facts already present in
+ * WordPress. Do not invent address, reviews, pricing or local-business claims.
+ */
+function ezb_print_structured_data() {
+	if ( is_admin() ) {
+		return;
+	}
+
+	$graph = array();
+
+	if ( is_front_page() ) {
+		$graph[] = array(
+			'@type' => 'WebSite',
+			'@id'   => home_url( '/#website' ),
+			'url'   => home_url( '/' ),
+			'name'  => get_bloginfo( 'name' ),
+		);
+	}
+
+	if ( is_singular( 'post' ) ) {
+		$post_id = get_queried_object_id();
+		if ( $post_id ) {
+			$article = array(
+				'@type'            => 'BlogPosting',
+				'@id'              => get_permalink( $post_id ) . '#article',
+				'headline'         => get_the_title( $post_id ),
+				'mainEntityOfPage' => get_permalink( $post_id ),
+				'datePublished'    => get_the_date( DATE_W3C, $post_id ),
+				'dateModified'     => get_the_modified_date( DATE_W3C, $post_id ),
+				'publisher'        => array(
+					'@type' => 'Organization',
+					'name'  => get_bloginfo( 'name' ),
+					'url'   => home_url( '/' ),
+				),
+			);
+
+			$excerpt = trim( wp_strip_all_tags( get_post_field( 'post_excerpt', $post_id ) ) );
+			if ( '' !== $excerpt ) {
+				$article['description'] = $excerpt;
+			}
+
+			$image_id = get_post_thumbnail_id( $post_id );
+			if ( $image_id ) {
+				$image_url = wp_get_attachment_image_url( $image_id, 'full' );
+				if ( $image_url ) {
+					$article['image'] = array( $image_url );
+				}
+			}
+
+			$graph[] = $article;
+		}
+	}
+
+	if ( ! $graph ) {
+		return;
+	}
+
+	$payload = array(
+		'@context' => 'https://schema.org',
+		'@graph'   => $graph,
+	);
+
+	printf(
+		"<script type="application/ld+json">%s</script>\n",
+		wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+	);
+}
+add_action( 'wp_head', 'ezb_print_structured_data', 20 );
+
+
+/**
  * WordPress core emits rel=canonical for singular content but not for the
  * Projects CPT archive. Add the archive self-canonical only for that route.
  */
@@ -412,15 +483,15 @@ function ezb_seed_starter_blog_posts() {
 			'excerpt' => 'A room-by-room checklist covering opening style, panel movement, moisture exposure and visual fit.',
 			'content' => '<p><strong>Working copy for review.</strong> Plantation shutters can make a window feel more architectural, but they are not automatically the best fit for every opening.</p><h2>Check how the window opens</h2><p>Handles, winders, recess depth and the way the original window operates can affect frame and panel design.</p><h2>Think about panel movement</h2><p>Furniture, taps, benches and nearby walls can influence how comfortably shutter panels can open and fold.</p><h2>Match material to the room</h2><p>Bathrooms and other moisture-prone areas need an appropriate material choice. Exact active EZ options will be inserted only after supplier verification.</p><p>The final article will add verified material choices, current warranty wording and real project examples.</p>',
 		),
-		'retractable-flyscreens-opening-suitability' => array(
-			'title'   => 'Is your doorway suitable for a retractable flyscreen?',
-			'excerpt' => 'The practical checks that matter before deciding whether a retractable screen suits a door or larger opening.',
-			'content' => '<p><strong>Working copy for review.</strong> Retractable flyscreens are particularly useful where you want insect protection without leaving a fixed screen visually dominant all the time.</p><h2>The opening matters more than the brochure</h2><p>Width, height, surrounding frame, tracks, handles and the way the doors move all affect suitability.</p><h2>Look at the whole threshold</h2><p>The lower track and surrounding floor condition need to work with normal use of the opening. Site measurement is therefore important.</p><h2>Photos can help before the visit</h2><p>Wide photos showing the whole opening and its surrounding frame can help identify obvious constraints before a measure is arranged.</p><p>The final version will add the current system range, verified size limits and genuine EZ installations.</p>',
+		'retractable-flyscreen-track-threshold-planning' => array(
+			'title'   => 'Retractable flyscreen tracks and thresholds: what should you check?',
+			'excerpt' => 'A focused guide to lower tracks, floor transitions, handles and everyday passage before a site measure.',
+			'content' => '<p><strong>Working copy for review.</strong> A retractable flyscreen has to work with the way people actually move through the opening, not just fit within its width and height.</p><h2>Look closely at the lower track area</h2><p>Floor transitions, existing door tracks and the condition of the threshold can affect where a screen track can sit and how practical the finished opening feels.</p><h2>Check handles and moving panels</h2><p>Door handles, locks and the travel of sliding or folding panels can influence the available fixing position.</p><h2>Think about everyday passage</h2><p>Frequently used openings need a layout that makes sense for normal movement through the doorway. A site measure is used to confirm the details.</p><p>The final version will add verified current system details and genuine EZ installation examples before publication.</p>',
 		),
-		'motorised-blinds-when-worth-it' => array(
-			'title'   => 'When does motorisation make sense for blinds?',
-			'excerpt' => 'A practical guide to deciding when motorisation solves a real access, convenience or grouped-control problem.',
-			'content' => '<p><strong>Working copy for review.</strong> Motorisation is most valuable when it solves a practical problem rather than being added only as a gadget.</p><h2>Hard-to-reach windows</h2><p>High, wide or obstructed windows can make manual operation inconvenient. Motorisation can be worth considering where access is the main problem.</p><h2>Frequent or grouped operation</h2><p>Rooms with several blinds may benefit from a simpler way to operate compatible blinds together.</p><h2>Compatibility still needs checking</h2><p>Blind size, tube and motor compatibility, power method and control options depend on the current product range.</p><p>The final version will publish only the motor systems and control options that EZ has verified as current.</p>',
+		'motorised-blinds-power-control-planning' => array(
+			'title'   => 'Motorised blinds: what should you plan for power and control?',
+			'excerpt' => 'Questions to ask about charging or power access, grouped control and day-to-day operation before choosing a motor system.',
+			'content' => '<p><strong>Working copy for review.</strong> Once motorisation is being considered, the next question is how the blind will be powered and controlled in normal daily use.</p><h2>Plan access before installation</h2><p>Charging access or another suitable power arrangement should be considered together with the window position and the way the room is used.</p><h2>Decide how many blinds need to work together</h2><p>A single blind and a room full of blinds can create different control needs. Grouped operation may be useful where compatible products are selected.</p><h2>Keep product compatibility separate from the idea</h2><p>Exact motor, control and power options depend on the current blind system and supplier range, so they must be verified before ordering.</p><p>The final version will publish only current EZ-supported motor and control options.</p>',
 		),
 	);
 
@@ -444,6 +515,56 @@ function ezb_seed_starter_blog_posts() {
 add_action( 'init', 'ezb_seed_starter_blog_posts', 34 );
 
 /**
+ * Migrate the two original starter posts whose search intent overlapped with
+ * existing Advice pages. Only untouched development working copies qualify.
+ */
+function ezb_migrate_overlapping_starter_blog_topics() {
+	if ( 'development' !== wp_get_environment_type() ) {
+		return;
+	}
+
+	$migrations = array(
+		'retractable-flyscreens-opening-suitability' => array(
+			'expected_title' => 'Is your doorway suitable for a retractable flyscreen?',
+			'new_slug'       => 'retractable-flyscreen-track-threshold-planning',
+			'new_title'      => 'Retractable flyscreen tracks and thresholds: what should you check?',
+			'new_excerpt'    => 'A focused guide to lower tracks, floor transitions, handles and everyday passage before a site measure.',
+			'new_content'    => '<p><strong>Working copy for review.</strong> A retractable flyscreen has to work with the way people actually move through the opening, not just fit within its width and height.</p><h2>Look closely at the lower track area</h2><p>Floor transitions, existing door tracks and the condition of the threshold can affect where a screen track can sit and how practical the finished opening feels.</p><h2>Check handles and moving panels</h2><p>Door handles, locks and the travel of sliding or folding panels can influence the available fixing position.</p><h2>Think about everyday passage</h2><p>Frequently used openings need a layout that makes sense for normal movement through the doorway. A site measure is used to confirm the details.</p><p>The final version will add verified current system details and genuine EZ installation examples before publication.</p>',
+		),
+		'motorised-blinds-when-worth-it' => array(
+			'expected_title' => 'When does motorisation make sense for blinds?',
+			'new_slug'       => 'motorised-blinds-power-control-planning',
+			'new_title'      => 'Motorised blinds: what should you plan for power and control?',
+			'new_excerpt'    => 'Questions to ask about charging or power access, grouped control and day-to-day operation before choosing a motor system.',
+			'new_content'    => '<p><strong>Working copy for review.</strong> Once motorisation is being considered, the next question is how the blind will be powered and controlled in normal daily use.</p><h2>Plan access before installation</h2><p>Charging access or another suitable power arrangement should be considered together with the window position and the way the room is used.</p><h2>Decide how many blinds need to work together</h2><p>A single blind and a room full of blinds can create different control needs. Grouped operation may be useful where compatible products are selected.</p><h2>Keep product compatibility separate from the idea</h2><p>Exact motor, control and power options depend on the current blind system and supplier range, so they must be verified before ordering.</p><p>The final version will publish only current EZ-supported motor and control options.</p>',
+		),
+	);
+
+	foreach ( $migrations as $old_slug => $data ) {
+		$post = get_page_by_path( $old_slug, OBJECT, 'post' );
+		if (
+			! $post ||
+			$data['expected_title'] !== $post->post_title ||
+			false === strpos( $post->post_content, '<strong>Working copy for review.</strong>' )
+		) {
+			continue;
+		}
+
+		wp_update_post(
+			array(
+				'ID'           => $post->ID,
+				'post_name'    => $data['new_slug'],
+				'post_title'   => $data['new_title'],
+				'post_excerpt' => $data['new_excerpt'],
+				'post_content' => $data['new_content'],
+			)
+		);
+	}
+}
+add_action( 'init', 'ezb_migrate_overlapping_starter_blog_topics', 35 );
+
+
+/**
  * Connect active product pages to one useful Blog guide without duplicating
  * the full article on the sales page. If the guide does not exist, render
  * nothing so production can fail closed until content is approved.
@@ -453,8 +574,8 @@ function ezb_related_guide_map() {
 		'roller-blinds'          => 'roller-blinds-blockout-vs-sunscreen',
 		'sheer-curtains'         => 'sheer-curtains-privacy-layering',
 		'plantation-shutters'    => 'plantation-shutters-before-you-choose',
-		'retractable-flyscreens' => 'retractable-flyscreens-opening-suitability',
-		'motorised-blinds'       => 'motorised-blinds-when-worth-it',
+		'retractable-flyscreens' => 'retractable-flyscreen-track-threshold-planning',
+		'motorised-blinds'       => 'motorised-blinds-power-control-planning',
 	);
 }
 
