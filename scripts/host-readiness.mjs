@@ -255,8 +255,21 @@ const verifiedRedirects = new Map([
   ['/retractable-fly-screen/', '/retractable-flyscreens/'],
   ['/portfolio/', '/projects/'],
   ['/portfolio/page/2/', '/projects/'],
-  ['/category/roller-blinds/', '/roller-blinds/']
+  ['/category/roller-blinds/', '/roller-blinds/'],
+  ['/2018/02/04/roller-blinds-showcase/', '/roller-blinds/'],
+  ['/2018/02/04/plantation-shutters-showcase/', '/plantation-shutters/'],
+  ['/2018/10/06/retractable-fly-screen-showcase/', '/retractable-flyscreens/']
 ]);
+
+const retiredRoutes = [
+  '/roman-blinds/',
+  '/panel-guide-blinds/',
+  '/venetian-blinds/',
+  '/portfolio/venetian-blinds/',
+  '/2018/02/04/roman-blinds-showcase/',
+  '/2018/02/04/panel-guide-blinds-showcase/',
+  '/2018/02/04/venetian-blinds-showcase/'
+];
 
 if (expectRedirects) {
   for (const [source, target] of verifiedRedirects) {
@@ -270,14 +283,22 @@ if (expectRedirects) {
     const resolved = new URL(location, base);
     const expected = new URL(target, base);
 
-    if (resolved.origin !== base.origin || resolved.pathname !== expected.pathname) {
+    if (resolved.origin !== base.origin || resolved.pathname !== expected.pathname || resolved.search || resolved.hash) {
       failures.push(
         `${source} -> expected Location ${expected.href}, got ${resolved.href}`
       );
     }
   }
+
+  // A retired product with no truthful replacement must not silently redirect.
+  for (const path of retiredRoutes) {
+    const { response } = await fetchPage(path, { redirect: 'manual' });
+    if (response.status !== 410 || response.headers.has('location')) {
+      failures.push(path + ' -> expected HTTP 410 without redirect, got ' + response.status);
+    }
+  }
 } else {
-  notes.push('verified legacy 301 checks skipped because EZB_EXPECT_REDIRECTS=0');
+  notes.push('verified legacy 301 and 410 checks skipped because EZB_EXPECT_REDIRECTS=0');
 }
 
 console.log(`EZB_HOST_READINESS base=${base.href}`);

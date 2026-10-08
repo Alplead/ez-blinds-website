@@ -51,6 +51,24 @@ jobs:
           grep -q 'Free Measure &amp; Quote' /tmp/release-home.html
           ! grep -q 'ezb_page=' /tmp/release-home.html
 
+      - name: Verify release-mode retired routes and truthful redirects
+        run: |
+          set -euo pipefail
+          for path in \\
+            /roman-blinds/ \\
+            /panel-guide-blinds/ \\
+            /venetian-blinds/ \\
+            /portfolio/venetian-blinds/ \\
+            /2018/02/04/roman-blinds-showcase/ \\
+            /2018/02/04/panel-guide-blinds-showcase/ \\
+            /2018/02/04/venetian-blinds-showcase/; do
+            code="$(curl -sS -o /tmp/retired-route.html -w '%{http_code}' "http://127.0.0.1:8081$path")"
+            test "$code" = "410"
+          done
+          code="$(curl -sS -o /dev/null -D /tmp/legacy-redirect-headers.txt -w '%{http_code}' 'http://127.0.0.1:8081/retractable-fly-screen/')"
+          test "$code" = "301"
+          grep -qi 'location: .*retractable-flyscreens/' /tmp/legacy-redirect-headers.txt
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:
