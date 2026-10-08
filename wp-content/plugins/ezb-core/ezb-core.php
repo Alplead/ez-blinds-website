@@ -1502,6 +1502,53 @@ function ezb_find_attachment_by_basename( $basename ) {
 }
 
 /**
+ * Development-only genuine EZ motion slot.
+ *
+ * The current source video contains identifiable people and has not yet passed
+ * publication/privacy approval. It may be previewed in development after the
+ * web derivative is imported, but it must not render in production yet.
+ */
+function ezb_retractable_video_candidate() {
+	return array(
+		'filename' => 'EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4',
+		'poster'   => 'EZ_Retractable_Flyscreen_WEB_V1_poster.jpg',
+	);
+}
+
+add_shortcode(
+	'ezb_retractable_video',
+	function () {
+		if ( 'development' !== wp_get_environment_type() ) {
+			return '';
+		}
+
+		$candidate = ezb_retractable_video_candidate();
+		$video_id  = ezb_find_attachment_by_basename( $candidate['filename'] );
+
+		if ( ! $video_id || 'video/mp4' !== get_post_mime_type( $video_id ) ) {
+			return '';
+		}
+
+		$video_url = wp_get_attachment_url( $video_id );
+		if ( ! $video_url ) {
+			return '';
+		}
+
+		$poster_id  = ezb_find_attachment_by_basename( $candidate['poster'] );
+		$poster_url = $poster_id ? wp_get_attachment_url( $poster_id ) : '';
+
+		return sprintf(
+			'<section class="ezb-section ezb-shell ezb-video-feature"><div class="ezb-video-feature__inner"><div class="ezb-video-feature__copy"><p class="ezb-eyebrow">%1$s</p><h2>%2$s</h2><p>%3$s</p></div><div class="ezb-video-feature__frame"><video data-ezb-autoplay-video autoplay muted loop playsinline controls preload="metadata"%4$s><source src="%5$s" type="video/mp4"></video></div></div></section>',
+			esc_html__( 'Real EZ installation motion', 'ezb-core' ),
+			esc_html__( 'See a retractable flyscreen in motion', 'ezb-core' ),
+			esc_html__( 'Development preview only. Publication and privacy approval are still required before launch.', 'ezb-core' ),
+			$poster_url ? ' poster="' . esc_url( $poster_url ) . '"' : '',
+			esc_url( $video_url )
+		);
+	}
+);
+
+/**
  * Development Project media groupings grounded in the Media Asset Registry.
  *
  * Grouping is visual/provisional only. It does not authorise publication of
