@@ -343,16 +343,6 @@ jobs:
           test "$(grep -o 'ezb-project-gallery__placeholder' /tmp/project-media-group-b.html | wc -l)" -eq 3
           grep -q 'Only the visual grouping is treated as verified at this stage.' /tmp/project-media-group-b.html
 
-      - name: Verify hero loading priority
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/hero-priority.html
-          grep -Eq 'class="[^"]*ezb-media-slot__image[^"]*"[^>]*loading="eager"' /tmp/hero-priority.html
-          grep -Eq 'class="[^"]*ezb-media-slot__image[^"]*"[^>]*fetchpriority="high"' /tmp/hero-priority.html
-          grep -Eq 'class="[^"]*ezb-product-gallery__image[^"]*"[^>]*loading="lazy"' /tmp/hero-priority.html
-
       - name: Verify real-media aspect-aware gallery fit rules
         shell: bash
         run: |
@@ -434,6 +424,9 @@ jobs:
 
           curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/media-gallery-roller.html
           test "$(grep -o 'ezb-product-gallery__image' /tmp/media-gallery-roller.html | wc -l)" -eq 6
+          grep -Eq '<img[^>]*class="[^"]*ezb-media-slot__image[^"]*"[^>]*loading="eager"' /tmp/media-gallery-roller.html
+          grep -Eq '<img[^>]*class="[^"]*ezb-media-slot__image[^"]*"[^>]*fetchpriority="high"' /tmp/media-gallery-roller.html
+          grep -Eq '<img[^>]*class="[^"]*ezb-product-gallery__image[^"]*"[^>]*loading="lazy"' /tmp/media-gallery-roller.html
 
           curl -sS "http://127.0.0.1:8080/?ezb_page=sheer-curtains" -o /tmp/media-gallery-sheer.html
           grep -q 'ezb-media-slot__image' /tmp/media-gallery-sheer.html
