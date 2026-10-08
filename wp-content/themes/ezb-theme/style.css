@@ -1312,3 +1312,57 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 		transition: none;
 	}
 }
+
+
+/* Development motion feature */
+.ezb-video-feature {
+	background: #211a16;
+	color: #f8f3ea;
+}
+
+.ezb-video-feature__inner {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(280px, 430px);
+	align-items: center;
+	gap: clamp(34px, 7vw, 90px);
+	max-width: 1180px;
+	margin-inline: auto;
+}
+
+.ezb-video-feature__copy p:not(.ezb-eyebrow) {
+	max-width: 620px;
+	color: #d8cdbc;
+}
+
+.ezb-video-feature__copy .ezb-eyebrow {
+	color: #d2ad72;
+}
+
+.ezb-video-feature__frame {
+	position: relative;
+	overflow: hidden;
+	border: 1px solid rgba(210, 173, 114, 0.42);
+	border-radius: calc(var(--ezb-radius) + 10px);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+	background: #0d0b0a;
+}
+
+.ezb-video-feature video {
+	display: block;
+	width: 100%;
+	aspect-ratio: 9 / 16;
+	max-height: 720px;
+	object-fit: cover;
+	background: #0d0b0a;
+}
+
+@media (max-width: 781px) {
+	.ezb-video-feature__inner {
+		grid-template-columns: 1fr;
+	}
+
+	.ezb-video-feature__frame {
+		width: min(100%, 420px);
+		margin-inline: auto;
+	}
+}
