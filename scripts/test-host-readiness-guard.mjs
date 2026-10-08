@@ -3,18 +3,20 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
-const routes = new Set(['/', '/roller-blinds/', '/retractable-flyscreens/', '/plantation-shutters/', '/projects/', '/advice/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
+const routes = new Set(['/', '/products/', '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/', '/retractable-flyscreens/', '/motorised-blinds/', '/projects/', '/advice/', '/blog/', '/about/', '/service-areas/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
     if (pathname === '/robots.txt') {
+      if (redirectRobots) { res.writeHead(302, { location: '/robots-proxy.txt' }); res.end(); return; }
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(indexable ? 'User-agent: *\nAllow: /' : 'User-agent: *\nDisallow: /');
       return;
     }
     if (pathname === '/wp-sitemap.xml') {
+      if (redirectSitemap) { res.writeHead(302, { location: '/sitemap-proxy.xml' }); res.end(); return; }
       res.writeHead(indexable ? 200 : 404, { 'content-type': 'text/xml' });
       res.end('<sitemapindex>' + ['page', 'post', 'ezb_project'].filter(type => !(missingPostSitemap && type === 'post')).map(type =>
         '<sitemap><loc>' + origin + '/wp-sitemap-posts-' + type + '-1.xml</loc></sitemap>'
@@ -85,7 +87,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
   console.log('PASS ' + name);
 }
 
-await check({ name: 'staging all seven routes noindex' });
+await check({ name: 'staging all thirteen structural routes noindex' });
 await check({ name: 'secondary route missing noindex rejected', missingNoindexPath: '/contact/', expectedError: '/contact/ lacks noindex protection' });
 await check({ name: 'staging dev query leak rejected', leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'prototype runtime explicit dev transport opt-in', allowDevTransport: true, leakPath: '/advice/' });
@@ -105,4 +107,9 @@ await check({ name: 'all verified 301 and retired 410 routes', expectRedirects: 
 await check({ name: 'legacy 301 with query rejected', expectRedirects: true, badRedirectQueryPath: '/portfolio/', expectedError: '/portfolio/ -> expected Location' });
 await check({ name: 'retired URL redirect rejected', expectRedirects: true, badGonePath: '/roman-blinds/', expectedError: '/roman-blinds/ -> expected HTTP 410' });
 await check({ name: 'legacy 302 rejected', expectRedirects: true, redirectPath: '/portfolio/', expectedError: '/portfolio/ -> expected 301' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=20');
+await check({ name: 'motorisation route missing staging noindex rejected', missingNoindexPath: '/motorised-blinds/', expectedError: '/motorised-blinds/ lacks noindex protection' });
+await check({ name: 'products route development transport leak rejected', leakPath: '/products/', expectedError: '/products/ leaked development' });
+await check({ name: 'indexable blog index development marker rejected', indexable: true, markerPath: '/blog/', expectedError: '/blog/ contains development-only publication marker' });
+await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
+await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=25');

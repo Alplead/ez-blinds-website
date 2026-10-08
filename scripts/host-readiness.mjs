@@ -87,13 +87,21 @@ const developmentPublicationMarkers = [
   'REAL EZ PROJECT MEDIA'
 ];
 
+// Include every current structural top-level route. A staging host must not
+// accidentally index a page omitted from the small original smoke subset.
 const canonicalRoutes = [
   '/',
+  '/products/',
   '/roller-blinds/',
-  '/retractable-flyscreens/',
+  '/sheer-curtains/',
   '/plantation-shutters/',
+  '/retractable-flyscreens/',
+  '/motorised-blinds/',
   '/projects/',
   '/advice/',
+  '/blog/',
+  '/about/',
+  '/service-areas/',
   '/contact/'
 ];
 
@@ -154,7 +162,7 @@ for (const path of canonicalRoutes) {
   }
 }
 
-const robotsResponse = await fetch(new URL('/robots.txt', base), { redirect: 'follow' });
+const robotsResponse = await fetch(new URL('/robots.txt', base), { redirect: 'manual' });
 if (robotsResponse.status !== 200) {
   failures.push(`/robots.txt -> expected HTTP 200, got ${robotsResponse.status}`);
 } else {
@@ -168,7 +176,7 @@ if (robotsResponse.status !== 200) {
   }
 }
 
-const sitemapResponse = await fetch(new URL('/wp-sitemap.xml', base), { redirect: 'follow' });
+const sitemapResponse = await fetch(new URL('/wp-sitemap.xml', base), { redirect: 'manual' });
 if (expectIndexable) {
   if (sitemapResponse.status !== 200) {
     failures.push(`/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got ${sitemapResponse.status}`);
