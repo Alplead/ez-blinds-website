@@ -80,10 +80,16 @@ const results = [];
 
 for (const path of paths) {
   const requested = new URL(path, base);
-  const response = await fetch(requested, {
-    redirect: 'follow',
-    headers: { accept: 'text/html,application/xhtml+xml;q=0.9' }
-  });
+  let response;
+  try {
+    response = await fetch(requested, {
+      redirect: 'follow',
+      headers: { accept: 'text/html,application/xhtml+xml;q=0.9' }
+    });
+  } catch (error) {
+    failures.push(`${path} -> fetch failed: ${error.message}`);
+    continue;
+  }
 
   if (response.status !== 200) {
     failures.push(`${path} -> expected HTTP 200, got ${response.status}`);
@@ -91,6 +97,10 @@ for (const path of paths) {
   }
 
   const finalUrl = new URL(response.url);
+  if (finalUrl.origin !== base.origin) {
+    failures.push(`${path} -> unexpected off-origin redirect: ${finalUrl.href}`);
+    continue;
+  }
   const html = await response.text();
   const title = extractTitle(html);
   const canonicals = extractCanonicals(html);
