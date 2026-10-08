@@ -45,6 +45,12 @@ jobs:
       - name: Check host readiness JavaScript syntax
         run: node --check scripts/host-readiness.mjs
 
+      - name: Test host readiness fail-closed guard
+        run: |
+          node --check scripts/test-host-readiness-guard.mjs
+          node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=6' /tmp/host-readiness-guard.log
+
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh
 
