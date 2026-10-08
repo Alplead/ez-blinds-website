@@ -15,7 +15,10 @@
 		'.ezb-media-placeholder',
 		'.ezb-map-placeholder',
 		'.ezb-contact-aside',
-		'.ezb-split-panel'
+		'.ezb-split-panel',
+		'.ezb-blog-card',
+		'.ezb-project-gallery',
+		'.ezb-product-gallery-block'
 	].join(','));
 
 	if (!('IntersectionObserver' in window)) {

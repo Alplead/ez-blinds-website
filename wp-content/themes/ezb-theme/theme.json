@@ -21,10 +21,11 @@
     },
     "color": {
       "palette": [
-        { "slug": "ink", "color": "#1b1f23", "name": "Ink" },
-        { "slug": "muted", "color": "#5f686f", "name": "Muted" },
-        { "slug": "surface", "color": "#f5f6f3", "name": "Surface" },
-        { "slug": "accent", "color": "#2f5d50", "name": "Accent" },
+        { "slug": "ink", "color": "#2a2521", "name": "Ink" },
+        { "slug": "muted", "color": "#6d6259", "name": "Muted" },
+        { "slug": "surface", "color": "#f7f2ea", "name": "Surface" },
+        { "slug": "accent", "color": "#7a5a2b", "name": "Bronze" },
+        { "slug": "gold", "color": "#b38a49", "name": "Soft Gold" },
         { "slug": "white", "color": "#ffffff", "name": "White" }
       ]
     }

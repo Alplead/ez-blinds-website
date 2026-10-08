@@ -1,0 +1,44 @@
+<!-- wp:template-part {"slug":"header","tagName":"header"} /-->
+<!-- wp:group {"tagName":"main","anchor":"main-content","layout":{"type":"default"}} -->
+<main class="wp-block-group">
+	<!-- wp:group {"align":"full","className":"ezb-blog-hero ezb-shell","layout":{"type":"constrained"}} -->
+	<div class="wp-block-group alignfull ezb-blog-hero ezb-shell">
+		<!-- wp:group {"align":"wide","layout":{"type":"constrained"}} -->
+		<div class="wp-block-group alignwide">
+			<!-- wp:paragraph {"className":"ezb-eyebrow"} --><p class="ezb-eyebrow">Ideas &amp; Advice</p><!-- /wp:paragraph -->
+			<!-- wp:heading {"level":1} --><h1 class="wp-block-heading">Practical window advice for Melbourne homes</h1><!-- /wp:heading -->
+			<!-- wp:paragraph {"className":"ezb-lede"} --><p class="ezb-lede">Product comparisons, planning tips and real-world questions drawn from the decisions we discuss with customers.</p><!-- /wp:paragraph -->
+		</div>
+		<!-- /wp:group -->
+	</div>
+	<!-- /wp:group -->
+
+	<!-- wp:group {"align":"full","className":"ezb-section ezb-shell ezb-blog-grid","layout":{"type":"constrained"}} -->
+	<div class="wp-block-group alignfull ezb-section ezb-shell ezb-blog-grid">
+		<!-- wp:query {"queryId":20,"query":{"perPage":9,"pages":0,"offset":0,"postType":"post","order":"desc","orderBy":"date","author":"","search":"","exclude":[],"sticky":"","inherit":false},"align":"wide"} -->
+		<div class="wp-block-query alignwide">
+			<!-- wp:post-template -->
+				<!-- wp:group {"className":"ezb-blog-card","layout":{"type":"constrained"}} -->
+				<div class="wp-block-group ezb-blog-card">
+					<!-- wp:post-date /-->
+					<!-- wp:post-title {"isLink":true} /-->
+					<!-- wp:post-excerpt {"moreText":"Read article"} /-->
+				</div>
+				<!-- /wp:group -->
+			<!-- /wp:post-template -->
+			<!-- wp:query-no-results -->
+				<!-- wp:paragraph --><p>New practical guides are being prepared.</p><!-- /wp:paragraph -->
+			<!-- /wp:query-no-results -->
+			<!-- wp:query-pagination {"layout":{"type":"flex","justifyContent":"space-between"}} -->
+				<!-- wp:query-pagination-previous /-->
+				<!-- wp:query-pagination-numbers /-->
+				<!-- wp:query-pagination-next /-->
+			<!-- /wp:query-pagination -->
+		</div>
+		<!-- /wp:query -->
+	</div>
+	<!-- /wp:group -->
+	<!-- wp:shortcode -->[ezb_measure_quote_cta]<!-- /wp:shortcode -->
+</main>
+<!-- /wp:group -->
+<!-- wp:template-part {"slug":"footer","tagName":"footer"} /-->

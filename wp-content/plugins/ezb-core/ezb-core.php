@@ -242,6 +242,7 @@ function ezb_seed_prototype_pages() {
 		'retractable-flyscreens'=> 'Retractable Flyscreens',
 		'motorised-blinds'      => 'Motorised Blinds',
 		'advice'                => 'Advice',
+		'blog'                  => 'Blog',
 		'service-areas'         => 'Service Areas',
 		'about'                 => 'About',
 		'contact'               => 'Contact',
@@ -381,6 +382,66 @@ function ezb_seed_product_faq_content() {
 	}
 }
 add_action( 'init', 'ezb_seed_product_faq_content', 33 );
+
+
+/**
+ * Seed a small set of development-only starter articles.
+ *
+ * These are working copy scaffolds, not production-approved claims. They give
+ * the Owner a realistic Blog/content surface now and are never overwritten
+ * once edited.
+ */
+function ezb_seed_starter_blog_posts() {
+	if ( 'development' !== wp_get_environment_type() ) {
+		return;
+	}
+
+	$posts = array(
+		'roller-blinds-blockout-vs-sunscreen' => array(
+			'title'   => 'Blockout or sunscreen roller blinds: where should you start?',
+			'excerpt' => 'A practical starting guide to privacy, glare, daylight and room use before choosing roller-blind fabric.',
+			'content' => '<p><strong>Working copy for review.</strong> Choosing a roller blind is easier when the first question is not colour, but what the room needs the blind to do.</p><h2>Start with privacy</h2><p>A living room, bedroom and street-facing window can need very different levels of screening. Think about daytime privacy and night privacy separately.</p><h2>Then look at light and glare</h2><p>Filtered daylight can be useful in living areas, while stronger light control may matter in bedrooms or rooms with screens and televisions.</p><h2>Measure the actual opening</h2><p>Handles, trims, recess depth, blind position and acceptable light gaps can all affect the final result. A measure should confirm these details before the product is ordered.</p><p>This article will be expanded with the current EZ fabric range, verified product specifications and real installation examples before publication.</p>',
+		),
+		'sheer-curtains-privacy-layering' => array(
+			'title'   => 'Sheer curtains, privacy and layering: what changes from day to night?',
+			'excerpt' => 'How to think about daylight, night privacy, stacking and pairing sheers with a separate privacy layer.',
+			'content' => '<p><strong>Working copy for review.</strong> Sheer curtains are mainly about softening a room, filtering daylight and creating a continuous finish across larger glazing.</p><h2>Daylight and privacy are different questions</h2><p>A sheer can change how visible a room feels during the day, but it should not automatically be treated as complete night privacy.</p><h2>Layering can solve two jobs</h2><p>Where stronger privacy or blockout control is needed, a second window treatment can be considered rather than asking one fabric to do everything.</p><h2>Plan the stack and drop</h2><p>Track position, curtain stack, floor clearance and furniture all influence how the finished curtain looks and operates.</p><p>The final version will use current fabric choices and genuine EZ installation photographs after product verification.</p>',
+		),
+		'plantation-shutters-before-you-choose' => array(
+			'title'   => 'Plantation shutters: what should be checked before you choose them?',
+			'excerpt' => 'A room-by-room checklist covering opening style, panel movement, moisture exposure and visual fit.',
+			'content' => '<p><strong>Working copy for review.</strong> Plantation shutters can make a window feel more architectural, but they are not automatically the best fit for every opening.</p><h2>Check how the window opens</h2><p>Handles, winders, recess depth and the way the original window operates can affect frame and panel design.</p><h2>Think about panel movement</h2><p>Furniture, taps, benches and nearby walls can influence how comfortably shutter panels can open and fold.</p><h2>Match material to the room</h2><p>Bathrooms and other moisture-prone areas need an appropriate material choice. Exact active EZ options will be inserted only after supplier verification.</p><p>The final article will add verified material choices, current warranty wording and real project examples.</p>',
+		),
+		'retractable-flyscreens-opening-suitability' => array(
+			'title'   => 'Is your doorway suitable for a retractable flyscreen?',
+			'excerpt' => 'The practical checks that matter before deciding whether a retractable screen suits a door or larger opening.',
+			'content' => '<p><strong>Working copy for review.</strong> Retractable flyscreens are particularly useful where you want insect protection without leaving a fixed screen visually dominant all the time.</p><h2>The opening matters more than the brochure</h2><p>Width, height, surrounding frame, tracks, handles and the way the doors move all affect suitability.</p><h2>Look at the whole threshold</h2><p>The lower track and surrounding floor condition need to work with normal use of the opening. Site measurement is therefore important.</p><h2>Photos can help before the visit</h2><p>Wide photos showing the whole opening and its surrounding frame can help identify obvious constraints before a measure is arranged.</p><p>The final version will add the current system range, verified size limits and genuine EZ installations.</p>',
+		),
+		'motorised-blinds-when-worth-it' => array(
+			'title'   => 'When does motorisation make sense for blinds?',
+			'excerpt' => 'A practical guide to deciding when motorisation solves a real access, convenience or grouped-control problem.',
+			'content' => '<p><strong>Working copy for review.</strong> Motorisation is most valuable when it solves a practical problem rather than being added only as a gadget.</p><h2>Hard-to-reach windows</h2><p>High, wide or obstructed windows can make manual operation inconvenient. Motorisation can be worth considering where access is the main problem.</p><h2>Frequent or grouped operation</h2><p>Rooms with several blinds may benefit from a simpler way to operate compatible blinds together.</p><h2>Compatibility still needs checking</h2><p>Blind size, tube and motor compatibility, power method and control options depend on the current product range.</p><p>The final version will publish only the motor systems and control options that EZ has verified as current.</p>',
+		),
+	);
+
+	foreach ( $posts as $slug => $data ) {
+		if ( get_page_by_path( $slug, OBJECT, 'post' ) ) {
+			continue;
+		}
+
+		wp_insert_post(
+			array(
+				'post_type'    => 'post',
+				'post_status'  => 'publish',
+				'post_title'   => $data['title'],
+				'post_name'    => $slug,
+				'post_excerpt' => $data['excerpt'],
+				'post_content' => $data['content'],
+			)
+		);
+	}
+}
+add_action( 'init', 'ezb_seed_starter_blog_posts', 34 );
 
 
 /**
