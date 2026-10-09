@@ -72,7 +72,7 @@ function xmlLocations(xml) {
 async function fetchPage(path, options = {}) {
   const requested = new URL(path, base);
   const response = await fetch(requested, {
-    redirect: options.redirect || 'follow',
+    redirect: options.redirect || 'manual',
     headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' }
   });
   return { requested, response };
@@ -133,7 +133,7 @@ const canonicalRoutes = [
 for (const path of canonicalRoutes) {
   const { requested, response } = await fetchPage(path);
   if (response.status !== 200) {
-    failures.push(`${path} -> expected HTTP 200, got ${response.status}`);
+    failures.push(`${path} -> expected HTTP 200 without redirects, got ${response.status}`);
     continue;
   }
 
