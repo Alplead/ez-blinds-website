@@ -80,6 +80,7 @@ async function fetchPage(path, options = {}) {
 
 const developmentPublicationMarkers = [
   'Prototype project',
+  'prototype product map',
   'PROJECT PLACEHOLDER',
   'Development case-study shell',
   'Working copy for review.',

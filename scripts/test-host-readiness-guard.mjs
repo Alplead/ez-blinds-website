@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/products/', '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/', '/retractable-flyscreens/', '/motorised-blinds/', '/projects/', '/advice/', '/blog/', '/about/', '/service-areas/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -61,7 +61,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     const html = '<link rel="canonical" href="' + origin + (badIndexedCanonicalPath === pathname ? '/wrong-article/' : pathname) + '">' +
       '<meta name="robots" content="' + (noindex ? 'noindex, nofollow' : 'index, follow') + '">' +
       (leakPath === pathname ? '<a href="/?ezb_page=roller-blinds">dev</a>' : '') +
-      (markerPath === pathname ? '<div>Prototype project</div>' : '');
+      (markerPath === pathname ? '<div>' + markerText + '</div>' : '');
     res.writeHead(200, { 'content-type': 'text/html' }); res.end(html);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -96,6 +96,7 @@ await check({ name: 'indexable release mode clean', indexable: true });
 await check({ name: 'indexable opt-in rejected', indexable: true, allowDevTransport: true, expectedError: 'indexable mode forbids development ezb_page transport opt-in' });
 await check({ name: 'indexable dev query leakage rejected', indexable: true, leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
+await check({ name: 'indexable prototype wording on homepage rejected', indexable: true, markerPath: '/', markerText: 'Browse the current prototype product map in one place.', expectedError: '/ contains development-only publication marker: prototype product map' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
 await check({ name: 'indexable prototype project in sitemap rejected', indexable: true, markerPath: '/projects/prototype-roller-blinds-project/', expectedError: '/projects/prototype-roller-blinds-project/ indexed development-only publication marker' });
@@ -112,4 +113,4 @@ await check({ name: 'products route development transport leak rejected', leakPa
 await check({ name: 'indexable blog index development marker rejected', indexable: true, markerPath: '/blog/', expectedError: '/blog/ contains development-only publication marker' });
 await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
 await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=25');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=26');

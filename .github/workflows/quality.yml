@@ -73,6 +73,13 @@ jobs:
       - name: Check SEO audit JavaScript syntax
         run: node --check scripts/seo-audit.mjs
 
+      - name: Keep homepage product comparison free of development labels
+        run: |
+          if grep -Eqi 'prototype|working copy|development preview' wp-content/themes/ezb-theme/patterns/core-solutions.php; then
+            echo "Homepage product navigation contains development-only wording."
+            exit 1
+          fi
+
       - name: Check host readiness JavaScript syntax
         run: node --check scripts/host-readiness.mjs
 
@@ -80,7 +87,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=25' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=26' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh
