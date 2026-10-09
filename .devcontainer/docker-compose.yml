@@ -52,6 +52,9 @@ services:
       WORDPRESS_DB_USER: wordpress
       WORDPRESS_DB_PASSWORD: wordpress
       WORDPRESS_DB_NAME: wordpress
+      # wp-config-docker.php evaluates the caller container's environment.
+      # The CLI bootstrap must agree with the web container on HTTP warning display.
+      WORDPRESS_CONFIG_EXTRA: "define('WP_DEBUG_DISPLAY', false);"
     volumes:
       - wp_data:/var/www/html
       - ../wp-content/themes/ezb-theme:/var/www/html/wp-content/themes/ezb-theme
