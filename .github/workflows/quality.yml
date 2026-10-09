@@ -126,6 +126,12 @@ jobs:
           bash scripts/test-staging-media-sha-guard.sh | tee /tmp/media-sha-guard.log
           grep -q 'EZB_STAGING_MEDIA_SHA_GUARD_TEST_PASS cases=7' /tmp/media-sha-guard.log
 
+      - name: Guard the 25 approved media registry filenames
+        run: |
+          node --check scripts/test-media-approved-registry.mjs
+          node scripts/test-media-approved-registry.mjs | tee /tmp/media-registry.log
+          grep -q 'EZB_MEDIA_APPROVED_REGISTRY_TEST_PASS files=25' /tmp/media-registry.log
+
       - name: Check real-media visual QA JavaScript syntax
         run: node --check scripts/real-media-visual-qa.mjs
 
