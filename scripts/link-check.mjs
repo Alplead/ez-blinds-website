@@ -98,13 +98,12 @@ while (queue.length) {
     failures.push(`${href} unexpectedly redirected off-origin to ${finalUrl.href}`);
     continue;
   }
-  // A required public entry route must not silently land on Home or another page.
-  if (seeded.has(href)) {
-    const requestedUrl = new URL(href);
-    if (finalUrl.pathname !== requestedUrl.pathname || finalUrl.search !== requestedUrl.search || finalUrl.hash) {
-      failures.push(`${href} unexpectedly redirected to ${finalUrl.href}`);
-      continue;
-    }
+  // All discovered internal links must resolve to their intended canonical path.
+  // A broken article link silently redirected to Home is not a valid link.
+  const requestedUrl = new URL(href);
+  if (finalUrl.pathname !== requestedUrl.pathname || finalUrl.search !== requestedUrl.search || finalUrl.hash) {
+    failures.push(`${href} unexpectedly redirected to ${finalUrl.href}`);
+    continue;
   }
 
   const contentType = (response.headers.get('content-type') || '').trim();

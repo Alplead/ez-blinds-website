@@ -7,7 +7,7 @@ const script = fileURLToPath(new URL('./link-check.mjs', import.meta.url));
 async function check(name, mode, expectedFailure = '') {
   const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
-    if (mode === 'redirect' && path === '/contact/') {
+    if ((mode === 'redirect' && path === '/contact/') || (mode === 'discovered-redirect' && path === '/redirected/')) {
       res.writeHead(302, { location: '/' }); res.end(); return;
     }
     if (path === '/missing/') { res.writeHead(404); res.end('missing'); return; }
@@ -18,7 +18,8 @@ async function check(name, mode, expectedFailure = '') {
       res.writeHead(204); res.end(); return;
     }
     res.writeHead(200, { 'content-type': 'text/html' });
-    const link = path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
+    const link = path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
+      path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
       path === '/' && mode === 'transport' ? '<a href="/products/?ezb_page=products">Development</a>' : '';
     res.end('<!doctype html><html><body>' + link + '</body></html>');
   });
@@ -49,8 +50,9 @@ async function check(name, mode, expectedFailure = '') {
 }
 await check('clean internal links', 'clean');
 await check('required route redirect to Home rejected', 'redirect', 'unexpectedly redirected to');
+await check('discovered link redirect to Home rejected', 'discovered-redirect', 'unexpectedly redirected to');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
 await check('required public route must return HTML', 'not-html', 'required route expected text/html');
 await check('required public route must not return 204', 'no-content', 'required route expected HTTP 200');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=6');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=7');

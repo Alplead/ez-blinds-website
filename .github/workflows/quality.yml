@@ -50,13 +50,19 @@ jobs:
         run: |
           node --check scripts/test-link-check-guard.mjs
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
-          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=6' /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=7' /tmp/link-check-guard.log
 
       - name: Test WordPress template skip-link targets
         run: |
           node --check scripts/test-theme-skip-link.mjs
           node scripts/test-theme-skip-link.mjs | tee /tmp/skip-link.log
           grep -q 'EZB_SKIP_LINK_TEST_PASS' /tmp/skip-link.log
+
+      - name: Verify home hero media slot remains wired
+        run: |
+          node --check scripts/test-home-hero-guard.mjs
+          node scripts/test-home-hero-guard.mjs | tee /tmp/home-hero-guard.log
+          grep -q 'EZB_HOME_HERO_GUARD_PASS' /tmp/home-hero-guard.log
 
       - name: Check SEO audit JavaScript syntax
         run: node --check scripts/seo-audit.mjs

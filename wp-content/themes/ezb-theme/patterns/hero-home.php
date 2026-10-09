@@ -35,12 +35,7 @@
 
 		<!-- wp:column {"verticalAlignment":"center","width":"46%"} -->
 		<div class="wp-block-column is-vertically-aligned-center" style="flex-basis:46%">
-			<!-- wp:group {"className":"ezb-hero-media-placeholder","layout":{"type":"constrained"}} -->
-			<div class="wp-block-group ezb-hero-media-placeholder">
-				<!-- wp:paragraph {"className":"ezb-media-placeholder__kicker"} --><p class="ezb-media-placeholder__kicker">REAL EZ PROJECT PHOTO</p><!-- /wp:paragraph -->
-				<!-- wp:paragraph --><p>Homepage hero photography placeholder</p><!-- /wp:paragraph -->
-			</div>
-			<!-- /wp:group -->
+			<!-- wp:shortcode -->[ezb_media_slot slot="home-hero"]<!-- /wp:shortcode -->
 		</div>
 		<!-- /wp:column -->
 	</div>

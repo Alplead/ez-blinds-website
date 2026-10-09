@@ -65,7 +65,7 @@ try {
         if (!heroOk.alt.trim()) {
           failures.push(`${viewportName} ${name}: hero image has empty alt text`);
         }
-      } else if (name !== 'home' && !isProject) {
+      } else if (!isProject) {
         failures.push(`${viewportName} ${name}: expected a real hero image`);
       }
 
