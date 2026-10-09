@@ -700,6 +700,13 @@ jobs:
           grep -q 'mailto:owner-cta@example.com' /tmp/cta-owner.html
           grep -q 'contact/' /tmp/cta-owner.html
 
+      - name: Verify development warning display is disabled in HTTP responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          setting="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval 'echo defined("WP_DEBUG_DISPLAY") && WP_DEBUG_DISPLAY === false ? "off" : "on";' --allow-root)"
+          test "$setting" = "off"
+
       - name: Verify quote form submission contract
         shell: bash
         run: |
