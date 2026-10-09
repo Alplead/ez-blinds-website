@@ -199,7 +199,11 @@ if (robotsResponse.status !== 200) {
   failures.push(`/robots.txt -> expected HTTP 200, got ${robotsResponse.status}`);
 } else {
   const robotsText = await robotsResponse.text();
-  const blocksAll = /^\s*Disallow:\s*\/\s*$/mi.test(robotsText);
+  // A global wildcard block also prevents indexing; reject it on an
+  // indexable release, and require a genuine wildcard group on staging.
+  const groups = robotsText.split(/(?=^\s*User-agent\s*:)/gmi);
+  const wildcardGroups = groups.filter(group => /^\s*User-agent\s*:\s*\*\s*$/mi.test(group));
+  const blocksAll = wildcardGroups.some(group => /^\s*Disallow\s*:\s*\/(?:\*|\$)?\s*$/mi.test(group));
   if (expectIndexable && blocksAll) {
     failures.push('/robots.txt blocks the entire site in indexable mode');
   }
