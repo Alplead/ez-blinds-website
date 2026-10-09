@@ -113,6 +113,8 @@ await check({ name: 'legacy 302 rejected', expectRedirects: true, redirectPath: 
 await check({ name: 'motorisation route missing staging noindex rejected', missingNoindexPath: '/motorised-blinds/', expectedError: '/motorised-blinds/ lacks noindex protection' });
 await check({ name: 'products route development transport leak rejected', leakPath: '/products/', expectedError: '/products/ leaked development' });
 await check({ name: 'indexable blog index development marker rejected', indexable: true, markerPath: '/blog/', expectedError: '/blog/ contains development-only publication marker' });
+await check({ name: 'indexable upload roadmap banner rejected', indexable: true, markerPath: '/contact/', markerText: 'Photo upload will be added after checks.', expectedError: '/contact/ contains development-only publication marker: Photo upload will be added after' });
+await check({ name: 'indexable old upload path hint rejected', indexable: true, markerPath: '/contact/', markerText: 'photos can be added later once the upload path is enabled', expectedError: '/contact/ contains development-only publication marker: once the upload path is enabled' });
 await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
 await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=28');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=30');

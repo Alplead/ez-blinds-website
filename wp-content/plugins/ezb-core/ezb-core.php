@@ -291,7 +291,7 @@ add_shortcode(
 				</p>
 
 				<p><label><?php esc_html_e( 'Message', 'ezb-core' ); ?><br><textarea name="message" rows="6" maxlength="4000"></textarea></label></p>
-				<p class="ezb-form-note"><?php esc_html_e( 'Photo upload will be added after the media-upload and mail-delivery path is verified.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-note"><?php esc_html_e( 'We can discuss how to share photos after your enquiry.', 'ezb-core' ); ?></p>
 				<p><button class="ezb-submit" type="submit"><?php esc_html_e( 'Send enquiry', 'ezb-core' ); ?></button></p>
 			</form>
 		</div>
@@ -793,7 +793,7 @@ add_shortcode(
 function ezb_site_setting_defaults() {
 	return array(
 		'ezb_cta_heading'      => 'Ready to talk through your windows?',
-		'ezb_cta_body'         => 'Send your suburb, the product you are considering and any useful photos. We can then work out the most practical next step.',
+		'ezb_cta_body'         => 'Send your suburb, the product you are considering and a brief description of your opening. We can then work out the most practical next step.',
 		'ezb_cta_button_label' => 'Free Measure & Quote',
 		'ezb_public_phone'          => '',
 		'ezb_public_email'          => '',

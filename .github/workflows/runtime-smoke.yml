@@ -638,6 +638,8 @@ jobs:
           grep -q 'name="phone"' /tmp/contact.html
           grep -q 'name="email"' /tmp/contact.html
           grep -q 'id="ezb-contact-method-note"' /tmp/contact.html
+          grep -Fq 'We can discuss how to share photos after your enquiry.' /tmp/contact.html
+          ! grep -Fqi 'Photo upload will be added' /tmp/contact.html
           grep -q 'aria-describedby="ezb-contact-method-note"' /tmp/contact.html
           grep -q 'name="product"' /tmp/contact.html
           grep -q 'name="message"' /tmp/contact.html

@@ -73,6 +73,13 @@ jobs:
       - name: Check SEO audit JavaScript syntax
         run: node --check scripts/seo-audit.mjs
 
+      - name: Prevent unfinished photo-upload promises in public contact copy
+        run: |
+          if grep -Eiq 'Photo upload will be added|upload path is enabled|any useful photos' wp-content/plugins/ezb-core/ezb-core.php wp-content/themes/ezb-theme/templates/page-contact.html; then
+            echo "Customer-facing enquiry text must not promise an unapproved upload path."
+            exit 1
+          fi
+
       - name: Keep homepage product comparison free of development labels
         run: |
           if grep -Eqi 'prototype|working copy|development preview' wp-content/themes/ezb-theme/patterns/core-solutions.php; then
@@ -87,7 +94,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=28' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=30' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh

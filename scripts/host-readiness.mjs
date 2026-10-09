@@ -81,6 +81,8 @@ async function fetchPage(path, options = {}) {
 const developmentPublicationMarkers = [
   'Prototype project',
   'prototype product map',
+  'Photo upload will be added after',
+  'once the upload path is enabled',
   'PROJECT PLACEHOLDER',
   'Development case-study shell',
   'Working copy for review.',
