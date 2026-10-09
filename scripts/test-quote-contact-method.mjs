@@ -7,7 +7,8 @@ const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/si
 function simulate({ reduced = false, formPresent = true, fieldsPresent = true } = {}) {
   const handlers = {};
   const phone = {
-    value: '', error: '', reportCount: 0,
+    value: '', error: '', reportCount: 0, focusCount: 0,
+    focus() { this.focusCount += 1; },
     setCustomValidity(value) { this.error = value; },
     reportValidity() { this.reportCount += 1; return !this.error; },
     addEventListener(name, fn) { handlers['phone:' + name] = fn; }
@@ -59,6 +60,7 @@ const empty = simulate();
 assert.equal(empty.send(), true, 'empty contact methods must block submission');
 assert.match(empty.phone.error, /phone number or email address/);
 assert.equal(empty.phone.reportCount, 1, 'browser validity feedback must be shown');
+assert.equal(empty.phone.focusCount, 1, 'missing contact method must receive keyboard focus');
 
 empty.enterEmail('visitor@example.com');
 assert.equal(empty.phone.error, '', 'email input must clear stale phone error');
