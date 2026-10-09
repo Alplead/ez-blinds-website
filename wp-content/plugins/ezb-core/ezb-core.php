@@ -1766,10 +1766,17 @@ function ezb_find_attachment_by_basename( $basename ) {
 
 	$basename   = wp_basename( $basename );
 	$stem       = pathinfo( $basename, PATHINFO_FILENAME );
+	$extension  = strtolower( pathinfo( $basename, PATHINFO_EXTENSION ) );
 	$candidates = array( $basename );
 
 	if ( '' !== $stem ) {
-		$candidates[] = $stem . '.webp';
+		// Use the optimized WebP before an original JPG/PNG if both exist.
+		// Exact MP4 filenames must keep their original search priority.
+		if ( in_array( $extension, array( 'jpg', 'jpeg', 'png' ), true ) ) {
+			array_unshift( $candidates, $stem . '.webp' );
+		} else {
+			$candidates[] = $stem . '.webp';
+		}
 		$candidates[] = $stem . '.jpg';
 		$candidates[] = $stem . '.jpeg';
 		$candidates[] = $stem . '.png';
@@ -1839,7 +1846,7 @@ add_shortcode(
 		$poster_url = $poster_id ? wp_get_attachment_url( $poster_id ) : '';
 
 		return sprintf(
-			'<section class="ezb-section ezb-shell ezb-video-feature"><div class="ezb-video-feature__inner"><div class="ezb-video-feature__copy"><p class="ezb-eyebrow">%1$s</p><h2>%2$s</h2><p>%3$s</p></div><div class="ezb-video-feature__frame"><video data-ezb-autoplay-video autoplay muted loop playsinline controls preload="metadata"%4$s><source src="%5$s" type="video/mp4"></video></div></div></section>',
+			'<section class="ezb-section ezb-shell ezb-video-feature"><div class="ezb-video-feature__inner"><div class="ezb-video-feature__copy"><p class="ezb-eyebrow">%1$s</p><h2>%2$s</h2><p>%3$s</p></div><div class="ezb-video-feature__frame"><video data-ezb-autoplay-video muted loop playsinline controls preload="metadata"%4$s><source src="%5$s" type="video/mp4"></video></div></div></section>',
 			esc_html__( 'Real EZ installation motion', 'ezb-core' ),
 			esc_html__( 'See a retractable flyscreen in motion', 'ezb-core' ),
 			esc_html__( 'Development preview only. Publication and privacy approval are still required before launch.', 'ezb-core' ),

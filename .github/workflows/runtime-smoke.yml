@@ -386,6 +386,25 @@ jobs:
           test "$(grep -o 'ezb-project-gallery__placeholder' /tmp/project-media-group-b.html | wc -l)" -eq 3
           grep -q 'Only the visual grouping is treated as verified at this stage.' /tmp/project-media-group-b.html
 
+      - name: Prefer optimized WebP when source JPG is also present
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $jpg = wp_insert_post(array("post_type"=>"attachment", "post_status"=>"inherit", "post_title"=>"Synthetic JPG", "post_mime_type"=>"image/jpeg"));
+            $webp = wp_insert_post(array("post_type"=>"attachment", "post_status"=>"inherit", "post_title"=>"Synthetic WebP", "post_mime_type"=>"image/webp"));
+            if (!$jpg || !$webp || is_wp_error($jpg) || is_wp_error($webp)) { throw new Exception("Could not insert media test fixtures"); }
+            update_post_meta($jpg, "_wp_attached_file", "2026/10/ezb-webp-priority-test.jpg");
+            update_post_meta($webp, "_wp_attached_file", "2026/10/ezb-webp-priority-test.webp");
+            if (ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg") !== $webp) {
+              throw new Exception("Raw JPG incorrectly outranked WebP derivative");
+            }
+            wp_delete_post($jpg, true);
+            wp_delete_post($webp, true);
+            echo "EZB_WEBP_PRIORITY_PASS" . PHP_EOL;
+          ' --allow-root | tee /tmp/webp-priority.log
+          grep -q 'EZB_WEBP_PRIORITY_PASS' /tmp/webp-priority.log
+
       - name: Verify real-media aspect-aware gallery fit rules
         shell: bash
         run: |

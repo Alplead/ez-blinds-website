@@ -35,8 +35,27 @@
 		});
 	}
 
+	// Never autoplay from HTML before reduced-motion preference is known.
+	function startAutoplayVideos() {
+		videos.forEach(function (video) {
+			video.autoplay = true;
+			if (typeof video.play !== 'function') return;
+			try {
+				var attempt = video.play();
+				if (attempt && typeof attempt.catch === 'function') {
+					attempt.catch(function () { video.autoplay = false; });
+				}
+			} catch (_error) {
+				video.autoplay = false;
+			}
+		});
+	}
+
 	function onMotionPreferenceChange(event) {
-		if (!event.matches) return;
+		if (!event.matches) {
+			startAutoplayVideos();
+			return;
+		}
 		stopAutoplayVideos();
 		// Reveal all animated items when reduced motion is enabled mid-session.
 		document.documentElement.classList.remove('ezb-motion-ready');
@@ -53,6 +72,7 @@
 		return;
 	}
 
+	startAutoplayVideos();
 	document.documentElement.classList.add('ezb-motion-ready');
 
 	var targets = document.querySelectorAll([
