@@ -69,6 +69,15 @@ jobs:
           test "$code" = "301"
           grep -qi 'location: .*retractable-flyscreens/' /tmp/legacy-redirect-headers.txt
 
+      - name: Verify quote status handles malformed array input safely
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = array("sent"); echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-array.html
+          grep -q 'class="ezb-quote-form"' /tmp/quote-status-array.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-array.html
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-sent.html
+          grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:

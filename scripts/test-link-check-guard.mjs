@@ -11,6 +11,12 @@ async function check(name, mode, expectedFailure = '') {
       res.writeHead(302, { location: '/' }); res.end(); return;
     }
     if (path === '/missing/') { res.writeHead(404); res.end('missing'); return; }
+    if (path === '/contact/' && mode === 'not-html') {
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); return;
+    }
+    if (path === '/contact/' && mode === 'no-content') {
+      res.writeHead(204); res.end(); return;
+    }
     res.writeHead(200, { 'content-type': 'text/html' });
     const link = path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
       path === '/' && mode === 'transport' ? '<a href="/products/?ezb_page=products">Development</a>' : '';
@@ -45,4 +51,6 @@ await check('clean internal links', 'clean');
 await check('required route redirect to Home rejected', 'redirect', 'unexpectedly redirected to');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=4');
+await check('required public route must return HTML', 'not-html', 'required route expected text/html');
+await check('required public route must not return 204', 'no-content', 'required route expected HTTP 200');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=6');

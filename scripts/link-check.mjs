@@ -82,6 +82,12 @@ while (queue.length) {
 
   checked.set(href, response.status);
 
+  // Required public pages must be real HTTP 200 pages, not 204/206 responses.
+  if (seeded.has(href) && response.status !== 200) {
+    failures.push(`${href} -> required route expected HTTP 200, got ${response.status}`);
+    continue;
+  }
+
   if (response.status >= 400) {
     failures.push(`${href} -> HTTP ${response.status}`);
     continue;
@@ -101,7 +107,11 @@ while (queue.length) {
     }
   }
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = (response.headers.get('content-type') || '').trim();
+  if (seeded.has(href) && !/^text\/html(?:\s*;|$)/i.test(contentType)) {
+    failures.push(`${href} -> required route expected text/html, got ${contentType || 'missing content-type'}`);
+    continue;
+  }
   if (!contentType.includes('text/html')) continue;
 
   const html = await response.text();

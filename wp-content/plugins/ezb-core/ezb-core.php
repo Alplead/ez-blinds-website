@@ -245,7 +245,9 @@ add_action(
 add_shortcode(
 	'ezb_quote_form',
 	function () {
-		$status = isset( $_GET['quote_status'] ) ? sanitize_key( wp_unslash( $_GET['quote_status'] ) ) : '';
+		$status = isset( $_GET['quote_status'] ) && is_string( $_GET['quote_status'] )
+			? sanitize_key( wp_unslash( $_GET['quote_status'] ) )
+			: '';
 		ob_start();
 		?>
 		<div class="ezb-form-wrap">
