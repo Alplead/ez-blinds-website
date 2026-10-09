@@ -1763,8 +1763,12 @@ function ezb_featured_image_for_page_slug( $slug ) {
 
 function ezb_find_attachment_by_basename( $basename ) {
 	global $wpdb;
+	static $found_in_request = array();
 
-	$basename   = wp_basename( $basename );
+	$basename = wp_basename( $basename );
+	if ( isset( $found_in_request[ $basename ] ) ) {
+		return $found_in_request[ $basename ];
+	}
 	$stem       = pathinfo( $basename, PATHINFO_FILENAME );
 	$extension  = strtolower( pathinfo( $basename, PATHINFO_EXTENSION ) );
 	$candidates = array( $basename );
@@ -1802,10 +1806,14 @@ function ezb_find_attachment_by_basename( $basename ) {
 		);
 
 		if ( $id ) {
-			return (int) $id;
+			// Product heroes and gallery cards can request the same asset.
+			// Avoid repeating the expensive suffix-LIKE lookup on this request.
+			$found_in_request[ $basename ] = (int) $id;
+			return $found_in_request[ $basename ];
 		}
 	}
 
+	// Keep misses uncached so a new import remains discoverable in this request.
 	return 0;
 }
 

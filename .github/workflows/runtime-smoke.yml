@@ -396,8 +396,14 @@ jobs:
             if (!$jpg || !$webp || is_wp_error($jpg) || is_wp_error($webp)) { throw new Exception("Could not insert media test fixtures"); }
             update_post_meta($jpg, "_wp_attached_file", "2026/10/ezb-webp-priority-test.jpg");
             update_post_meta($webp, "_wp_attached_file", "2026/10/ezb-webp-priority-test.webp");
-            if (ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg") !== $webp) {
+            $found = ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg");
+            if ($found !== $webp) {
               throw new Exception("Raw JPG incorrectly outranked WebP derivative");
+            }
+            global $wpdb;
+            $before_repeat = $wpdb->num_queries;
+            if (ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg") !== $found || $wpdb->num_queries !== $before_repeat) {
+              throw new Exception("Repeated media lookup unexpectedly queried the database");
             }
             wp_delete_post($jpg, true);
             wp_delete_post($webp, true);
