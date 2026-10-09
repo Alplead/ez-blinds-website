@@ -6,6 +6,10 @@ import { join } from 'node:path';
 const templates = fileURLToPath(new URL('../wp-content/themes/ezb-theme/templates/', import.meta.url));
 const header = readFileSync(new URL('../wp-content/themes/ezb-theme/parts/header.html', import.meta.url), 'utf8');
 assert.match(header, /class="ezb-skip-link"[^>]*href="#main-content"/, 'header must link to main-content');
+const style = readFileSync(new URL('../wp-content/themes/ezb-theme/style.css', import.meta.url), 'utf8');
+const offset = style.match(/#main-content\s*\{[^}]*scroll-margin-top:\s*(\d+)px\s*;/s);
+assert.ok(offset, 'skip link target must account for the sticky header');
+assert.ok(Number(offset[1]) >= 76, 'skip link target offset must clear the sticky header');
 let count = 0;
 for (const name of readdirSync(templates).filter(name => name.endsWith('.html'))) {
   const source = readFileSync(join(templates, name), 'utf8');

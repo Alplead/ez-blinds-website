@@ -1418,6 +1418,11 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 }
 
 
+/* Keep anchor jumps visible beneath the 76px sticky header. */
+#main-content {
+	scroll-margin-top: 96px;
+}
+
 /* Keyboard skip link */
 .ezb-skip-link {
 	position: fixed;
