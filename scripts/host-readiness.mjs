@@ -203,8 +203,10 @@ if (robotsResponse.status !== 200) {
   // indexable release, and require a genuine wildcard group on staging.
   const groups = robotsText.split(/(?=^\s*User-agent\s*:)/gmi);
   const wildcardGroups = groups.filter(group => /^\s*User-agent\s*:\s*\*\s*$/mi.test(group));
-  const blocksAll = wildcardGroups.some(group => /^\s*Disallow\s*:\s*\/(?:\*|\$)?\s*$/mi.test(group));
-  if (expectIndexable && blocksAll) {
+  const broadBlock = wildcardGroups.some(group => /^\s*Disallow\s*:\s*\/(?:\*)?\s*$/mi.test(group));
+  const allowException = wildcardGroups.some(group => /^\s*Allow\s*:\s*\/\S*/mi.test(group));
+  const blocksAll = broadBlock && !allowException;
+  if (expectIndexable && broadBlock) {
     failures.push('/robots.txt blocks the entire site in indexable mode');
   }
   if (!expectIndexable && !blocksAll) {
