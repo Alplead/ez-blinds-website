@@ -35,6 +35,11 @@ function decodeHref(value) {
     .replace(/&amp;/gi, '&')
     .replace(/&#0*38;/gi, '&')
     .replace(/&#x0*26;/gi, '&')
+    .replace(/&#(x[0-9a-f]+|[0-9]+);?/gi, (match, code) => {
+      const number = code.startsWith('x') || code.startsWith('X')
+        ? Number.parseInt(code.slice(1), 16) : Number.parseInt(code, 10);
+      return number >= 0 && number <= 0x10ffff ? String.fromCodePoint(number) : match;
+    })
     .replace(/&quot;/gi, '"')
     .replace(/&#0*39;/gi, "'")
     .trim();
@@ -118,8 +123,18 @@ while (queue.length) {
     if (
       !rawHref ||
       rawHref.startsWith('#') ||
-      /^(mailto:|tel:|javascript:|data:)/i.test(rawHref)
+      /^(mailto:|tel:)/i.test(rawHref)
     ) {
+      continue;
+    }
+
+    // HTML entity and ASCII whitespace tricks must not conceal script/data
+    // protocols. Never fetch these links or treat them as valid public navigation.
+    const compactHref = rawHref.replace(/[\u0000-\u0020]/g, '');
+    const protocolMatch = /^([a-z][a-z0-9+.-]*):/i.exec(compactHref);
+    const protocol = protocolMatch?.[1]?.toLowerCase() || '';
+    if (['javascript', 'data', 'vbscript'].includes(protocol)) {
+      failures.push(`${href} contains unsafe internal link protocol: ${protocol}:`);
       continue;
     }
 

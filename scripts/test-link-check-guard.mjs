@@ -18,7 +18,11 @@ async function check(name, mode, expectedFailure = '') {
       res.writeHead(204); res.end(); return;
     }
     res.writeHead(200, { 'content-type': 'text/html' });
-    const link = path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
+    const link = path === '/' && mode === 'unsafe-script' ? '<a href="javascript:alert(1)">Unsafe</a>' :
+      path === '/' && mode === 'unsafe-data' ? '<a href="data:text/html,unsafe">Unsafe</a>' :
+      path === '/' && mode === 'unsafe-entity' ? '<a href="java&#x73;cript:alert(1)">Unsafe</a>' :
+      path === '/' && mode === 'unsafe-whitespace' ? '<a href="java&#x09;script:alert(1)">Unsafe</a>' :
+      path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
       path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
       path === '/' && mode === 'transport' ? '<a href="/products/?ezb_page=products">Development</a>' : '';
     res.end('<!doctype html><html><body>' + link + '</body></html>');
@@ -55,4 +59,8 @@ await check('broken internal link rejected', 'broken', 'HTTP 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
 await check('required public route must return HTML', 'not-html', 'required route expected text/html');
 await check('required public route must not return 204', 'no-content', 'required route expected HTTP 200');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=7');
+await check('javascript href rejected', 'unsafe-script', 'unsafe internal link protocol: javascript:');
+await check('data href rejected', 'unsafe-data', 'unsafe internal link protocol: data:');
+await check('HTML-encoded javascript href rejected', 'unsafe-entity', 'unsafe internal link protocol: javascript:');
+await check('whitespace-obfuscated javascript href rejected', 'unsafe-whitespace', 'unsafe internal link protocol: javascript:');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=11');
