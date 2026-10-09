@@ -19,3 +19,14 @@ export async function inspectMediaImage(locator) {
     };
   });
 }
+
+/**
+ * Require a single real hero on product/home pages. Projects may omit a hero,
+ * but duplicate hero slots must never conceal a broken second image.
+ */
+export function heroImageCountFailure(count, required = true) {
+  if (!Number.isInteger(count) || count < 0 || count > 1 || (required && count !== 1)) {
+    return `expected ${required ? 'exactly one' : 'at most one'} hero image, found ${count}`;
+  }
+  return '';
+}

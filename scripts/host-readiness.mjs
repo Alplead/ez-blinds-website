@@ -88,6 +88,12 @@ const developmentPublicationMarkers = [
   'REAL EZ PROJECT MEDIA'
 ];
 
+// Reject case-only changes to draft markers on indexable release hosts.
+function findDevelopmentMarker(html) {
+  const lowerHtml = html.toLowerCase();
+  return developmentPublicationMarkers.find(marker => lowerHtml.includes(marker.toLowerCase()));
+}
+
 // Include every current structural top-level route. A staging host must not
 // accidentally index a page omitted from the small original smoke subset.
 const canonicalRoutes = [
@@ -127,7 +133,7 @@ for (const path of canonicalRoutes) {
   }
 
   if (expectIndexable) {
-    const marker = developmentPublicationMarkers.find(value => html.includes(value));
+    const marker = findDevelopmentMarker(html);
     if (marker) {
       failures.push(`${path} contains development-only publication marker: ${marker}`);
     }
@@ -269,7 +275,7 @@ if (expectIndexable) {
               failures.push(pageUrl.pathname + ' indexed content has malformed canonical');
             }
           }
-          const marker = developmentPublicationMarkers.find(value => pageHtml.includes(value));
+          const marker = findDevelopmentMarker(pageHtml);
           if (marker) failures.push(pageUrl.pathname + ' indexed development-only publication marker: ' + marker);
           if (pageHtml.includes('ezb_page=')) failures.push(pageUrl.pathname + ' indexed development transport leak');
           const robots = (pageResponse.headers.get('x-robots-tag') || '').toLowerCase() + ',' + metaRobots(pageHtml).join(',');

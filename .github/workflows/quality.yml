@@ -87,7 +87,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=26' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=28' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh
@@ -115,7 +115,7 @@ jobs:
           node --check scripts/media-image-readiness.mjs
           node --check scripts/test-media-image-readiness.mjs
           node scripts/test-media-image-readiness.mjs | tee /tmp/media-image-readiness.log
-          grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=3' /tmp/media-image-readiness.log
+          grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=8' /tmp/media-image-readiness.log
 
       - name: Build and validate deployment bundle
         run: |

@@ -96,6 +96,8 @@ await check({ name: 'indexable release mode clean', indexable: true });
 await check({ name: 'indexable opt-in rejected', indexable: true, allowDevTransport: true, expectedError: 'indexable mode forbids development ezb_page transport opt-in' });
 await check({ name: 'indexable dev query leakage rejected', indexable: true, leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
+await check({ name: 'indexable lowercase prototype marker rejected', indexable: true, markerPath: '/projects/', markerText: 'prototype project', expectedError: '/projects/ contains development-only publication marker' });
+await check({ name: 'indexable lowercase indexed article marker rejected', indexable: true, markerPath: '/roller-blinds-blockout-vs-sunscreen/', markerText: 'prototype project', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development-only publication marker' });
 await check({ name: 'indexable prototype wording on homepage rejected', indexable: true, markerPath: '/', markerText: 'Browse the current prototype product map in one place.', expectedError: '/ contains development-only publication marker: prototype product map' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
 await check({ name: 'canonical route redirected to home rejected', redirectPath: '/contact/', expectedError: '/contact/ resolved to unexpected route /' });
@@ -113,4 +115,4 @@ await check({ name: 'products route development transport leak rejected', leakPa
 await check({ name: 'indexable blog index development marker rejected', indexable: true, markerPath: '/blog/', expectedError: '/blog/ contains development-only publication marker' });
 await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
 await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=26');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=28');

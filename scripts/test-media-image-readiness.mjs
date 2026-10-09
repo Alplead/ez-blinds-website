@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { inspectMediaImage } from './media-image-readiness.mjs';
+import { inspectMediaImage, heroImageCountFailure } from './media-image-readiness.mjs';
 
 function fakeLocator(image) {
   const calls = [];
@@ -48,4 +48,9 @@ const fallback = await inspectMediaImage(legacy);
 assert.equal(fallback.naturalWidth, 400);
 assert.equal(fallback.src, '/legacy.webp');
 
-console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=3');
+assert.equal(heroImageCountFailure(1), '');
+assert.match(heroImageCountFailure(0), /exactly one hero image/);
+assert.match(heroImageCountFailure(2), /exactly one hero image/);
+assert.equal(heroImageCountFailure(0, false), '');
+assert.match(heroImageCountFailure(2, false), /at most one hero image/);
+console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=8');

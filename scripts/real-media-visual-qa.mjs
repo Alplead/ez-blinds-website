@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
-import { inspectMediaImage } from './media-image-readiness.mjs';
+import { inspectMediaImage, heroImageCountFailure } from './media-image-readiness.mjs';
 
 const rawBase = process.env.EZB_BASE_URL || '';
 if (!rawBase) throw new Error('EZB_BASE_URL is required');
@@ -54,7 +54,10 @@ try {
       }
 
       const heroImages = page.locator('img.ezb-media-slot__image');
-      if (await heroImages.count()) {
+      const heroCount = await heroImages.count();
+      const heroCountError = heroImageCountFailure(heroCount, !isProject);
+      if (heroCountError) failures.push(`${viewportName} ${name}: ${heroCountError}`);
+      if (heroCount) {
         if (await heroImages.first().getAttribute('loading') === 'lazy') {
           failures.push(`${viewportName} ${name}: hero image should not be lazy-loaded`);
         }
@@ -65,8 +68,6 @@ try {
         if (!heroOk.alt.trim()) {
           failures.push(`${viewportName} ${name}: hero image has empty alt text`);
         }
-      } else if (!isProject) {
-        failures.push(`${viewportName} ${name}: expected a real hero image`);
       }
 
       if (galleryCount !== null) {
