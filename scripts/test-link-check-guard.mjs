@@ -17,12 +17,28 @@ async function check(name, mode, expectedFailure = '') {
     if (path === '/contact/' && mode === 'no-content') {
       res.writeHead(204); res.end(); return;
     }
+    if (path === '/empty/' && mode === 'discovered-empty') {
+      res.writeHead(204); res.end(); return;
+    }
+    if (path === '/partial/' && mode === 'discovered-partial') {
+      res.writeHead(206, { 'content-type': 'text/html' }); res.end('<html></html>'); return;
+    }
+    if (path === '/json/' && mode === 'discovered-json') {
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); return;
+    }
+    if (path === '/brochure.pdf' && mode === 'discovered-file') {
+      res.writeHead(200, { 'content-type': 'application/pdf' }); res.end('%PDF-test'); return;
+    }
     res.writeHead(200, { 'content-type': 'text/html' });
     const link = path === '/' && mode === 'unsafe-script' ? '<a href="javascript:alert(1)">Unsafe</a>' :
       path === '/' && mode === 'unsafe-data' ? '<a href="data:text/html,unsafe">Unsafe</a>' :
       path === '/' && mode === 'unsafe-entity' ? '<a href="java&#x73;cript:alert(1)">Unsafe</a>' :
       path === '/' && mode === 'unsafe-whitespace' ? '<a href="java&#x09;script:alert(1)">Unsafe</a>' :
       path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
+      path === '/' && mode === 'discovered-empty' ? '<a href="/empty/">Empty</a>' :
+      path === '/' && mode === 'discovered-partial' ? '<a href="/partial/">Partial</a>' :
+      path === '/' && mode === 'discovered-json' ? '<a href="/json/">Wrong content</a>' :
+      path === '/' && mode === 'discovered-file' ? '<a href="/brochure.pdf">Download PDF</a>' :
       path === '/' && mode === 'broken' ? '<a href="/missing/">Broken</a>' :
       path === '/' && mode === 'transport' ? '<a href="/products/?ezb_page=products">Development</a>' : '';
     res.end('<!doctype html><html><body>' + link + '</body></html>');
@@ -63,4 +79,8 @@ await check('javascript href rejected', 'unsafe-script', 'unsafe internal link p
 await check('data href rejected', 'unsafe-data', 'unsafe internal link protocol: data:');
 await check('HTML-encoded javascript href rejected', 'unsafe-entity', 'unsafe internal link protocol: javascript:');
 await check('whitespace-obfuscated javascript href rejected', 'unsafe-whitespace', 'unsafe internal link protocol: javascript:');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=11');
+await check('discovered link must not return 204', 'discovered-empty', 'internal link expected HTTP 200');
+await check('discovered link must not return 206', 'discovered-partial', 'internal link expected HTTP 200');
+await check('discovered page must serve HTML', 'discovered-json', 'internal page expected text/html');
+await check('explicit file link may serve PDF', 'discovered-file');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=15');

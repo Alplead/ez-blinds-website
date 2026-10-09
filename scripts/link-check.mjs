@@ -97,6 +97,11 @@ while (queue.length) {
     failures.push(`${href} -> HTTP ${response.status}`);
     continue;
   }
+  // Discovered navigation must not silently pass with empty or partial bodies.
+  if (response.status !== 200) {
+    failures.push(`${href} -> internal link expected HTTP 200, got ${response.status}`);
+    continue;
+  }
 
   const finalUrl = new URL(response.url);
   if (finalUrl.origin !== base.origin) {
@@ -112,11 +117,14 @@ while (queue.length) {
   }
 
   const contentType = (response.headers.get('content-type') || '').trim();
-  if (seeded.has(href) && !/^text\/html(?:\s*;|$)/i.test(contentType)) {
-    failures.push(`${href} -> required route expected text/html, got ${contentType || 'missing content-type'}`);
+  // Page-like links must serve HTML. Allow explicit file URLs (e.g. PDFs)
+  // to retain their own content types without hiding wrong-page responses.
+  const pageLike = seeded.has(href) || !/\.[a-z0-9]{2,8}$/i.test(requestedUrl.pathname);
+  if (pageLike && !/^text\/html(?:\s*;|$)/i.test(contentType)) {
+    failures.push(`${href} -> ${seeded.has(href) ? 'required route' : 'internal page'} expected text/html, got ${contentType || 'missing content-type'}`);
     continue;
   }
-  if (!contentType.includes('text/html')) continue;
+  if (!/^text\/html(?:\s*;|$)/i.test(contentType)) continue;
 
   const html = await response.text();
   for (const rawHref of extractAnchors(html)) {
