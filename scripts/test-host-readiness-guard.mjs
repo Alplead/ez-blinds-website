@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/products/', '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/', '/retractable-flyscreens/', '/motorised-blinds/', '/projects/', '/advice/', '/blog/', '/about/', '/service-areas/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', leakText = '<a href="/?ezb_page=roller-blinds">dev</a>', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', leakText = '<a href="/?ezb_page=roller-blinds">dev</a>', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', robotsTextOverride = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
