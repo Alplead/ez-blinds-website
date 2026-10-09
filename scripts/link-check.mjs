@@ -22,7 +22,12 @@ const seeds = [
   '/contact/'
 ];
 
-const maxUrls = Number(process.env.EZB_LINK_CHECK_MAX || 120);
+const rawMaxUrls = process.env.EZB_LINK_CHECK_MAX ?? '120';
+const maxUrls = Number(rawMaxUrls);
+if (!Number.isSafeInteger(maxUrls) || maxUrls < 1 || maxUrls > 10000) {
+  console.error('EZB_LINK_CHECK_MAX must be a finite integer between 1 and 10000');
+  process.exit(2);
+}
 const queue = seeds.map((path) => new URL(path, base).href);
 const queued = new Set(queue);
 const seeded = new Set(queue);

@@ -52,6 +52,12 @@ jobs:
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
 
+      - name: Test bounded link crawler configuration
+        run: |
+          node --check scripts/test-link-check-budget.mjs
+          node scripts/test-link-check-budget.mjs | tee /tmp/link-budget.log
+          grep -q 'EZB_LINK_CHECK_BUDGET_TEST_PASS cases=7' /tmp/link-budget.log
+
       - name: Test internal-link fail-closed guard
         run: |
           node --check scripts/test-link-check-guard.mjs
