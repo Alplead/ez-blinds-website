@@ -24,6 +24,7 @@ function simulate({ reduced, observerSupported }) {
       remove(name) { rootClasses.delete(name); }
     } },
     querySelectorAll(selector) {
+      if (selector === '.ezb-quote-form') return [];
       return selector === '[data-ezb-autoplay-video]' ? [video] : [target];
     }
   };

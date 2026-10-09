@@ -43,6 +43,12 @@ jobs:
           node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
           grep -q 'EZB_SITE_MOTION_TEST_PASS cases=3' /tmp/site-motion.log
 
+      - name: Test quote contact-method pre-submit validation
+        run: |
+          node --check scripts/test-quote-contact-method.mjs
+          node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=6' /tmp/quote-contact-method.log
+
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
 

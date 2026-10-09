@@ -1,6 +1,30 @@
 (function () {
 	'use strict';
 
+	// The server still validates contact details; catch the common missing
+	// contact method before navigation so visitors do not lose their message.
+	// Run independently of motion settings and fail open if markup changes.
+	document.querySelectorAll('.ezb-quote-form').forEach(function (form) {
+		var phone = form.querySelector('input[name="phone"]');
+		var email = form.querySelector('input[name="email"]');
+		if (!phone || !email || typeof phone.setCustomValidity !== 'function') return;
+
+		function clearContactError() {
+			phone.setCustomValidity('');
+		}
+
+		phone.addEventListener('input', clearContactError);
+		email.addEventListener('input', clearContactError);
+		form.addEventListener('submit', function (event) {
+			clearContactError();
+			if (phone.value.trim() || email.value.trim()) return;
+			phone.setCustomValidity('Please enter a phone number or email address so we can reply.');
+			event.preventDefault();
+			phone.reportValidity();
+		});
+	});
+
+
 	var motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 	var videos = document.querySelectorAll('[data-ezb-autoplay-video]');
 
