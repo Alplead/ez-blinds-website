@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
-import { inspectMediaImage, heroImageCountFailure } from './media-image-readiness.mjs';
+import { inspectMediaImage, heroImageCountFailure, mediaImageSourceFailure } from './media-image-readiness.mjs';
 
 const rawBase = process.env.EZB_BASE_URL || '';
 if (!rawBase) throw new Error('EZB_BASE_URL is required');
@@ -68,6 +68,8 @@ try {
         if (!heroOk.alt.trim()) {
           failures.push(`${viewportName} ${name}: hero image has empty alt text`);
         }
+        const heroSourceFailure = mediaImageSourceFailure(heroOk.src, base);
+        if (heroSourceFailure) failures.push(`${viewportName} ${name}: hero ${heroSourceFailure}`);
       }
 
       if (galleryCount !== null) {
@@ -85,6 +87,8 @@ try {
           if (!state.alt.trim()) {
             failures.push(`${viewportName} ${name}: gallery image ${i + 1} has empty alt text`);
           }
+          const gallerySourceFailure = mediaImageSourceFailure(state.src, base);
+          if (gallerySourceFailure) failures.push(`${viewportName} ${name}: gallery image ${i + 1} ${gallerySourceFailure}`);
         }
       }
 

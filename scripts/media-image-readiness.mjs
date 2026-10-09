@@ -21,6 +21,26 @@ export async function inspectMediaImage(locator) {
 }
 
 /**
+ * A real-media acceptance run must not pass on unrelated external images,
+ * embedded data or ephemeral blob URLs. WordPress attachment URLs may be
+ * absolute or relative, but must resolve to the verified staging origin.
+ */
+export function mediaImageSourceFailure(src, baseUrl) {
+  if (typeof src !== 'string' || !src.trim()) return 'image source is missing';
+  try {
+    const base = new URL(baseUrl);
+    const image = new URL(src, base);
+    if (!['http:', 'https:'].includes(image.protocol) ||
+        image.origin !== base.origin || image.username || image.password) {
+      return 'image source must use the verified same-origin HTTP(S) host';
+    }
+    return '';
+  } catch {
+    return 'image source URL is invalid';
+  }
+}
+
+/**
  * Require a single real hero on product/home pages. Projects may omit a hero,
  * but duplicate hero slots must never conceal a broken second image.
  */

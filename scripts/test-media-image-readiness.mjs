@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { inspectMediaImage, heroImageCountFailure } from './media-image-readiness.mjs';
+import { inspectMediaImage, heroImageCountFailure, mediaImageSourceFailure } from './media-image-readiness.mjs';
 
 function fakeLocator(image) {
   const calls = [];
@@ -53,4 +53,20 @@ assert.match(heroImageCountFailure(0), /exactly one hero image/);
 assert.match(heroImageCountFailure(2), /exactly one hero image/);
 assert.equal(heroImageCountFailure(0, false), '');
 assert.match(heroImageCountFailure(2, false), /at most one hero image/);
-console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=8');
+const verifiedBase = 'https://staging.example.test/';
+const mediaSources = [
+  ['/wp-content/uploads/2026/10/hero.webp', ''],
+  ['https://staging.example.test/wp-content/uploads/gallery.webp', ''],
+  ['https://external.example.test/photo.webp', 'same-origin'],
+  ['//external.example.test/photo.webp', 'same-origin'],
+  ['data:image/webp;base64,AAAA', 'same-origin'],
+  ['blob:https://staging.example.test/123', 'same-origin'],
+  ['javascript:alert(1)', 'same-origin'],
+  ['', 'missing']
+];
+for (const [source, expectedFailure] of mediaSources) {
+  const failure = mediaImageSourceFailure(source, verifiedBase);
+  if (expectedFailure) assert.match(failure, new RegExp(expectedFailure));
+  else assert.equal(failure, '');
+}
+console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=16');
