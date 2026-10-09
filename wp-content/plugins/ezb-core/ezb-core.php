@@ -256,6 +256,8 @@ add_shortcode(
 				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please add your name and either a phone number or an email address.', 'ezb-core' ); ?></p>
+			<?php elseif ( 'too_long' === $status ) : ?>
+				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Your enquiry is too long. Please shorten it and try again.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'error' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Something went wrong. Please check the form and try again.', 'ezb-core' ); ?></p>
 			<?php endif; ?>
@@ -267,10 +269,10 @@ add_shortcode(
 				</p>
 
 				<div class="ezb-form-grid">
-					<p><label><?php esc_html_e( 'Name', 'ezb-core' ); ?><br><input type="text" name="name" required></label></p>
-					<p><label><?php esc_html_e( 'Suburb / Postcode', 'ezb-core' ); ?><br><input type="text" name="suburb"></label></p>
-					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" aria-describedby="ezb-contact-method-note"></label></p>
-					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" aria-describedby="ezb-contact-method-note"></label></p>
+					<p><label><?php esc_html_e( 'Name', 'ezb-core' ); ?><br><input type="text" name="name" autocomplete="name" maxlength="120" required></label></p>
+					<p><label><?php esc_html_e( 'Suburb / Postcode', 'ezb-core' ); ?><br><input type="text" name="suburb" maxlength="120"></label></p>
+					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" autocomplete="tel" maxlength="60" aria-describedby="ezb-contact-method-note"></label></p>
+					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" autocomplete="email" maxlength="254" aria-describedby="ezb-contact-method-note"></label></p>
 				</div>
 				<p class="ezb-form-note" id="ezb-contact-method-note"><?php esc_html_e( 'Please enter a phone number or email address so we can reply.', 'ezb-core' ); ?></p>
 
@@ -288,7 +290,7 @@ add_shortcode(
 					</label>
 				</p>
 
-				<p><label><?php esc_html_e( 'Message', 'ezb-core' ); ?><br><textarea name="message" rows="6"></textarea></label></p>
+				<p><label><?php esc_html_e( 'Message', 'ezb-core' ); ?><br><textarea name="message" rows="6" maxlength="4000"></textarea></label></p>
 				<p class="ezb-form-note"><?php esc_html_e( 'Photo upload will be added after the media-upload and mail-delivery path is verified.', 'ezb-core' ); ?></p>
 				<p><button class="ezb-submit" type="submit"><?php esc_html_e( 'Send enquiry', 'ezb-core' ); ?></button></p>
 			</form>
@@ -331,6 +333,19 @@ function ezb_handle_quote_form() {
 	$email   = isset( $_POST['email'] ) && is_string( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 	$product = isset( $_POST['product'] ) ? sanitize_text_field( wp_unslash( $_POST['product'] ) ) : '';
 	$message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+
+	// Bound public input before invoking wp_mail; HTML maxlength is not a security boundary.
+	if (
+		strlen( $name ) > 512 ||
+		strlen( $suburb ) > 512 ||
+		strlen( $phone ) > 240 ||
+		strlen( $email ) > 1024 ||
+		strlen( $product ) > 256 ||
+		strlen( $message ) > 16000
+	) {
+		wp_safe_redirect( home_url( '/contact/?quote_status=too_long' ) );
+		exit;
+	}
 
 	if ( '' === $name || ( '' === $phone && ! is_email( $email ) ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );

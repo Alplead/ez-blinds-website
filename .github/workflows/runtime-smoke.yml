@@ -760,6 +760,19 @@ jobs:
           test "$ARRAY_EMAIL_CODE" = "302"
           grep -qi 'location: .*quote_status=invalid' /tmp/array-email-headers.txt
 
+          # A forged oversized message must be rejected before wp_mail is called.
+          OVERSIZED_MESSAGE="$(printf '%16001s' '' | tr ' ' 'x')"
+          OVERSIZED_CODE="$(curl -sS -o /tmp/oversized-submit-body.html -D /tmp/oversized-submit-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Oversized Message' \
+            --data-urlencode 'email=ci-oversized@example.com' \
+            --data-urlencode "message=$OVERSIZED_MESSAGE")"
+          test "$OVERSIZED_CODE" = "302"
+          grep -qi 'location: .*quote_status=too_long' /tmp/oversized-submit-headers.txt
+          curl -LsS 'http://127.0.0.1:8080/contact/?quote_status=too_long' -o /tmp/too-long-contact.html
+          grep -q 'Your enquiry is too long.' /tmp/too-long-contact.html
           HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'website=bot-filled-this'             --data-urlencode 'name=Bot')"
           test "$HONEYPOT_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
