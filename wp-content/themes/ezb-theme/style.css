@@ -199,6 +199,13 @@ a {
 	color: #f8f3ea;
 }
 
+/* A dark global focus ring disappears against the dark proof and CTA panels.
+   Keep keyboard focus visible on these contrasting section backgrounds. */
+.ezb-proof a:focus-visible,
+.ezb-cta a:focus-visible {
+	outline-color: var(--ezb-white);
+}
+
 /* Light focus ring for links on the dark footer. */
 .ezb-footer a:focus-visible {
 	outline-color: var(--ezb-white);
