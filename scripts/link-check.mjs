@@ -152,7 +152,9 @@ while (queue.length) {
     const compactHref = rawHref.replace(/[\u0000-\u0020]/g, '');
     const protocolMatch = /^([a-z][a-z0-9+.-]*):/i.exec(compactHref);
     const protocol = protocolMatch?.[1]?.toLowerCase() || '';
-    if (['javascript', 'data', 'vbscript'].includes(protocol)) {
+    // Only standard web, email and telephone schemes are valid public navigation.
+    // Reject unknown schemes instead of silently skipping them as off-origin.
+    if (protocol && !['http', 'https', 'mailto', 'tel'].includes(protocol)) {
       failures.push(`${href} contains unsafe internal link protocol: ${protocol}:`);
       continue;
     }

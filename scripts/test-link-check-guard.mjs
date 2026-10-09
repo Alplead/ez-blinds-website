@@ -40,6 +40,11 @@ async function check(name, mode, expectedFailure = '') {
       path === '/' && mode === 'transport-unquoted' ? '<a href=/products/?ezb_page=products>Dev</a>' :
       path === '/' && mode === 'data-href-decoy' ? '<a data-href="/missing/">No navigation</a>' :
       path === '/' && mode === 'quoted-label-decoy' ? '<a aria-label="href=/missing/" href="/contact/">Contact</a>' :
+      path === '/' && mode === 'file-protocol' ? '<a href="file:///private/internal.txt">Unsafe</a>' :
+      path === '/' && mode === 'blob-protocol' ? '<a href="blob:https://example.com/preview">Unsafe</a>' :
+      path === '/' && mode === 'ftp-protocol' ? '<a href="ftp://example.com/private.txt">Unsafe</a>' :
+      path === '/' && mode === 'external-https' ? '<a href="https://example.com/">External</a>' :
+      path === '/' && mode === 'valid-mailto' ? '<a href="mailto:hello@example.com">Email</a>' :
       path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
       path === '/' && mode === 'discovered-empty' ? '<a href="/empty/">Empty</a>' :
       path === '/' && mode === 'discovered-partial' ? '<a href="/partial/">Partial</a>' :
@@ -95,4 +100,9 @@ await check('unquoted broken internal href rejected', 'broken-unquoted', 'HTTP 4
 await check('unquoted development transport rejected', 'transport-unquoted', 'development ezb_page links');
 await check('data-href is not a real navigation link', 'data-href-decoy');
 await check('href in quoted aria-label cannot override actual href', 'quoted-label-decoy');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=21');
+await check('local file URL rejected', 'file-protocol', 'unsafe internal link protocol: file:');
+await check('blob URL rejected', 'blob-protocol', 'unsafe internal link protocol: blob:');
+await check('legacy FTP URL rejected', 'ftp-protocol', 'unsafe internal link protocol: ftp:');
+await check('external HTTPS link remains allowed', 'external-https');
+await check('mail address link remains allowed', 'valid-mailto');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=26');
