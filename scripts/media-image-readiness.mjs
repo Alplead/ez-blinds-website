@@ -34,6 +34,12 @@ export function mediaImageSourceFailure(src, baseUrl) {
         image.origin !== base.origin || image.username || image.password) {
       return 'image source must use the verified same-origin HTTP(S) host';
     }
+    if (!image.pathname.startsWith('/wp-content/uploads/') || image.pathname.endsWith('/')) {
+      return 'image source must be a WordPress uploads attachment';
+    }
+    if (image.search || image.hash) {
+      return 'image source must not include query parameters or fragments';
+    }
     return '';
   } catch {
     return 'image source URL is invalid';
