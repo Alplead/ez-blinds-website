@@ -88,7 +88,7 @@ while (queue.length) {
   let response;
   try {
     response = await fetch(href, {
-      redirect: 'follow',
+      redirect: 'manual',
       headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' }
     });
   } catch (error) {
@@ -97,6 +97,19 @@ while (queue.length) {
   }
 
   checked.set(href, response.status);
+
+  // Never follow a redirect while crawling: even a bad same-origin route
+  // must not cause this audit to request an unrelated external host.
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location');
+    let destination = 'missing Location';
+    if (location) {
+      try { destination = new URL(location, href).href; }
+      catch { destination = 'invalid Location'; }
+    }
+    failures.push(`${href} unexpectedly redirected to ${destination}`);
+    continue;
+  }
 
   // Required public pages must be real HTTP 200 pages, not 204/206 responses.
   if (seeded.has(href) && response.status !== 200) {

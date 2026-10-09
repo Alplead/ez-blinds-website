@@ -56,7 +56,7 @@ jobs:
         run: |
           node --check scripts/test-link-check-guard.mjs
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
-          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=26' /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=27' /tmp/link-check-guard.log
 
       - name: Test keyboard focus visibility and navigation guard
         run: |

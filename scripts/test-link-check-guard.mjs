@@ -10,6 +10,9 @@ async function check(name, mode, expectedFailure = '') {
     if ((mode === 'redirect' && path === '/contact/') || (mode === 'discovered-redirect' && path === '/redirected/')) {
       res.writeHead(302, { location: '/' }); res.end(); return;
     }
+    if (mode === 'off-origin-redirect' && path === '/contact/') {
+      res.writeHead(302, { location: 'https://example.com/off-site/' }); res.end(); return;
+    }
     if (path === '/missing/') { res.writeHead(404); res.end('missing'); return; }
     if (path === '/contact/' && mode === 'not-html') {
       res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); return;
@@ -82,6 +85,7 @@ async function check(name, mode, expectedFailure = '') {
 await check('clean internal links', 'clean');
 await check('required route redirect to Home rejected', 'redirect', 'unexpectedly redirected to');
 await check('discovered link redirect to Home rejected', 'discovered-redirect', 'unexpectedly redirected to');
+await check('off-origin redirect rejected without following', 'off-origin-redirect', 'unexpectedly redirected to https://example.com/off-site/');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
 await check('required public route must return HTML', 'not-html', 'required route expected text/html');
@@ -105,4 +109,4 @@ await check('blob URL rejected', 'blob-protocol', 'unsafe internal link protocol
 await check('legacy FTP URL rejected', 'ftp-protocol', 'unsafe internal link protocol: ftp:');
 await check('external HTTPS link remains allowed', 'external-https');
 await check('mail address link remains allowed', 'valid-mailto');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=26');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=27');
