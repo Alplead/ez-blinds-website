@@ -58,6 +58,12 @@ jobs:
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
           grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=26' /tmp/link-check-guard.log
 
+      - name: Test keyboard focus visibility and navigation guard
+        run: |
+          node --check scripts/test-theme-focus-visibility.mjs
+          node scripts/test-theme-focus-visibility.mjs | tee /tmp/theme-focus.log
+          grep -q 'EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=8' /tmp/theme-focus.log
+
       - name: Test WordPress template skip-link targets
         run: |
           node --check scripts/test-theme-skip-link.mjs

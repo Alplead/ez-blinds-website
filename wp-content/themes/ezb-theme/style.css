@@ -199,6 +199,11 @@ a {
 	color: #f8f3ea;
 }
 
+/* Light focus ring for links on the dark footer. */
+.ezb-footer a:focus-visible {
+	outline-color: var(--ezb-white);
+}
+
 @media (max-width: 781px) {
 	.ezb-header__inner {
 		min-height: 64px;
@@ -323,7 +328,8 @@ a {
 .ezb-quote-form input:focus,
 .ezb-quote-form select:focus,
 .ezb-quote-form textarea:focus {
-	outline: 3px solid rgba(122, 90, 43, 0.14);
+	outline: 3px solid var(--ezb-accent-dark);
+	outline-offset: 2px;
 	border-color: var(--ezb-accent);
 }
 
@@ -450,7 +456,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-	outline: 3px solid rgba(122, 90, 43, 0.35);
+	outline: 3px solid var(--ezb-accent-dark);
 	outline-offset: 3px;
 }
 
