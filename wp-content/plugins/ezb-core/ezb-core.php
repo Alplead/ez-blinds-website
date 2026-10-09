@@ -1574,6 +1574,29 @@ function ezb_rewrite_dev_prototype_html( $html ) {
 	);
 }
 
+/**
+ * Reject malformed development routing query parameters before WP_Query runs.
+ * ezb_project is also a WordPress public query var; passing an array reaches
+ * sanitize_title_for_query() and can trigger a PHP TypeError before our
+ * template_redirect handler is invoked.
+ */
+function ezb_reject_malformed_dev_route_query() {
+	if ( 'development' !== wp_get_environment_type() ) {
+		return;
+	}
+
+	foreach ( array( 'ezb_page', 'ezb_project' ) as $parameter ) {
+		if ( isset( $_GET[ $parameter ] ) && ! is_string( $_GET[ $parameter ] ) ) {
+			wp_die(
+				esc_html__( 'Invalid development route request.', 'ezb-core' ),
+				esc_html__( 'Invalid request', 'ezb-core' ),
+				array( 'response' => 400 )
+			);
+		}
+	}
+}
+add_action( 'init', 'ezb_reject_malformed_dev_route_query', 0 );
+
 function ezb_render_dev_prototype_route() {
 	if ( 'development' !== wp_get_environment_type() || empty( $_GET['ezb_page'] ) || ! is_string( $_GET['ezb_page'] ) ) {
 		return;
