@@ -371,7 +371,9 @@ Message:
 	$headers = array();
 
 	if ( is_email( $email ) ) {
-		$headers[] = 'Reply-To: ' . $name . ' <' . $email . '>';
+		// User-submitted display names are kept in the message body rather than
+		// interpreted as an RFC 5322 address/display-name in mail headers.
+		$headers[] = 'Reply-To: ' . $email;
 	}
 
 	$recipient = ezb_quote_recipient_email();

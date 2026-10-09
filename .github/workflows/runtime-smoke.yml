@@ -739,7 +739,7 @@ jobs:
 
           docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc '
             mkdir -p /var/www/html/wp-content/mu-plugins
-            printf "%s\n" "<?php" "add_filter( '\''pre_wp_mail'\'', function ( \$return, \$atts ) { \$to = is_array( \$atts['\''to'\'' ] ) ? implode( '\'', '\'', \$atts['\''to'\'' ] ) : \$atts['\''to'\'' ]; file_put_contents( '\''/tmp/ezb-ci-mail-to.txt'\'', \$to ); return true; }, 10, 2 );" > /var/www/html/wp-content/mu-plugins/ezb-ci-mail.php
+            printf "%s\n" "<?php" "add_filter( '\''pre_wp_mail'\'', function ( \$return, \$atts ) { \$to = is_array( \$atts['\''to'\'' ] ) ? implode( '\'', '\'', \$atts['\''to'\'' ] ) : \$atts['\''to'\'' ]; file_put_contents( '\''/tmp/ezb-ci-mail-to.txt'\'', \$to ); file_put_contents( '\''/tmp/ezb-ci-mail-headers.json'\'', json_encode( \$atts['\''headers'\''] ) ); return true; }, 10, 2 );" > /var/www/html/wp-content/mu-plugins/ezb-ci-mail.php
           '
 
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ezb_quote_recipient_email 'quotes-ci@example.com' --allow-root >/dev/null
@@ -752,6 +752,8 @@ jobs:
           test "$VALID_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/valid-submit-headers.txt
           test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "quotes-ci@example.com"
+          # The sender's editable name must never influence mail header syntax.
+          test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-headers.json')" = '["Reply-To: ci-form@example.com"]'
 
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ezb_quote_recipient_email '' --allow-root >/dev/null
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update admin_email 'admin-fallback@example.com' --allow-root >/dev/null
