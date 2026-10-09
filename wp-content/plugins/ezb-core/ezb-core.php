@@ -138,9 +138,10 @@ function ezb_print_structured_data() {
 		'@graph'   => $graph,
 	);
 
+	// Escape angle brackets so imported or Owner-edited titles cannot close this script element.
 	printf(
 		'<script type="application/ld+json">%s</script>' . "\n",
-		wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG )
 	);
 }
 add_action( 'wp_head', 'ezb_print_structured_data', 20 );

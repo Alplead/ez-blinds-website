@@ -185,6 +185,23 @@ jobs:
           grep -q '"publisher":{"@type":"Organization"' /tmp/schema-blog.html
           ! grep -q '"@type":"LocalBusiness"' /tmp/schema-blog.html
 
+      - name: Verify structured-data script escapes hostile title text
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $posts = get_posts(array("post_type"=>"post", "post_status"=>"publish", "numberposts"=>1));
+            if (!$posts) { throw new Exception("No published test post"); }
+            global $wp_query;
+            $wp_query = new WP_Query(array("p"=>$posts[0]->ID, "post_type"=>"post"));
+            $wp_query->the_post();
+            add_filter("the_title", static function ($title) { return "</script><svg/onload=alert(1)>"; });
+            ezb_print_structured_data();
+          ' --allow-root > /tmp/schema-hostile-title.html
+          grep -qF '\u003C/script\u003E' /tmp/schema-hostile-title.html
+          ! grep -qF '</script><svg/onload' /tmp/schema-hostile-title.html
+          test "$(grep -o '</script>' /tmp/schema-hostile-title.html | wc -l)" -eq 1
+
       - name: Audit title and canonical structure
         shell: bash
         run: |
