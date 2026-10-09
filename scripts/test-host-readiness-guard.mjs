@@ -12,7 +12,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     if (pathname === '/robots.txt') {
       if (redirectRobots) { res.writeHead(302, { location: '/robots-proxy.txt' }); res.end(); return; }
       res.writeHead(200, { 'content-type': 'text/plain' });
-      res.end(indexable ? 'User-agent: *\nAllow: /' : 'User-agent: *\nDisallow: /');
+      res.end(robotsTextOverride || (indexable ? 'User-agent: *\nAllow: /' : 'User-agent: *\nDisallow: /'));
       return;
     }
     if (pathname === '/wp-sitemap.xml') {
