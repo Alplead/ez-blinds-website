@@ -372,6 +372,30 @@ async function verifyAccessibilityInteractions(browser) {
     throw new Error('quote form Name control is not required');
   }
 
+  const phoneInput = page.locator('.ezb-quote-form input[name="phone"]').first();
+  const emailInput = page.locator('.ezb-quote-form input[name="email"]').first();
+  if (!(await phoneInput.isVisible()) || !(await emailInput.isVisible())) {
+    throw new Error('quote form contact-method inputs are not visible');
+  }
+  await phoneInput.fill('');
+  await emailInput.fill('');
+  const quoteForm = page.locator('.ezb-quote-form').first();
+  const blockedEmptyContact = await quoteForm.evaluate((form) => {
+    let prevented = false;
+    const event = new Event('submit', { bubbles: true, cancelable: true });
+    form.addEventListener('submit', (submitted) => {
+      prevented = submitted.defaultPrevented;
+    }, { once: true });
+    form.dispatchEvent(event);
+    return prevented;
+  });
+  if (!blockedEmptyContact) {
+    throw new Error('quote form allowed submission without phone or email');
+  }
+  if (!(await phoneInput.evaluate((input) => document.activeElement === input))) {
+    throw new Error('missing contact-method validation did not focus phone field');
+  }
+
   const submit = page.locator('.ezb-quote-form button[type="submit"]').first();
   if (!(await submit.isVisible()) || !(await submit.textContent())?.trim()) {
     throw new Error('quote form submit control is not visibly named');
