@@ -743,11 +743,12 @@ jobs:
 
           # When neither destination is valid, fail closed instead of calling wp_mail.
           INVALID_BOTH="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
-            $old_admin = get_option("admin_email");
             update_option("ezb_quote_recipient_email", "not-an-email");
-            update_option("admin_email", "not-an-email");
+            // WordPress refuses to store an invalid admin_email; simulate a
+            // malformed legacy DB value without mutating the protected option.
+            add_filter("pre_option_admin_email", static function () { return "not-an-email"; });
             echo ezb_quote_recipient_email();
-            update_option("admin_email", $old_admin);
+            remove_all_filters("pre_option_admin_email");
             update_option("ezb_quote_recipient_email", "");
           ' --allow-root)"
           test -z "$INVALID_BOTH"
