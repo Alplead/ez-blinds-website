@@ -255,6 +255,17 @@ jobs:
           done
           grep -q 'id="ezb-codespaces-url-bridge"' /tmp/prototype.html
 
+      - name: Verify malformed development query arrays are harmless
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/prototype-malformed-key.html -w '%{http_code}' 'http://127.0.0.1:8080/?ezb_page%5B%5D=products')"
+          test "$code" = "200"
+          grep -q 'ezb-theme-style-css' /tmp/prototype-malformed-key.html
+          code="$(curl -sS -o /tmp/prototype-malformed-project.html -w '%{http_code}' 'http://127.0.0.1:8080/?ezb_page=project&ezb_project%5B%5D=unknown')"
+          test "$code" = "404"
+          ! grep -q 'Fatal error' /tmp/prototype-malformed-project.html
+
       - name: Verify prototype links are server-rewritten
         shell: bash
         run: |

@@ -1575,7 +1575,7 @@ function ezb_rewrite_dev_prototype_html( $html ) {
 }
 
 function ezb_render_dev_prototype_route() {
-	if ( 'development' !== wp_get_environment_type() || empty( $_GET['ezb_page'] ) ) {
+	if ( 'development' !== wp_get_environment_type() || empty( $_GET['ezb_page'] ) || ! is_string( $_GET['ezb_page'] ) ) {
 		return;
 	}
 
@@ -1584,7 +1584,9 @@ function ezb_render_dev_prototype_route() {
 	$post_context_set = false;
 
 	if ( 'project' === $key ) {
-		$slug = isset( $_GET['ezb_project'] ) ? sanitize_title( wp_unslash( $_GET['ezb_project'] ) ) : '';
+		$slug = isset( $_GET['ezb_project'] ) && is_string( $_GET['ezb_project'] )
+			? sanitize_title( wp_unslash( $_GET['ezb_project'] ) )
+			: '';
 		$post = $slug ? get_page_by_path( $slug, OBJECT, 'ezb_project' ) : null;
 
 		if ( ! $post ) {
