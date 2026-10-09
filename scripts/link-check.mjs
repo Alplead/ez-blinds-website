@@ -57,10 +57,21 @@ function shouldSkip(url) {
 
 function extractAnchors(html) {
   const hrefs = [];
-  const pattern = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1/gi;
-  let match;
-  while ((match = pattern.exec(html)) !== null) {
-    hrefs.push(decodeHref(match[2]));
+  // A valid HTML href need not be quoted; never overlook unquoted script
+  // protocols. Scan opening tags and attributes separately so data-href and
+  // other quoted attribute values cannot masquerade as real navigation.
+  const tags = /<a\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi;
+  const attrPattern = /\s+([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let tag;
+  while ((tag = tags.exec(html)) !== null) {
+    attrPattern.lastIndex = 0;
+    let attribute;
+    while ((attribute = attrPattern.exec(tag[0])) !== null) {
+      if (attribute[1].toLowerCase() !== 'href') continue;
+      const rawValue = attribute[2] ?? attribute[3] ?? attribute[4];
+      if (rawValue !== undefined) hrefs.push(decodeHref(rawValue));
+      break;
+    }
   }
   return hrefs;
 }

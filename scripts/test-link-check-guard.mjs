@@ -34,6 +34,12 @@ async function check(name, mode, expectedFailure = '') {
       path === '/' && mode === 'unsafe-data' ? '<a href="data:text/html,unsafe">Unsafe</a>' :
       path === '/' && mode === 'unsafe-entity' ? '<a href="java&#x73;cript:alert(1)">Unsafe</a>' :
       path === '/' && mode === 'unsafe-whitespace' ? '<a href="java&#x09;script:alert(1)">Unsafe</a>' :
+      path === '/' && mode === 'unsafe-unquoted' ? '<a href=javascript:alert(1)>Unsafe</a>' :
+      path === '/' && mode === 'data-unquoted' ? '<a href=data:text/html,x>Unsafe</a>' :
+      path === '/' && mode === 'broken-unquoted' ? '<a href=/missing/>Broken</a>' :
+      path === '/' && mode === 'transport-unquoted' ? '<a href=/products/?ezb_page=products>Dev</a>' :
+      path === '/' && mode === 'data-href-decoy' ? '<a data-href="/missing/">No navigation</a>' :
+      path === '/' && mode === 'quoted-label-decoy' ? '<a aria-label="href=/missing/" href="/contact/">Contact</a>' :
       path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
       path === '/' && mode === 'discovered-empty' ? '<a href="/empty/">Empty</a>' :
       path === '/' && mode === 'discovered-partial' ? '<a href="/partial/">Partial</a>' :
@@ -83,4 +89,10 @@ await check('discovered link must not return 204', 'discovered-empty', 'internal
 await check('discovered link must not return 206', 'discovered-partial', 'internal link expected HTTP 200');
 await check('discovered page must serve HTML', 'discovered-json', 'internal page expected text/html');
 await check('explicit file link may serve PDF', 'discovered-file');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=15');
+await check('unquoted javascript href rejected', 'unsafe-unquoted', 'unsafe internal link protocol: javascript:');
+await check('unquoted data href rejected', 'data-unquoted', 'unsafe internal link protocol: data:');
+await check('unquoted broken internal href rejected', 'broken-unquoted', 'HTTP 404');
+await check('unquoted development transport rejected', 'transport-unquoted', 'development ezb_page links');
+await check('data-href is not a real navigation link', 'data-href-decoy');
+await check('href in quoted aria-label cannot override actual href', 'quoted-label-decoy');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=21');
