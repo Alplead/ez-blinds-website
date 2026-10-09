@@ -560,12 +560,15 @@ jobs:
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
             printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > /tmp/owner-featured-roller.webp
             ATTACHMENT_ID=\$(wp media import /tmp/owner-featured-roller.webp --porcelain --allow-root)
+            wp post meta update \"\$ATTACHMENT_ID\" _wp_attachment_image_alt 'Owner-selected roller blind installation' --allow-root >/dev/null
             PAGE_ID=\$(wp post list --post_type=page --name=roller-blinds --field=ID --allow-root | head -1)
             wp post meta update \"\$PAGE_ID\" _thumbnail_id \"\$ATTACHMENT_ID\" --allow-root >/dev/null
           "
           curl -sS "http://127.0.0.1:8080/?ezb_page=roller-blinds" -o /tmp/owner-featured-roller.html
           grep -q 'owner-featured-roller' /tmp/owner-featured-roller.html
           grep -q 'ezb-media-slot__image' /tmp/owner-featured-roller.html
+          grep -Fq 'alt="Owner-selected roller blind installation"' /tmp/owner-featured-roller.html
+          ! grep -Fq 'alt="Roller blinds installed across apartment glazing"' /tmp/owner-featured-roller.html
 
           docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint sh bootstrap -lc "
             printf '%s' 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAIAAUAmJaQAA3AA/vz0AAA=' | base64 -d > /tmp/owner-project-featured.webp

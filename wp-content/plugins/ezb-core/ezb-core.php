@@ -2220,23 +2220,33 @@ add_shortcode(
 			return '';
 		}
 
-		$candidate      = $candidates[ $slot ];
-		$attachment_id = ! empty( $candidate['page_slug'] )
+		$candidate         = $candidates[ $slot ];
+		$featured_image_id = ! empty( $candidate['page_slug'] )
 			? ezb_featured_image_for_page_slug( $candidate['page_slug'] )
 			: 0;
+		$attachment_id     = $featured_image_id;
 
 		if ( ! $attachment_id ) {
 			$attachment_id = ezb_find_attachment_by_basename( $candidate['filename'] );
 		}
 
 		if ( $attachment_id ) {
+			// The fallback candidate alt must never describe a different
+			// photograph when an Owner changes the page's Featured Image.
+			$alt = $candidate['alt'];
+			if ( $featured_image_id ) {
+				$owner_alt = get_post_meta( $featured_image_id, '_wp_attachment_image_alt', true );
+				$alt       = is_string( $owner_alt ) && '' !== trim( $owner_alt )
+					? $owner_alt
+					: __( 'Window furnishings photograph', 'ezb-core' );
+			}
 			return wp_get_attachment_image(
 				$attachment_id,
 				'large',
 				false,
 				array(
 					'class'         => 'ezb-media-slot__image',
-					'alt'           => $candidate['alt'],
+					'alt'           => $alt,
 					'loading'       => 'eager',
 					'fetchpriority' => 'high',
 					'decoding'      => 'async',
