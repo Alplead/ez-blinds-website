@@ -301,13 +301,19 @@ add_shortcode(
 );
 
 function ezb_quote_recipient_email() {
-	$recipient = sanitize_email( ezb_get_site_setting( 'ezb_quote_recipient_email' ) );
+	$setting   = ezb_get_site_setting( 'ezb_quote_recipient_email' );
+	$recipient = is_string( $setting ) ? sanitize_email( $setting ) : '';
 
-	if ( $recipient ) {
+	// sanitize_email() cleans an address but does not guarantee an @domain.
+	// A malformed destination must not silently swallow customer enquiries.
+	if ( is_email( $recipient ) ) {
 		return $recipient;
 	}
 
-	return sanitize_email( get_option( 'admin_email' ) );
+	$admin_email = get_option( 'admin_email' );
+	$fallback    = is_string( $admin_email ) ? sanitize_email( $admin_email ) : '';
+
+	return is_email( $fallback ) ? $fallback : '';
 }
 
 function ezb_handle_quote_form() {

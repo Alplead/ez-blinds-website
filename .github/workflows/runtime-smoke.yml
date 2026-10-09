@@ -733,6 +733,25 @@ jobs:
           grep -qi 'location: .*quote_status=sent' /tmp/fallback-submit-headers.txt
           test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "admin-fallback@example.com"
 
+          # An invalid configured mailbox must use the existing valid admin fallback.
+          INVALID_DESTINATION="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            update_option("ezb_quote_recipient_email", "not-an-email");
+            echo ezb_quote_recipient_email();
+            update_option("ezb_quote_recipient_email", "");
+          ' --allow-root)"
+          test "$INVALID_DESTINATION" = "admin-fallback@example.com"
+
+          # When neither destination is valid, fail closed instead of calling wp_mail.
+          INVALID_BOTH="$(docker compose -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $old_admin = get_option("admin_email");
+            update_option("ezb_quote_recipient_email", "not-an-email");
+            update_option("admin_email", "not-an-email");
+            echo ezb_quote_recipient_email();
+            update_option("admin_email", $old_admin);
+            update_option("ezb_quote_recipient_email", "");
+          ' --allow-root)"
+          test -z "$INVALID_BOTH"
+
           ERROR_CODE="$(curl -sS -o /tmp/error-submit-body.html -D /tmp/error-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Missing Contact')"
           test "$ERROR_CODE" = "302"
           grep -qi 'location: .*quote_status=invalid' /tmp/error-submit-headers.txt
