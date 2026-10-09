@@ -52,4 +52,4 @@ assert.match(css, /\.wp-block-navigation__responsive-container\.is-menu-open\s*\
   'mobile navigation must scroll when content exceeds viewport');
 assert.match(header, /class="ezb-skip-link"[^>]*href="#main-content"/,
   'keyboard skip link must target main content');
-console.log('EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=9');
+console.log('EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=8');
