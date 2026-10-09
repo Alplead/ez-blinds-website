@@ -94,7 +94,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=32' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=34' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh

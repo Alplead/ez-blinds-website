@@ -94,8 +94,14 @@ const developmentPublicationMarkers = [
 
 // Reject case-only changes to draft markers on indexable release hosts.
 function findDevelopmentMarker(html) {
-  const lowerHtml = html.toLowerCase();
-  return developmentPublicationMarkers.find(marker => lowerHtml.includes(marker.toLowerCase()));
+  // Browsers decode numeric character references before displaying HTML.
+  // Do not let an encoded character hide an unapproved publication marker.
+  const renderedText = html.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/gi, (entity, hex, decimal) => {
+    const point = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
+    return point >= 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
+      ? String.fromCodePoint(point) : entity;
+  }).toLowerCase();
+  return developmentPublicationMarkers.find(marker => renderedText.includes(marker.toLowerCase()));
 }
 
 // Include every current structural top-level route. A staging host must not

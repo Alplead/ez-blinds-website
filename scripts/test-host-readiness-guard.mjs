@@ -97,6 +97,8 @@ await check({ name: 'indexable opt-in rejected', indexable: true, allowDevTransp
 await check({ name: 'indexable dev query leakage rejected', indexable: true, leakPath: '/advice/', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable development marker rejected', indexable: true, markerPath: '/projects/', expectedError: '/projects/ contains development-only publication marker' });
 await check({ name: 'indexable lowercase prototype marker rejected', indexable: true, markerPath: '/projects/', markerText: 'prototype project', expectedError: '/projects/ contains development-only publication marker' });
+await check({ name: 'indexable decimal-entity prototype marker rejected', indexable: true, markerPath: '/projects/', markerText: 'Pro&#116;otype project', expectedError: '/projects/ contains development-only publication marker: Prototype project' });
+await check({ name: 'indexable hex-entity indexed article marker rejected', indexable: true, markerPath: '/roller-blinds-blockout-vs-sunscreen/', markerText: 'Pro&#x74;otype project', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development-only publication marker: Prototype project' });
 await check({ name: 'indexable lowercase indexed article marker rejected', indexable: true, markerPath: '/roller-blinds-blockout-vs-sunscreen/', markerText: 'prototype project', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development-only publication marker' });
 await check({ name: 'indexable prototype wording on homepage rejected', indexable: true, markerPath: '/', markerText: 'Browse the current prototype product map in one place.', expectedError: '/ contains development-only publication marker: prototype product map' });
 await check({ name: 'indexable secondary noindex rejected', indexable: true, forceNoindexPath: '/projects/', expectedError: '/projects/ is unexpectedly noindex' });
@@ -119,4 +121,4 @@ await check({ name: 'indexable product route cannot embed unapproved RFS video',
 await check({ name: 'indexable sitemap project cannot embed case-varied private video', indexable: true, markerPath: '/projects/prototype-roller-blinds-project/', markerText: '<video src="/uploads/ez_retractable_flyscreen_web_v1_720x1280_muted.mp4"></video>', expectedError: '/projects/prototype-roller-blinds-project/ indexed development-only publication marker: EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4' });
 await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
 await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=32');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=34');
