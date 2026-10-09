@@ -39,10 +39,17 @@ assert.match(footerFocus, /outline-color:\s*var\(--ezb-white\)\s*;/);
 assert.ok(contrast(hexValue('ezb-white'), '#211a16') >= 3,
   'footer focus ring must have at least 3:1 contrast on the dark footer');
 
+const darkPanelFocus = body(/\\.ezb-proof a:focus-visible,\\s*\\.ezb-cta a:focus-visible\\s*\\{([^}]*)\\}/, 'dark proof and CTA focus');
+assert.match(darkPanelFocus, /outline-color:\\s*var\\(--ezb-white\\)\\s*;/);
+assert.ok(contrast(hexValue('ezb-white'), hexValue('ezb-accent')) >= 3,
+  'CTA keyboard focus ring must have at least 3:1 contrast against the CTA background');
+assert.ok(contrast(hexValue('ezb-white'), '#3a3028') >= 3,
+  'proof keyboard focus ring must have at least 3:1 contrast against the proof background');
+
 assert.match(css, /\.wp-block-navigation-submenu:focus-within\s*>\s*\.wp-block-navigation__submenu-container/,
   'keyboard focus must reveal desktop submenus');
 assert.match(css, /\.wp-block-navigation__responsive-container\.is-menu-open\s*\{[^}]*overflow-y:\s*auto\s*;/s,
   'mobile navigation must scroll when content exceeds viewport');
 assert.match(header, /class="ezb-skip-link"[^>]*href="#main-content"/,
   'keyboard skip link must target main content');
-console.log('EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=8');
+console.log('EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=9');
