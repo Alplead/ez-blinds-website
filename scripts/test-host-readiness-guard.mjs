@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/products/', '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/', '/retractable-flyscreens/', '/motorised-blinds/', '/projects/', '/advice/', '/blog/', '/about/', '/service-areas/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', leakText = '<a href="/?ezb_page=roller-blinds">dev</a>', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -60,7 +60,7 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
     const noindex = forceNoindexPath === pathname || (!indexable && missingNoindexPath !== pathname);
     const html = '<link rel="canonical" href="' + origin + (badIndexedCanonicalPath === pathname ? '/wrong-article/' : pathname) + '">' +
       '<meta name="robots" content="' + (noindex ? 'noindex, nofollow' : 'index, follow') + '">' +
-      (leakPath === pathname ? '<a href="/?ezb_page=roller-blinds">dev</a>' : '') +
+      (leakPath === pathname ? leakText : '') +
       (markerPath === pathname ? '<div>' + markerText + '</div>' : '');
     res.writeHead(200, { 'content-type': 'text/html' }); res.end(html);
   });
@@ -121,4 +121,8 @@ await check({ name: 'indexable product route cannot embed unapproved RFS video',
 await check({ name: 'indexable sitemap project cannot embed case-varied private video', indexable: true, markerPath: '/projects/prototype-roller-blinds-project/', markerText: '<video src="/uploads/ez_retractable_flyscreen_web_v1_720x1280_muted.mp4"></video>', expectedError: '/projects/prototype-roller-blinds-project/ indexed development-only publication marker: EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4' });
 await check({ name: 'robots redirect rejected', redirectRobots: true, expectedError: '/robots.txt -> expected HTTP 200, got 302' });
 await check({ name: 'indexable sitemap redirect rejected', indexable: true, redirectSitemap: true, expectedError: '/wp-sitemap.xml -> expected HTTP 200 in indexable mode, got 302' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=34');
+await check({ name: 'indexable decimal entity query key rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb&#95;page=roller-blinds">dev</a>', expectedError: '/products/ leaked development' });
+await check({ name: 'non-indexable hex entity equals rejected', leakPath: '/advice/', leakText: '<a href="/?ezb_page&#x3d;roller-blinds">dev</a>', expectedError: '/advice/ leaked development' });
+await check({ name: 'indexable case variant rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?EZB_PAGE=roller-blinds">dev</a>', expectedError: '/contact/ leaked development' });
+await check({ name: 'indexed blog numeric entity query rejected', indexable: true, leakPath: '/roller-blinds-blockout-vs-sunscreen/', leakText: '<a href="/?ezb&#x5f;page&#61;roller-blinds">dev</a>', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development transport leak' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=38');

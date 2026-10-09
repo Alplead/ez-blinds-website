@@ -93,15 +93,23 @@ const developmentPublicationMarkers = [
 ];
 
 // Reject case-only changes to draft markers on indexable release hosts.
-function findDevelopmentMarker(html) {
-  // Browsers decode numeric character references before displaying HTML.
-  // Do not let an encoded character hide an unapproved publication marker.
-  const renderedText = html.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/gi, (entity, hex, decimal) => {
+function decodeNumericHtmlReferences(html) {
+  // Browsers decode numeric character references in both text and href values.
+  return html.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/gi, (entity, hex, decimal) => {
     const point = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
     return point >= 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
       ? String.fromCodePoint(point) : entity;
-  }).toLowerCase();
+  });
+}
+
+function findDevelopmentMarker(html) {
+  const renderedText = decodeNumericHtmlReferences(html).toLowerCase();
   return developmentPublicationMarkers.find(marker => renderedText.includes(marker.toLowerCase()));
+}
+
+function hasDevelopmentTransport(html) {
+  // Fail closed on case variants and HTML numeric references in query keys.
+  return /ezb_page\s*=/i.test(decodeNumericHtmlReferences(html));
 }
 
 // Include every current structural top-level route. A staging host must not
@@ -138,7 +146,7 @@ for (const path of canonicalRoutes) {
   }
 
   const html = await response.text();
-  if (html.includes('ezb_page=') && (expectIndexable || !allowDevTransport)) {
+  if (hasDevelopmentTransport(html) && (expectIndexable || !allowDevTransport)) {
     failures.push(`${path} leaked development ezb_page transport into public HTML`);
   }
 
@@ -287,7 +295,7 @@ if (expectIndexable) {
           }
           const marker = findDevelopmentMarker(pageHtml);
           if (marker) failures.push(pageUrl.pathname + ' indexed development-only publication marker: ' + marker);
-          if (pageHtml.includes('ezb_page=')) failures.push(pageUrl.pathname + ' indexed development transport leak');
+          if (hasDevelopmentTransport(pageHtml)) failures.push(pageUrl.pathname + ' indexed development transport leak');
           const robots = (pageResponse.headers.get('x-robots-tag') || '').toLowerCase() + ',' + metaRobots(pageHtml).join(',');
           if (robots.includes('noindex')) failures.push(pageUrl.pathname + ' appears in sitemap but is noindex');
         }
