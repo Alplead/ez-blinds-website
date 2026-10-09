@@ -69,6 +69,15 @@ jobs:
           test "$code" = "301"
           grep -qi 'location: .*retractable-flyscreens/' /tmp/legacy-redirect-headers.txt
 
+      - name: Verify public project query rejects malformed input before WordPress parses it
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/release-malformed-project-query.html -w '%{http_code}' 'http://127.0.0.1:8081/?ezb_project%5B%5D=unexpected')"
+          test "$code" = "400"
+          grep -q 'Invalid route request.' /tmp/release-malformed-project-query.html
+          ! grep -q 'Fatal error' /tmp/release-malformed-project-query.html
+          ! grep -q 'Uncaught TypeError' /tmp/release-malformed-project-query.html
+
       - name: Verify quote status handles malformed array input safely
         run: |
           set -euo pipefail

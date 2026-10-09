@@ -1597,27 +1597,30 @@ function ezb_rewrite_dev_prototype_html( $html ) {
 }
 
 /**
- * Reject malformed development routing query parameters before WP_Query runs.
- * ezb_project is also a WordPress public query var; passing an array reaches
- * sanitize_title_for_query() and can trigger a PHP TypeError before our
- * template_redirect handler is invoked.
+ * Reject malformed routing query parameters before WP_Query parses requests.
+ *
+ * ezb_project is a registered public post-type query variable on ALL hosts,
+ * including staging and production; arrays can cause a TypeError in core.
+ * ezb_page is a development-only prototype transport parameter.
  */
-function ezb_reject_malformed_dev_route_query() {
-	if ( 'development' !== wp_get_environment_type() ) {
-		return;
+function ezb_reject_malformed_route_query() {
+	$is_dev     = 'development' === wp_get_environment_type();
+	$parameters = array( 'ezb_project' );
+	if ( $is_dev ) {
+		$parameters[] = 'ezb_page';
 	}
 
-	foreach ( array( 'ezb_page', 'ezb_project' ) as $parameter ) {
+	foreach ( $parameters as $parameter ) {
 		if ( isset( $_GET[ $parameter ] ) && ! is_string( $_GET[ $parameter ] ) ) {
 			wp_die(
-				esc_html__( 'Invalid development route request.', 'ezb-core' ),
+				esc_html__( $is_dev ? 'Invalid development route request.' : 'Invalid route request.', 'ezb-core' ),
 				esc_html__( 'Invalid request', 'ezb-core' ),
 				array( 'response' => 400 )
 			);
 		}
 	}
 }
-add_action( 'init', 'ezb_reject_malformed_dev_route_query', 0 );
+add_action( 'init', 'ezb_reject_malformed_route_query', 0 );
 
 function ezb_render_dev_prototype_route() {
 	if ( 'development' !== wp_get_environment_type() || empty( $_GET['ezb_page'] ) || ! is_string( $_GET['ezb_page'] ) ) {
