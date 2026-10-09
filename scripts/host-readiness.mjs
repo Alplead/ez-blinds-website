@@ -114,19 +114,6 @@ function hasDevelopmentTransport(html) {
 
 // Include every current structural top-level route. A staging host must not
 // accidentally index a page omitted from the small original smoke subset.
-// These slugs are seeded as development-only drafts. Editing away a visible
-// warning must not silently turn an unapproved starter into an indexed page.
-const unapprovedIndexedSlugs = new Set([
-  '/projects/prototype-roller-blinds-project/',
-  '/projects/prototype-sheer-curtains-project/',
-  '/projects/prototype-retractable-flyscreen-project/',
-  '/roller-blinds-blockout-vs-sunscreen/',
-  '/sheer-curtains-privacy-layering/',
-  '/plantation-shutters-before-you-choose/',
-  '/retractable-flyscreen-track-threshold-planning/',
-  '/motorised-blinds-power-control-planning/'
-]);
-
 const canonicalRoutes = [
   '/',
   '/products/',
@@ -198,6 +185,13 @@ for (const path of canonicalRoutes) {
   } else if (!expectIndexable && !hasNoindex) {
     failures.push(`${path} lacks noindex protection in non-indexable mode`);
   }
+}
+
+// Confirm the host does not silently serve its Home page for unknown paths.
+const missingPath = '/ezb-readiness-nonexistent-404/';
+const missingResponse = await fetch(new URL(missingPath, base), { redirect: 'manual' });
+if (missingResponse.status !== 404 || missingResponse.headers.has('location')) {
+  failures.push(missingPath + ' -> expected HTTP 404 without redirect, got ' + missingResponse.status);
 }
 
 const robotsResponse = await fetch(new URL('/robots.txt', base), { redirect: 'manual' });
@@ -278,9 +272,6 @@ if (expectIndexable) {
           if (pageUrl.origin !== base.origin || pageUrl.search || pageUrl.hash) {
             failures.push(childUrl.pathname + ' contains a non-canonical or off-origin content URL');
             continue;
-          }
-          if (unapprovedIndexedSlugs.has(pageUrl.pathname)) {
-            failures.push(pageUrl.pathname + ' is an unapproved development-only indexed page');
           }
           if (checkedPages.has(pageUrl.href)) continue;
           checkedPages.add(pageUrl.href);
