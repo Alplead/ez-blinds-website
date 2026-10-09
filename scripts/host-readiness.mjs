@@ -83,6 +83,8 @@ const developmentPublicationMarkers = [
   'prototype product map',
   'Photo upload will be added after',
   'once the upload path is enabled',
+  // This video contains people and has no Owner publication/privacy clearance.
+  'EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4',
   'PROJECT PLACEHOLDER',
   'Development case-study shell',
   'Working copy for review.',
