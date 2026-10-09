@@ -79,6 +79,7 @@ try {
           failures.push(`${viewportName} ${name}: expected ${galleryCount} gallery images, found ${count}`);
         }
 
+        const seenGallerySources = new Set();
         for (let i = 0; i < count; i += 1) {
           const state = await inspectMediaImage(gallery.nth(i));
           if (!state.complete || state.naturalWidth <= 0 || state.naturalHeight <= 0) {
@@ -89,6 +90,10 @@ try {
           }
           const gallerySourceFailure = mediaImageSourceFailure(state.src, base);
           if (gallerySourceFailure) failures.push(`${viewportName} ${name}: gallery image ${i + 1} ${gallerySourceFailure}`);
+          if (seenGallerySources.has(state.src)) {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} duplicates an earlier image source`);
+          }
+          seenGallerySources.add(state.src);
         }
       }
 
