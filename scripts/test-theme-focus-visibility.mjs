@@ -39,8 +39,8 @@ assert.match(footerFocus, /outline-color:\s*var\(--ezb-white\)\s*;/);
 assert.ok(contrast(hexValue('ezb-white'), '#211a16') >= 3,
   'footer focus ring must have at least 3:1 contrast on the dark footer');
 
-const darkPanelFocus = body(/\\.ezb-proof a:focus-visible,\\s*\\.ezb-cta a:focus-visible\\s*\\{([^}]*)\\}/, 'dark proof and CTA focus');
-assert.match(darkPanelFocus, /outline-color:\\s*var\\(--ezb-white\\)\\s*;/);
+const darkPanelFocus = body(/\.ezb-proof a:focus-visible,\s*\.ezb-cta a:focus-visible\s*\{([^}]*)\}/, 'dark proof and CTA focus');
+assert.match(darkPanelFocus, /outline-color:\s*var\(--ezb-white\)\s*;/);
 assert.ok(contrast(hexValue('ezb-white'), hexValue('ezb-accent')) >= 3,
   'CTA keyboard focus ring must have at least 3:1 contrast against the CTA background');
 assert.ok(contrast(hexValue('ezb-white'), '#3a3028') >= 3,
