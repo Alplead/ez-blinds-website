@@ -87,6 +87,35 @@ jobs:
           docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-sent.html
           grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
 
+      - name: Verify unapproved flyscreen video stays private in release mode
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (wp_get_environment_type() !== "staging") {
+              throw new Exception("Synthetic privacy check must run in release staging mode");
+            }
+            $filename = "EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4";
+            $video = wp_insert_post(array(
+              "post_type" => "attachment",
+              "post_status" => "inherit",
+              "post_title" => "Synthetic privacy-restricted clip",
+              "post_mime_type" => "video/mp4",
+            ));
+            if (!$video || is_wp_error($video)) { throw new Exception("Synthetic video attachment was not created"); }
+            update_post_meta($video, "_wp_attached_file", "2026/10/" . $filename);
+            if (ezb_find_attachment_by_basename($filename) !== $video ||
+                get_post_mime_type($video) !== "video/mp4" ||
+                !wp_get_attachment_url($video)) {
+              throw new Exception("Synthetic private video fixture is not renderable");
+            }
+            if (do_shortcode("[ezb_retractable_video]") !== "") {
+              throw new Exception("Privacy-restricted video leaked into release mode");
+            }
+            wp_delete_post($video, true);
+            echo "EZB_RELEASE_VIDEO_PRIVACY_PASS" . PHP_EOL;
+          ' --allow-root | tee /tmp/release-video-privacy.log
+          grep -q 'EZB_RELEASE_VIDEO_PRIVACY_PASS' /tmp/release-video-privacy.log
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:
