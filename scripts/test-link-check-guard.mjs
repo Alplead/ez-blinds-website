@@ -41,6 +41,8 @@ async function check(name, mode, expectedFailure = '') {
       path === '/' && mode === 'data-unquoted' ? '<a href=data:text/html,x>Unsafe</a>' :
       path === '/' && mode === 'broken-unquoted' ? '<a href=/missing/>Broken</a>' :
       path === '/' && mode === 'transport-unquoted' ? '<a href=/products/?ezb_page=products>Dev</a>' :
+      path === '/' && mode === 'transport-uppercase' ? '<a href="/products/?EZB_PAGE=products">Dev</a>' :
+      path === '/' && mode === 'transport-encoded-key' ? '<a href="/products/?ezb%5Fpage=products">Dev</a>' :
       path === '/' && mode === 'data-href-decoy' ? '<a data-href="/missing/">No navigation</a>' :
       path === '/' && mode === 'quoted-label-decoy' ? '<a aria-label="href=/missing/" href="/contact/">Contact</a>' :
       path === '/' && mode === 'file-protocol' ? '<a href="file:///private/internal.txt">Unsafe</a>' :
@@ -109,4 +111,6 @@ await check('blob URL rejected', 'blob-protocol', 'unsafe internal link protocol
 await check('legacy FTP URL rejected', 'ftp-protocol', 'unsafe internal link protocol: ftp:');
 await check('external HTTPS link remains allowed', 'external-https');
 await check('mail address link remains allowed', 'valid-mailto');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=27');
+await check('uppercase development transport key rejected', 'transport-uppercase', 'development ezb_page links');
+await check('percent-encoded development transport key rejected', 'transport-encoded-key', 'development ezb_page links');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=29');

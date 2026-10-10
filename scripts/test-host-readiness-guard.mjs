@@ -125,4 +125,15 @@ await check({ name: 'indexable decimal entity query key rejected', indexable: tr
 await check({ name: 'non-indexable hex entity equals rejected', leakPath: '/advice/', leakText: '<a href="/?ezb_page&#x3d;roller-blinds">dev</a>', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable case variant rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?EZB_PAGE=roller-blinds">dev</a>', expectedError: '/contact/ leaked development' });
 await check({ name: 'indexed blog numeric entity query rejected', indexable: true, leakPath: '/roller-blinds-blockout-vs-sunscreen/', leakText: '<a href="/?ezb&#x5f;page&#61;roller-blinds">dev</a>', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development transport leak' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=38');
+await check({ name: 'staging wildcard block with inline comments', robotsTextOverride: 'User-agent: * # all bots\nDisallow: / # whole site' });
+await check({ name: 'staging consecutive agents share rules', robotsTextOverride: 'User-agent: ExampleBot\nUser-agent: *\nDisallow: /' });
+await check({ name: 'staging wildcard before named agent shares rules', robotsTextOverride: 'User-agent: *\nUser-agent: ExampleBot\nDisallow: /' });
+await check({ name: 'staging wildcard /*$ blocks entire site', robotsTextOverride: 'User-agent: *\nDisallow: /*$' });
+await check({ name: 'staging named bot only does not protect all crawlers', robotsTextOverride: 'User-agent: ExampleBot\nDisallow: /\nUser-agent: *\nAllow: /', expectedError: '/robots.txt does not block the entire site' });
+await check({ name: 'staging root-only disallow is insufficient', robotsTextOverride: 'User-agent: *\nDisallow: /$', expectedError: '/robots.txt does not block the entire site' });
+await check({ name: 'staging inline-comment Allow exception rejected', robotsTextOverride: 'User-agent: *\nDisallow: / # whole site\nAllow: /private # exception', expectedError: '/robots.txt does not block the entire site' });
+await check({ name: 'indexable inline-comment global block rejected', indexable: true, robotsTextOverride: 'User-agent: * # bots\nDisallow: / # whole site', expectedError: '/robots.txt blocks the entire site' });
+await check({ name: 'indexable named bot block not global', indexable: true, robotsTextOverride: 'User-agent: ExampleBot\nDisallow: /\n\nUser-agent: *\nAllow: /' });
+await check({ name: 'staging commented-out rules are not protection', robotsTextOverride: '# User-agent: *\n# Disallow: /\nUser-agent: *\nAllow: /', expectedError: '/robots.txt does not block the entire site' });
+await check({ name: 'staging wildcard group after blank line', robotsTextOverride: 'User-agent: ExampleBot\nDisallow: /private\n\nUser-agent: *\nDisallow: /' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=49');

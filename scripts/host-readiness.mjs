@@ -201,10 +201,40 @@ if (robotsResponse.status !== 200) {
   const robotsText = await robotsResponse.text();
   // A global wildcard block also prevents indexing; reject it on an
   // indexable release, and require a genuine wildcard group on staging.
-  const groups = robotsText.split(/(?=^\s*User-agent\s*:)/gmi);
-  const wildcardGroups = groups.filter(group => /^\s*User-agent\s*:\s*\*\s*$/mi.test(group));
-  const broadBlock = wildcardGroups.some(group => /^\s*Disallow\s*:\s*\/(?:\*\$?)?\s*$/mi.test(group));
-  const allowException = wildcardGroups.some(group => /^\s*Allow\s*:\s*\/\S*/mi.test(group));
+  // Parse robots groups rather than treating each User-agent line as its
+  // own group. Consecutive agents share the same rules; # starts a comment.
+  const wildcardRules = [];
+  let agents = [];
+  let rules = [];
+  function finishGroup() {
+    if (agents.includes('*')) wildcardRules.push(...rules);
+    agents = [];
+    rules = [];
+  }
+  for (const rawLine of robotsText.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const line = rawLine.split('#', 1)[0].trim();
+    if (!line) {
+      if (agents.length) finishGroup();
+      continue;
+    }
+    const match = /^([a-z-]+)\s*:\s*(.*?)\s*$/i.exec(line);
+    if (!match) continue;
+    const directive = match[1].toLowerCase();
+    const value = match[2].trim();
+    if (directive === 'user-agent') {
+      if (rules.length) finishGroup();
+      agents.push(value.toLowerCase());
+    } else if (agents.length && (directive === 'allow' || directive === 'disallow')) {
+      rules.push({ directive, value });
+    }
+  }
+  finishGroup();
+  const broadBlock = wildcardRules.some(rule =>
+    rule.directive === 'disallow' && ['/', '/*', '/*$'].includes(rule.value)
+  );
+  const allowException = wildcardRules.some(rule =>
+    rule.directive === 'allow' && rule.value.startsWith('/')
+  );
   const blocksAll = broadBlock && !allowException;
   if (expectIndexable && broadBlock) {
     failures.push('/robots.txt blocks the entire site in indexable mode');

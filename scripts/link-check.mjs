@@ -187,7 +187,7 @@ while (queue.length) {
 
     if (url.origin !== base.origin || shouldSkip(url)) continue;
 
-    if (url.searchParams.has('ezb_page')) {
+    if ([...url.searchParams.keys()].some(key => key.toLowerCase() === 'ezb_page')) {
       devTransportLinks.push(`${href} -> ${url.pathname}${url.search}`);
       continue;
     }
