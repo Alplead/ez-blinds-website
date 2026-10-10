@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { previewRenderFailures } from './preview-render-guard.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -79,6 +80,45 @@ async function main() {
             const headingCount = await page.locator('h1').count();
             if (headingCount !== 1) {
               throw new Error('expected exactly one page heading, got ' + headingCount);
+            }
+
+            // Validate the *actual* linked stylesheet and computed browser CSS.
+            // This catches the former /wordpress-site asset-root regression and
+            // raw [ezb_media_slot] leak that HTTP 200 / H1 checks missed.
+            const renderEvidence = await page.evaluate(() => {
+              const themeLinks = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'))
+                .filter((link) => {
+                  try {
+                    return new URL(link.href, document.baseURI).pathname
+                      .endsWith('/wp-content/themes/ezb-theme/style.css');
+                  } catch {
+                    return false;
+                  }
+                });
+              const themeLink = themeLinks[0];
+              const hero = document.querySelector('.ezb-hero');
+              const heroHeading = hero?.querySelector('h1');
+              const card = document.querySelector('.ezb-card');
+              return {
+                themeStylesheetCount: themeLinks.length,
+                themeStylesheetPath: themeLink
+                  ? new URL(themeLink.href, document.baseURI).pathname : '',
+                themeStylesheetLoaded: Boolean(themeLink?.sheet),
+                accentValue: getComputedStyle(document.documentElement)
+                  .getPropertyValue('--ezb-accent').trim(),
+                rawShortcode: /\\[(?:\\/)?ezb_[a-z0-9_]+(?:\\s|\\])/i
+                  .test(document.body.textContent || ''),
+                homeHeroPresent: Boolean(hero),
+                homeHeroBackground: hero ? getComputedStyle(hero).backgroundImage : '',
+                homeHeadingPx: heroHeading ? parseFloat(getComputedStyle(heroHeading).fontSize) : 0,
+                homeCardPresent: Boolean(card),
+                homeCardBorderPx: card ? parseFloat(getComputedStyle(card).borderTopWidth) : 0,
+                homeCardRadiusPx: card ? parseFloat(getComputedStyle(card).borderTopLeftRadius) : 0
+              };
+            });
+            const renderFailures = previewRenderFailures(renderEvidence, route.path === '/');
+            if (renderFailures.length) {
+              throw new Error('unstyled or incomplete preview: ' + renderFailures.join('; '));
             }
 
             await page.waitForTimeout(1000);

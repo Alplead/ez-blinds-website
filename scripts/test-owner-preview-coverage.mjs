@@ -32,6 +32,16 @@ assert.match(source, /page\.locator\('h1'\)\.count\(\)/,
   'owner preview must reject missing or duplicate page headings');
 assert.match(source, /captures\.length !== expectedCaptureCount/,
   'owner preview must fail if a screenshot is missing');
+assert.match(source, /previewRenderFailures\\(renderEvidence, route\\.path === '\/'\\)/,
+  'screenshots must be rejected when actual browser styling is missing');
+assert.match(source, /themeStylesheetLoaded/,
+  'screenshots must check the actual linked theme stylesheet');
+assert.match(source, /rawShortcode/,
+  'screenshots must reject leaked shortcode placeholders');
+assert.match(source, /homeHeadingPx/,
+  'screenshots must check real computed hero typography');
+assert.match(source, /homeCardBorderPx/,
+  'screenshots must check real computed card framing');
 assert.match(source, /reducedMotion: 'reduce'/,
   'previews should not force animated visual effects');
 

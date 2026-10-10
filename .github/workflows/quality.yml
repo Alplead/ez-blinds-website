@@ -43,6 +43,13 @@ jobs:
           node scripts/test-owner-preview-coverage.mjs | tee /tmp/owner-preview-coverage.log
           grep -q 'EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56' /tmp/owner-preview-coverage.log
 
+      - name: Reject unstyled Owner previews and leaked shortcode content
+        run: |
+          node --check scripts/preview-render-guard.mjs
+          node --check scripts/test-preview-render-guard.mjs
+          node scripts/test-preview-render-guard.mjs | tee /tmp/preview-render-guard.log
+          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=13' /tmp/preview-render-guard.log
+
       - name: Test reduced-motion preference changes
         run: |
           node --check wp-content/themes/ezb-theme/assets/js/site.js
