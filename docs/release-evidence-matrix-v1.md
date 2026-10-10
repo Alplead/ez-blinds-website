@@ -13,8 +13,8 @@ Status: engineering checklist only. Not Owner acceptance, launch permission, or 
 
 | Gate | Minimum evidence | Current classification | Next bounded action |
 | --- | --- | --- | --- |
-| Source and CI | Exact feature head; Quality, Runtime Smoke, Release Install Smoke all successful on same head | HISTORICAL PASS at 5a2d1afe646f699f4eec5135ebac9755dac2f909 (2026-10-10); any later head requires its own three checks | Fresh-check PR head and three CI runs |
-| Install package | Artifact tied to exact head; install smoke and expiry recorded | HISTORICAL PASS at 5a2d1afe646f699f4eec5135ebac9755dac2f909; artifact 11669046805 expires 2026-10-24T11:00:53Z | Verify artifact for each new head |
+| Source and CI | Exact feature head; Quality, Runtime Smoke, Release Install Smoke all successful on same head | EXACT-HEAD PASS at d84d55c4257b2baf81c13bd5673d6f60a5045aed (2026-10-11 AEDT): Quality 38069521002, Runtime Smoke 38069520999, Release Install Smoke 38069521100 | Fresh-check PR head and three CI runs |
+| Install package | Artifact tied to exact head; install smoke and expiry recorded | EXACT-HEAD PASS at d84d55c4257b2baf81c13bd5673d6f60a5045aed; artifact 11675779122 expires 2026-10-24T16:54:50Z | Verify artifact for each new head |
 | Sitemap | Owner accepts top navigation, Products subpages, Blog placement, Service Areas entry | APPROVED_NAV_ONLY — Owner D-017 on 2026-10-10 approves A/B/C navigation and supporting Service Areas placement; NOT geographic coverage, copy, layout or publication | Keep section-order, content and launch gates separate |
 | Page sections | Owner accepts sequence for Home, Products, product pages, Projects, Advice, About, Contact | OWNER_REVIEW_PENDING | Produce page-order comparison after sitemap decision |
 | Real media | Selected image bundle checksum, mapping to actual product, alt text, privacy and publish rights | PARTIAL — approved V2.3 ZIP verified offline 2026-10-10 (SHA-256 3d3a2a2a66c66e3d8a37dbcda2de96900ba9f939f7799f887725f27799faa142; 25/25 WebP decoded, manifest hashes/dimensions/size/EXIF checked; 25 names match plugin registry). This does **not** prove persistent WordPress import, browser QA, or publication rights. | Run import and visual checks on approved persistent staging; retain Owner media gate |
@@ -40,4 +40,4 @@ Status: engineering checklist only. Not Owner acceptance, launch permission, or 
 
 ## Last reconciled baseline
 
-Feature branch: `feature/vertical-slice-v1`; PR #1 Draft. Last verified historical head `5a2d1afe646f699f4eec5135ebac9755dac2f909`, Quality 38050130904, Runtime Smoke 38050130902, Release Install Smoke 38050130949 all PASS on 2026-10-10; artifact 11669046805. This is historical once a newer commit is created. The next code commit invalidates this as a current-head claim. Owner D-017 navigation approved; Owner visual preview and page-section-order acceptance remain open.
+Feature branch: `feature/vertical-slice-v1`; PR #1 Draft. Verified current head `d84d55c4257b2baf81c13bd5673d6f60a5045aed`: Quality 38069521002, Runtime Smoke 38069520999, Release Install Smoke 38069521100 all PASS on 2026-10-11 AEDT; artifact 11675779122, expires 2026-10-24T16:54:50Z. This is exact-head evidence only until a newer commit is created. Owner D-017 navigation approved; Owner visual preview and page-section-order acceptance remain open.
