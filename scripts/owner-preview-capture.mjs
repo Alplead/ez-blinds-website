@@ -108,6 +108,17 @@ async function main() {
                   }
                 });
               const themeLink = themeLinks[0];
+              const themeScripts = Array.from(document.querySelectorAll('script[src]'))
+                .filter((script) => {
+                  try {
+                    return new URL(script.src, document.baseURI).pathname
+                      .endsWith('/wp-content/themes/ezb-theme/assets/js/site.js');
+                  } catch {
+                    return false;
+                  }
+                });
+              const themeScript = themeScripts[0];
+              const scriptResources = performance.getEntriesByType('resource');
               const hero = document.querySelector('.ezb-hero');
               const heroHeading = hero?.querySelector('h1');
               const card = document.querySelector('.ezb-card');
@@ -116,6 +127,15 @@ async function main() {
                 themeStylesheetPath: themeLink
                   ? new URL(themeLink.href, document.baseURI).pathname : '',
                 themeStylesheetLoaded: Boolean(themeLink?.sheet),
+                themeStylesheetSameOrigin: Boolean(themeLink &&
+                  new URL(themeLink.href, document.baseURI).origin === location.origin),
+                themeScriptCount: themeScripts.length,
+                themeScriptPath: themeScript
+                  ? new URL(themeScript.src, document.baseURI).pathname : '',
+                themeScriptSameOrigin: Boolean(themeScript &&
+                  new URL(themeScript.src, document.baseURI).origin === location.origin),
+                themeScriptFetched: Boolean(themeScript && scriptResources.some((entry) =>
+                  entry.name === themeScript.src)),
                 accentValue: getComputedStyle(document.documentElement)
                   .getPropertyValue('--ezb-accent').trim(),
                 rawShortcode: /\[(?:\/)?ezb_[a-z0-9_]+(?:\s|\])/i
@@ -133,18 +153,23 @@ async function main() {
               throw new Error('unstyled or incomplete preview: ' + renderFailures.join('; '));
             }
 
+            await page.waitForTimeout(1000);
+            // Deferred script errors must be checked after settling.
             if (pageErrors.length || assetFailures.length) {
               throw new Error('browser or theme asset failure: ' +
                 [...pageErrors, ...assetFailures].join('; '));
             }
-
-            await page.waitForTimeout(1000);
 
             const filename = `${viewport.name}-${route.name}.png`;
             await page.screenshot({
               path: path.join(outDir, filename),
               fullPage: true
             });
+            // A screenshot may itself trigger lazy resources and browser errors.
+            if (pageErrors.length || assetFailures.length) {
+              throw new Error('browser or theme asset failure after screenshot: ' +
+                [...pageErrors, ...assetFailures].join('; '));
+            }
 
             captures.push({
               viewport: viewport.name,

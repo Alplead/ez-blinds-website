@@ -9,6 +9,19 @@ export function previewRenderFailures(evidence, isHome = false) {
   if (!evidence.themeStylesheetLoaded) {
     failures.push('EZB theme stylesheet did not load in the browser');
   }
+  if (!evidence.themeStylesheetSameOrigin) {
+    failures.push('EZB theme stylesheet must be served from the preview origin');
+  }
+  if (evidence.themeScriptCount !== 1 ||
+      evidence.themeScriptPath !== '/wp-content/themes/ezb-theme/assets/js/site.js') {
+    failures.push('EZB theme script must resolve from the site root');
+  }
+  if (!evidence.themeScriptSameOrigin) {
+    failures.push('EZB theme script must be served from the preview origin');
+  }
+  if (!evidence.themeScriptFetched) {
+    failures.push('EZB theme script was not fetched by the browser');
+  }
   if (!/^#[0-9a-f]{6}$/i.test(evidence.accentValue || '')) {
     failures.push('EZB theme brand CSS variable was not applied');
   }

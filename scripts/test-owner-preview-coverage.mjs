@@ -38,6 +38,14 @@ assert.ok(source.includes('rawShortcode: /\\[(?:\\/)?ezb_'),
   'browser must explicitly recognise unrendered EZB shortcodes');
 assert.match(source, /themeStylesheetLoaded/,
   'screenshots must check the actual linked theme stylesheet');
+assert.match(source, /themeStylesheetSameOrigin/,
+  'theme stylesheet must come from the private preview origin');
+assert.match(source, /themeScriptCount/,
+  'screenshots must require the real enqueued theme JavaScript');
+assert.match(source, /themeScriptSameOrigin/,
+  'theme JavaScript must come from the private preview origin');
+assert.match(source, /themeScriptFetched/,
+  'screenshots must prove the browser fetched the theme JavaScript');
 assert.match(source, /rawShortcode/,
   'screenshots must reject leaked shortcode placeholders');
 assert.match(source, /homeHeadingPx/,
@@ -52,5 +60,10 @@ assert.ok(source.includes("page.on('response'") && source.includes("page.on('req
   'owner preview must detect failed theme CSS/JS requests');
 assert.ok(source.includes('pageErrors.length || assetFailures.length'),
   'browser errors and failed theme assets must block screenshot acceptance');
+assert.ok((source.match(/if \(pageErrors\.length \|\| assetFailures\.length\)/g) || []).length >= 2,
+  'browser errors must be checked after settle and after screenshot');
+assert.ok(source.indexOf('await page.waitForTimeout(1000)') <
+  source.indexOf('if (pageErrors.length || assetFailures.length)'),
+  'deferred browser errors must be checked after the settle interval');
 
 console.log('EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56');
