@@ -83,7 +83,7 @@ for (const path of paths) {
   let response;
   try {
     response = await fetch(requested, {
-      redirect: 'follow',
+      redirect: 'manual',
       headers: { accept: 'text/html,application/xhtml+xml;q=0.9' }
     });
   } catch (error) {
@@ -91,8 +91,18 @@ for (const path of paths) {
     continue;
   }
 
+  // Never follow an unexpected redirect: an off-site Location must not be fetched.
+  if (response.status >= 300 && response.status < 400) {
+    failures.push(`${path} -> unexpected redirect: ${response.headers.get('location') || 'missing Location'}`);
+    continue;
+  }
   if (response.status !== 200) {
     failures.push(`${path} -> expected HTTP 200, got ${response.status}`);
+    continue;
+  }
+  const contentType = (response.headers.get('content-type') || '').trim();
+  if (!/^text\/html(?:\s*;|$)/i.test(contentType)) {
+    failures.push(`${path} -> expected text/html, got ${contentType || 'missing content-type'}`);
     continue;
   }
 

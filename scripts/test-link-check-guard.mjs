@@ -13,7 +13,11 @@ async function check(name, mode, expectedFailure = '') {
     if (mode === 'off-origin-redirect' && path === '/contact/') {
       res.writeHead(302, { location: 'https://example.com/off-site/' }); res.end(); return;
     }
-    if (path === '/missing/') { res.writeHead(404); res.end('missing'); return; }
+    if (path === '/missing/' ||
+        (mode === 'blog-missing' && path === '/blog/') ||
+        (mode === 'article-missing' && path === '/roller-blinds-blockout-vs-sunscreen/')) {
+      res.writeHead(404); res.end('missing'); return;
+    }
     if (path === '/contact/' && mode === 'not-html') {
       res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); return;
     }
@@ -91,6 +95,8 @@ await check('required route redirect to Home rejected', 'redirect', 'unexpectedl
 await check('discovered link redirect to Home rejected', 'discovered-redirect', 'unexpectedly redirected to');
 await check('off-origin redirect rejected without following', 'off-origin-redirect', 'unexpectedly redirected to https://example.com/off-site/');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
+await check('approved Blog index is a required route', 'blog-missing', 'HTTP 404');
+await check('development-only article route is crawled', 'article-missing', 'HTTP 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
 await check('required public route must return HTML', 'not-html', 'required route expected text/html');
 await check('required public route must not return 204', 'no-content', 'required route expected HTTP 200');
@@ -117,4 +123,4 @@ await check('uppercase development transport key rejected', 'transport-uppercase
 await check('percent-encoded development transport key rejected', 'transport-encoded-key', 'development ezb_page links');
 await check('double-encoded development transport key rejected', 'transport-double-encoded-key', 'development ezb_page links');
 await check('HTML-entity development transport key rejected', 'transport-html-entity-key', 'development ezb_page links');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=31');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=33');

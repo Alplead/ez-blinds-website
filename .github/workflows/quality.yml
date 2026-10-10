@@ -88,7 +88,7 @@ jobs:
         run: |
           node --check scripts/test-link-check-guard.mjs
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
-          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=31' /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=33' /tmp/link-check-guard.log
 
       - name: Enforce Owner-approved navigation A/B/C without expanding publication authority
         run: |
@@ -116,6 +116,12 @@ jobs:
 
       - name: Check SEO audit JavaScript syntax
         run: node --check scripts/seo-audit.mjs
+
+      - name: Reject SEO redirects and non-HTML route responses
+        run: |
+          node --check scripts/test-seo-audit-guard.mjs
+          node scripts/test-seo-audit-guard.mjs | tee /tmp/seo-audit-guard.log
+          grep -q 'EZB_SEO_AUDIT_GUARD_PASS cases=6' /tmp/seo-audit-guard.log
 
       - name: Prevent unfinished photo-upload promises in public contact copy
         run: |
