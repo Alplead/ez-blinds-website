@@ -328,7 +328,11 @@ function ezb_handle_quote_form() {
 		);
 	}
 
-	if ( ! empty( $_POST['website'] ) ) {
+	// PHP empty( '0' ) is true; even that value must trigger the honeypot.
+	if (
+		isset( $_POST['website'] ) &&
+		( ! is_string( $_POST['website'] ) || '' !== trim( wp_unslash( $_POST['website'] ) ) )
+	) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=sent' ) );
 		exit;
 	}

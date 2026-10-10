@@ -17,7 +17,8 @@ const routes = [
   ['plantation-shutters', '/plantation-shutters/', 4],
   ['retractable-flyscreens', '/retractable-flyscreens/', 10],
   ['sheer-curtains', '/sheer-curtains/', null],
-  ['retractable-flyscreen-large-opening', '/projects/retractable-flyscreen-large-opening/', 3]
+  ['retractable-flyscreen-large-opening', '/projects/retractable-flyscreen-large-opening/', 3],
+  ['retractable-flyscreen-indoor-outdoor-opening', '/projects/retractable-flyscreen-indoor-outdoor-opening/', 3]
 ];
 const viewports = [
   ['desktop', { width: 1440, height: 900 }],
@@ -47,6 +48,12 @@ try {
         failures.push(`${viewportName} ${name}: unexpected navigation to ${finalUrl.href}`);
         continue;
       }
+
+      // All media routes must respect the user's reduced-motion preference.
+      const motionReady = await page.evaluate(() =>
+        document.documentElement.classList.contains('ezb-motion-ready')
+      );
+      if (motionReady) failures.push(`${viewportName} ${name}: reduced-motion preference ignored`);
 
       const placeholderCount = await page.locator('.ezb-media-placeholder').count();
       if (name === 'home' && placeholderCount > 0) {

@@ -135,6 +135,12 @@ jobs:
       - name: Check real-media visual QA JavaScript syntax
         run: node --check scripts/real-media-visual-qa.mjs
 
+      - name: Test real-media QA route and reduced-motion coverage
+        run: |
+          node --check scripts/test-real-media-qa-coverage.mjs
+          node scripts/test-real-media-qa-coverage.mjs | tee /tmp/media-qa-coverage.log
+          grep -q 'EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=6' /tmp/media-qa-coverage.log
+
       - name: Test lazy-media visual QA readiness
         run: |
           node --check scripts/media-image-readiness.mjs

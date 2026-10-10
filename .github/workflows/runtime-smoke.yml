@@ -760,6 +760,20 @@ jobs:
           NONCE="$(grep -o 'name="ezb_quote_nonce" value="[^"]*"' /tmp/contact-submit.html | sed -E 's/.*value="([^"]*)"/\1/' | head -1)"
           test -n "$NONCE"
 
+          # A filled honeypot must never call wp_mail, even for the string "0".
+          # The mail transport is intercepted by the synthetic CI-only filter.
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
+          HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'website=0' \
+            --data-urlencode 'name=CI Honeypot' \
+            --data-urlencode 'email=ci-honeypot@example.com')"
+          test "$HONEYPOT_CODE" = "302"
+          grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'test ! -e /tmp/ezb-ci-mail-to.txt'
+
           VALID_CODE="$(curl -sS -o /tmp/valid-submit-body.html -D /tmp/valid-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Form Test'             --data-urlencode 'email=ci-form@example.com'             --data-urlencode 'suburb=Melbourne 3000'             --data-urlencode 'product=Roller Blinds'             --data-urlencode 'message=Runtime submission contract test.')"
           test "$VALID_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/valid-submit-headers.txt
