@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { previewRenderFailures, previewNavigationFailure } from './preview-render-guard.mjs';
+import { previewRenderFailures, previewNavigationFailure, previewImageFailures } from './preview-render-guard.mjs';
 
 const valid = {
   themeStylesheetCount: 1,
@@ -58,5 +58,9 @@ for (const [actual, redirected, expectedFailure] of navigationCases) {
   if (expectedFailure) assert.match(failure, new RegExp(expectedFailure));
   else assert.equal(failure, '');
 }
-assert.equal(cases.length + 2 + navigationCases.length, 26);
-console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=26');
+assert.deepEqual(previewImageFailures([{ src: '/approved.webp', complete: true, naturalWidth: 1200 }]), []);
+assert.match(previewImageFailures([{ src: '/broken.webp', complete: true, naturalWidth: 0 }]).join('; '), /broken image/);
+assert.match(previewImageFailures([{ src: '/slow.webp', complete: false, naturalWidth: 0 }]).join('; '), /did not finish/);
+assert.match(previewImageFailures([{ src: '', complete: true, naturalWidth: 0 }]).join('; '), /no resolved source/);
+assert.equal(cases.length + 2 + navigationCases.length + 4, 30);
+console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=30');

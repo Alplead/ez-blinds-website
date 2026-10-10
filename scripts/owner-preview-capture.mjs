@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { previewRenderFailures, previewNavigationFailure } from './preview-render-guard.mjs';
+import { previewRenderFailures, previewNavigationFailure, previewImageFailures } from './preview-render-guard.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -163,6 +163,26 @@ async function main() {
             if (pageErrors.length || assetFailures.length) {
               throw new Error('browser or theme asset failure: ' +
                 [...pageErrors, ...assetFailures].join('; '));
+            }
+
+            // Trigger QA-only eager loading without changing production lazy-loading.
+            await page.locator('img').evaluateAll(images => {
+              images.forEach(image => { image.loading = 'eager'; });
+            });
+            await page.waitForFunction(() =>
+              Array.from(document.images).every(image => image.complete),
+              null, { timeout: 15000 }
+            );
+            const imageEvidence = await page.evaluate(() =>
+              Array.from(document.images).map(image => ({
+                src: image.currentSrc || image.src,
+                complete: image.complete,
+                naturalWidth: image.naturalWidth
+              }))
+            );
+            const imageFailures = previewImageFailures(imageEvidence);
+            if (imageFailures.length) {
+              throw new Error('preview image load failure: ' + imageFailures.slice(0, 5).join('; '));
             }
 
             const filename = `${viewport.name}-${route.name}.png`;

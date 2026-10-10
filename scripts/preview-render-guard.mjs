@@ -18,6 +18,21 @@ export function previewNavigationFailure(requestedUrl, finalUrl, redirected = fa
   }
 }
 
+// A screenshot can appear correct even if one or more actual <img> assets fail.
+export function previewImageFailures(images) {
+  const failures = [];
+  for (const image of images) {
+    if (!image.src) {
+      failures.push('image has no resolved source');
+    } else if (!image.complete) {
+      failures.push(`image did not finish loading: ${image.src}`);
+    } else if (!(image.naturalWidth > 0)) {
+      failures.push(`broken image: ${image.src}`);
+    }
+  }
+  return failures;
+}
+
 export function previewRenderFailures(evidence, isHome = false) {
   const failures = [];
   if (evidence.themeStylesheetCount !== 1 ||
