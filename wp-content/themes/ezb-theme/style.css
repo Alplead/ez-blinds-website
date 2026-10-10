@@ -923,6 +923,14 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 
 /* Mobile navigation panel */
 @media (max-width: 781px) {
+	/* Accessible tap targets for all mobile widths. */
+	.ezb-header .wp-block-navigation__responsive-container-open,
+	.ezb-header .wp-block-navigation__responsive-container-close {
+		box-sizing: border-box;
+		min-width: 44px;
+		min-height: 44px;
+	}
+
 	.ezb-header .wp-block-navigation__responsive-container.is-menu-open {
 		position: fixed;
 		inset: 0;
@@ -960,6 +968,10 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 
 	.ezb-header .wp-block-navigation__responsive-container.is-menu-open .wp-block-navigation-item__content {
 		width: 100%;
+		box-sizing: border-box;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
 		padding: 0.7rem 0;
 		font-size: 1.2rem;
 		line-height: 1.25;
