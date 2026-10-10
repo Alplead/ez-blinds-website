@@ -94,8 +94,12 @@ const developmentPublicationMarkers = [
 
 // Reject case-only changes to draft markers on indexable release hosts.
 function decodeNumericHtmlReferences(html) {
-  // Browsers decode numeric character references in both text and href values.
-  return html.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/gi, (entity, hex, decimal) => {
+  // Browsers decode both numeric and named character references in hrefs.
+  // These bounded named entities can conceal the ezb_page key, its equals
+  // sign, or percent escapes. Fail closed before declaring a host indexable.
+  return html.replace(/&(?:lowbar|equals|percnt);/gi, (entity) => ({
+    '&lowbar;': '_', '&equals;': '=', '&percnt;': '%'
+  })[entity.toLowerCase()]).replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/gi, (entity, hex, decimal) => {
     const point = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
     return point >= 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
       ? String.fromCodePoint(point) : entity;

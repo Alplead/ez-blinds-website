@@ -48,7 +48,7 @@ jobs:
           node --check scripts/preview-render-guard.mjs
           node --check scripts/test-preview-render-guard.mjs
           node scripts/test-preview-render-guard.mjs | tee /tmp/preview-render-guard.log
-          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=13' /tmp/preview-render-guard.log
+          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=18' /tmp/preview-render-guard.log
 
       - name: Test reduced-motion preference changes
         run: |
@@ -138,7 +138,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=56' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=60' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh

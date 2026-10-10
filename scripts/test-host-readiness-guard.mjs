@@ -141,6 +141,10 @@ await check({ name: 'indexable percent-encoded equals in dev query rejected', in
 await check({ name: 'indexable double-percent-encoded dev query rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb%255Fpage%253Dproducts">Dev</a>', expectedError: '/products/ leaked development' });
 await check({ name: 'staging percent-encoded dev query rejected without opt-in', leakPath: '/advice/', leakText: '<a href="/?ezb%5fpage=advice">Dev</a>', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable numeric entity encoded percent rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?ezb&#37;5Fpage=contact">Dev</a>', expectedError: '/contact/ leaked development' });
+await check({ name: 'indexable named entity key and equals rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb&lowbar;page&equals;products">Dev</a>', expectedError: '/products/ leaked development' });
+await check({ name: 'staging named entity equals rejected', leakPath: '/advice/', leakText: '<a href="/?ezb_page&equals;advice">Dev</a>', expectedError: '/advice/ leaked development' });
+await check({ name: 'indexable named percent entity rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?ezb&lowbar;page&percnt;3Dcontact">Dev</a>', expectedError: '/contact/ leaked development' });
+await check({ name: 'indexable mixed numeric and named entities rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb&#95;page&equals;products">Dev</a>', expectedError: '/products/ leaked development' });
 await check({ name: 'staging comment-only line preserves wildcard group', robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /' });
 await check({ name: 'indexable comment-only line preserves wildcard block', indexable: true, robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /', expectedError: '/robots.txt blocks the entire site' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=56');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=60');
