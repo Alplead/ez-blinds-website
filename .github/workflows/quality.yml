@@ -77,6 +77,12 @@ jobs:
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
           grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=31' /tmp/link-check-guard.log
 
+      - name: Enforce Owner-approved navigation A/B/C without expanding publication authority
+        run: |
+          node --check scripts/test-owner-approved-navigation.mjs
+          node scripts/test-owner-approved-navigation.mjs | tee /tmp/owner-navigation.log
+          grep -q 'EZB_OWNER_APPROVED_NAV_PASS cases=7' /tmp/owner-navigation.log
+
       - name: Test keyboard focus visibility and navigation guard
         run: |
           node --check scripts/test-theme-focus-visibility.mjs

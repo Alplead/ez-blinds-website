@@ -1,6 +1,6 @@
 # Content Readiness v1
 
-Status: working inventory for Owner review. This document does not lock the sitemap, final copy, production publication, or business claims.
+Status: working inventory for Owner review. A/B/C primary navigation and Service Areas placement were explicitly APPROVED on 2026-10-10 (canonical D-017). Page-section order, final copy, imagery/privacy, service-area claims, production publication and business claims are still NOT locked.
 
 ## Summary
 

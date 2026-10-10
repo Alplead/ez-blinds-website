@@ -1,6 +1,6 @@
 # Provisional Information Architecture v2
 
-Status: development candidate for Owner sitemap review. Not a production lock.
+Status: Owner APPROVED the A/B/C navigation structure on 2026-10-10 (canonical Drive D-017). Page-section order, visual/media/motion, geographic claims, final copy and launch remain PENDING. Approval does not authorise a production release.
 
 ## Primary navigation
 
@@ -18,7 +18,15 @@ Status: development candidate for Owner sitemap review. Not a production lock.
 
 ## Supporting route
 
-- Service Areas
+- Service Areas — footer and Contact only; NOT a top-level navigation item. Actual geographic coverage remains unapproved.
+
+## Owner-approved navigation scope (D-017, 2026-10-10)
+
+- Primary order: Products, Projects, Advice, Blog, About, Contact. The site title/logo remains the Home entry point.
+- Products submenu order: Roller Blinds, Sheer Curtains, Plantation Shutters, Retractable Flyscreens, Motorised Blinds.
+- Blog remains a separate top-level item, not nested under Advice.
+- Service Areas is a supporting link in the footer and Contact, with no implied suburb-coverage approval.
+- This is a navigation/placement decision only. No approval of section order, media, motion, copy/claims, project or blog publication, staging, hosting, main merge, DNS or cutover.
 
 ## Role of each content family
 
@@ -68,7 +76,7 @@ Where there is no truthful equivalent, legacy routes should retire deliberately 
 
 ## Current review order
 
-1. Owner confirms sitemap / page hierarchy.
-2. Owner reviews page-section order.
-3. Owner reviews visual direction, imagery, motion and video.
-4. Copy is then refined page by page.
+1. DONE — Owner approved A/B/C navigation and Service Areas placement on 2026-10-10 (D-017).
+2. NEXT — Owner reviews page-section order for Home and major product pages.
+3. PENDING — Owner reviews visual direction, imagery, motion and video.
+4. PENDING — Evidence-based product copy, service wording and publication gates are reviewed separately.

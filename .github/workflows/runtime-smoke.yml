@@ -83,6 +83,22 @@ jobs:
           ! grep -q '/projects/prototype-roller-blinds-project/' /tmp/header-safety.html
           ! grep -q '/projects/prototype-sheer-curtains-project/' /tmp/header-safety.html
 
+      - name: Verify D-017 approved navigation and supporting Service Areas on rendered WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:8080/ -o /tmp/owner-approved-nav-home.html
+          sed -n '/<header[ >]/,/<\/header>/p' /tmp/owner-approved-nav-home.html > /tmp/owner-approved-nav-header.html
+          sed -n '/<footer[ >]/,/<\/footer>/p' /tmp/owner-approved-nav-home.html > /tmp/owner-approved-nav-footer.html
+          grep -Fq 'Motorised Blinds' /tmp/owner-approved-nav-header.html
+          grep -Fq 'Blog' /tmp/owner-approved-nav-header.html
+          grep -Fq '/blog/' /tmp/owner-approved-nav-header.html
+          ! grep -Fq '/service-areas/' /tmp/owner-approved-nav-header.html
+          grep -Fq '/service-areas/' /tmp/owner-approved-nav-footer.html
+          curl -fsS http://127.0.0.1:8080/contact/ -o /tmp/owner-approved-nav-contact.html
+          grep -Fq '/service-areas/' /tmp/owner-approved-nav-contact.html
+          grep -Fq 'include your suburb in the enquiry so we can check' /tmp/owner-approved-nav-contact.html
+
       - name: Verify 404 fallback
         shell: bash
         run: |
