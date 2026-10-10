@@ -5,6 +5,8 @@ const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8'
 const header = read('wp-content/themes/ezb-theme/parts/header.html');
 const footer = read('wp-content/themes/ezb-theme/parts/footer.html');
 const contact = read('wp-content/themes/ezb-theme/templates/page-contact.html');
+const products = read('wp-content/themes/ezb-theme/templates/page-products.html');
+const homeCards = read('wp-content/themes/ezb-theme/patterns/core-solutions.php');
 const decision = read('docs/information-architecture-v2-provisional.md');
 
 function parseLine(line) {
@@ -47,4 +49,19 @@ assert.match(decision, /Owner APPROVED the A\/B\/C navigation structure/,
   'engineering IA note must reflect Owner decision');
 assert.match(decision, /geographic coverage remains unapproved/i,
   'geographic claims must remain pending');
-console.log('EZB_OWNER_APPROVED_NAV_PASS cases=7');
+const productPaths = [
+  '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/',
+  '/retractable-flyscreens/', '/motorised-blinds/'
+];
+for (const source of [products, homeCards]) {
+  for (const productPath of productPaths) {
+    const escaped = productPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.equal((source.match(new RegExp('href="' + escaped + '"', 'g')) || []).length, 1,
+      'all five approved products must appear exactly once in each chooser: ' + productPath);
+  }
+  assert.match(source, /href="\/motorised-blinds\/">Motorised Blinds<\/a>/,
+    'fifth approved product must use its Owner-approved menu label');
+}
+assert.doesNotMatch(products, /Other products|Additional current product categories/,
+  'do not render an unapproved sixth product slot');
+console.log('EZB_OWNER_APPROVED_NAV_PASS cases=10');

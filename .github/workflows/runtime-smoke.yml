@@ -99,6 +99,16 @@ jobs:
           grep -Fq '/service-areas/' /tmp/owner-approved-nav-contact.html
           grep -Fq 'include your suburb in the enquiry so we can check' /tmp/owner-approved-nav-contact.html
 
+      - name: Verify approved five-product choice pages have no unapproved extra category
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:8080/products/ -o /tmp/owner-five-products.html
+          curl -fsS http://127.0.0.1:8080/ -o /tmp/owner-five-products-home.html
+          grep -Fq '>Motorised Blinds</a>' /tmp/owner-five-products.html
+          grep -Fq '>Motorised Blinds</a>' /tmp/owner-five-products-home.html
+          ! grep -Fq '>Other products</h3>' /tmp/owner-five-products.html
+
       - name: Verify 404 fallback
         shell: bash
         run: |

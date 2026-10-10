@@ -81,7 +81,7 @@ jobs:
         run: |
           node --check scripts/test-owner-approved-navigation.mjs
           node scripts/test-owner-approved-navigation.mjs | tee /tmp/owner-navigation.log
-          grep -q 'EZB_OWNER_APPROVED_NAV_PASS cases=7' /tmp/owner-navigation.log
+          grep -q 'EZB_OWNER_APPROVED_NAV_PASS cases=10' /tmp/owner-navigation.log
 
       - name: Test keyboard focus visibility and navigation guard
         run: |
