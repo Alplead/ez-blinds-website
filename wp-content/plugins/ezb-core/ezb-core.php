@@ -2326,3 +2326,23 @@ add_shortcode(
 		);
 	}
 );
+
+
+/**
+ * Execute EZB shortcodes embedded in full-site editing templates/patterns.
+ *
+ * WordPress core/shortcode currently renders wpautop( $content ) for block
+ * templates. Normal the_content shortcode filters do not run there, causing
+ * the raw [ezb_media_slot ...] label to appear in the public HTML. Limit
+ * this adapter to first-party EZB codes; do not change unrelated shortcodes.
+ */
+add_filter(
+	'render_block_core/shortcode',
+	function ( $content ) {
+		if ( false === strpos( $content, '[ezb_' ) ) {
+			return $content;
+		}
+
+		return do_shortcode( shortcode_unautop( $content ) );
+	}
+);
