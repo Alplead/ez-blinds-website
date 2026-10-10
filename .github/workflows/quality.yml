@@ -36,6 +36,13 @@ jobs:
       - name: Check Visual QA JavaScript syntax
         run: node --check scripts/visual-qa.mjs
 
+      - name: Validate Owner preview responsive and route coverage
+        run: |
+          node --check scripts/owner-preview-capture.mjs
+          node --check scripts/test-owner-preview-coverage.mjs
+          node scripts/test-owner-preview-coverage.mjs | tee /tmp/owner-preview-coverage.log
+          grep -q 'EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56' /tmp/owner-preview-coverage.log
+
       - name: Test reduced-motion preference changes
         run: |
           node --check wp-content/themes/ezb-theme/assets/js/site.js

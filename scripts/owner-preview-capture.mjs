@@ -23,12 +23,16 @@ const coreRoutes = [
   { name: 'project-example', path: '/projects/retractable-flyscreen-indoor-outdoor-opening/' },
   { name: 'about', path: '/about/' },
   { name: 'advice', path: '/advice/' },
+  { name: 'blog', path: '/blog/' },
+  { name: 'service-areas', path: '/service-areas/' },
   { name: 'contact', path: '/contact/' }
 ];
 
 const viewports = [
   { name: 'desktop', width: 1440, height: 900 },
-  { name: 'mobile', width: 390, height: 844 }
+  { name: 'tablet', width: 834, height: 1112 },
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'small-mobile', width: 320, height: 700 }
 ];
 
 async function main() {
@@ -60,6 +64,21 @@ async function main() {
 
             if (!response || response.status() !== 200) {
               throw new Error(`HTTP ${response?.status() ?? 'no response'}`);
+            }
+
+            // Catch layout failures that full-page screenshots can conceal,
+            // particularly on narrow 320px mobile screens.
+            const horizontalOverflow = await page.evaluate(() =>
+              document.documentElement.scrollWidth >
+                document.documentElement.clientWidth + 1
+            );
+            if (horizontalOverflow) {
+              throw new Error('horizontal layout overflow at ' + viewport.width + 'px');
+            }
+
+            const headingCount = await page.locator('h1').count();
+            if (headingCount !== 1) {
+              throw new Error('expected exactly one page heading, got ' + headingCount);
             }
 
             await page.waitForTimeout(1000);
@@ -118,6 +137,8 @@ async function main() {
     .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; }
     .badge.desktop { background: #e0f2fe; color: #0369a1; }
     .badge.mobile { background: #fce7f3; color: #be185d; }
+    .badge.tablet { background: #e3f4e9; color: #18582f; }
+    .badge.small-mobile { background: #ece9f9; color: #433088; }
     a { display: block; margin-top: 1rem; text-decoration: none; color: #2563eb; }
     a:hover { text-decoration: underline; }
   </style>
