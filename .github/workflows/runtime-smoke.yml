@@ -1110,8 +1110,7 @@ jobs:
       - name: Verify actual theme asset paths and first-party template shortcodes
         shell: bash
         run: |
-          # Verbose only for public local HTML/CSS evidence; no credentials.
-          set -euxo pipefail
+          set -euo pipefail
           curl -fsS http://127.0.0.1:8080/ -o /tmp/ezb-asset-path-qa.html
 
           # A mere style.css mention is insufficient: its absolute URL must
@@ -1126,7 +1125,11 @@ jobs:
           # WordPress block theme patterns must show the media placeholder,
           # not a literal raw shortcode that reads like unfinished source.
           ! grep -Fq '[ezb_media_slot' /tmp/ezb-asset-path-qa.html
-          grep -Fq 'ezb-media-placeholder__kicker' /tmp/ezb-asset-path-qa.html
+          # CI may intentionally set a real Featured Image on Home earlier;
+          # accept that image OR the honest no-media placeholder.
+          if ! grep -Fq 'ezb-media-placeholder__kicker' /tmp/ezb-asset-path-qa.html; then
+            grep -Fq 'ezb-media-slot__image' /tmp/ezb-asset-path-qa.html
+          fi
 
       - name: Show service state
         if: always()
