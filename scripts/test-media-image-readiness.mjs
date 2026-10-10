@@ -66,6 +66,13 @@ const mediaSources = [
   ['/wp-content/uploads/unapproved.svg', 'WebP derivative'],
   ['/wp-content/uploads/2026/10/EZ%20blinds%20and%20shutters%20Roller%20blinds%2001.webp', ''],
   ['/wp-content/uploads/IMAG4641%20(2).webp', ''],
+  ['/wp-content/uploads/../uploads/hero.webp', 'unsafe encoded path'],
+  ['/wp-content/uploads/%2e%2e/uploads/hero.webp', 'unsafe encoded path'],
+  ['/wp-content/uploads/./hero.webp', 'unsafe encoded path'],
+  ['/wp-content/uploads/%2e/hero.webp', 'unsafe encoded path'],
+  ['https://staging.example.test/wp-content/uploads/2026/../hero.webp', 'unsafe encoded path'],
+  ['/wp-content/uploads/2026/%2e./hero.webp', 'unsafe encoded path'],
+  ['/wp-content\\uploads\\hero.webp', 'unsafe encoded path'],
   ['/wp-content/uploads/%2fprivate.webp', 'unsafe encoded path'],
   ['/wp-content/uploads/%5cprivate.webp', 'unsafe encoded path'],
   ['/wp-content/uploads/%252fprivate.webp', 'unsafe encoded path'],
@@ -86,4 +93,4 @@ for (const [source, expectedFailure] of mediaSources) {
   if (expectedFailure) assert.match(failure, new RegExp(expectedFailure));
   else assert.equal(failure, '');
 }
-console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=32');
+console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=39');
