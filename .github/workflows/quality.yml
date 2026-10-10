@@ -56,6 +56,12 @@ jobs:
           node scripts/test-mobile-speed-guard.mjs | tee /tmp/mobile-speed-guard.log
           grep -q 'EZB_MOBILE_SPEED_GUARD_PASS cases=5' /tmp/mobile-speed-guard.log
 
+      - name: Verify five approved product-to-quote journeys (static)
+        run: |
+          node --check scripts/test-product-quote-journey.mjs
+          node scripts/test-product-quote-journey.mjs | tee /tmp/product-quote-static.log
+          grep -q 'EZB_PRODUCT_QUOTE_STATIC_PASS routes=5' /tmp/product-quote-static.log
+
       - name: Test quote contact-method pre-submit validation
         run: |
           node --check scripts/test-quote-contact-method.mjs

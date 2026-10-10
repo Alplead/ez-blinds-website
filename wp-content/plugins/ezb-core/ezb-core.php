@@ -243,9 +243,28 @@ add_action(
 	}
 );
 
+/**
+ * Carry only one of the five Owner-approved product choices into enquiry UI.
+ * Query data never locks the visitor's choice or creates a new product.
+ */
+function ezb_quote_product_labels() {
+	return array(
+		'roller-blinds'          => 'Roller Blinds',
+		'sheer-curtains'         => 'Sheer Curtains',
+		'plantation-shutters'    => 'Plantation Shutters',
+		'retractable-flyscreens' => 'Retractable Flyscreens',
+		'motorised-blinds'       => 'Motorised Blinds',
+	);
+}
+
 add_shortcode(
 	'ezb_quote_form',
 	function () {
+		$slug = isset( $_GET['quote_product'] ) && is_string( $_GET['quote_product'] )
+			? sanitize_key( wp_unslash( $_GET['quote_product'] ) )
+			: '';
+		$labels = ezb_quote_product_labels();
+		$selected_product = isset( $labels[ $slug ] ) ? $labels[ $slug ] : '';
 		$status = isset( $_GET['quote_status'] ) && is_string( $_GET['quote_status'] )
 			? sanitize_key( wp_unslash( $_GET['quote_status'] ) )
 			: '';
@@ -280,11 +299,11 @@ add_shortcode(
 					<label><?php esc_html_e( 'Product', 'ezb-core' ); ?><br>
 						<select name="product">
 							<option value=""><?php esc_html_e( 'Select one', 'ezb-core' ); ?></option>
-							<option><?php esc_html_e( 'Roller Blinds', 'ezb-core' ); ?></option>
-							<option><?php esc_html_e( 'Retractable Flyscreens', 'ezb-core' ); ?></option>
-							<option><?php esc_html_e( 'Plantation Shutters', 'ezb-core' ); ?></option>
-							<option><?php esc_html_e( 'Sheer Curtains', 'ezb-core' ); ?></option>
-							<option><?php esc_html_e( 'Motorisation', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Roller Blinds' ); ?>><?php esc_html_e( 'Roller Blinds', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Retractable Flyscreens' ); ?>><?php esc_html_e( 'Retractable Flyscreens', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Plantation Shutters' ); ?>><?php esc_html_e( 'Plantation Shutters', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Sheer Curtains' ); ?>><?php esc_html_e( 'Sheer Curtains', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Motorised Blinds' ); ?>><?php esc_html_e( 'Motorised Blinds', 'ezb-core' ); ?></option>
 							<option><?php esc_html_e( 'Other / Not sure', 'ezb-core' ); ?></option>
 						</select>
 					</label>
@@ -902,6 +921,17 @@ add_shortcode(
 
 		$contact_items = array();
 
+		// Pre-fill enquiries only when reached from an approved product page.
+		$contact_url = home_url( '/contact/' );
+		$queried = get_queried_object();
+		if ( $queried instanceof WP_Post && 'page' === $queried->post_type ) {
+			$slug = sanitize_key( $queried->post_name );
+			$labels = ezb_quote_product_labels();
+			if ( isset( $labels[ $slug ] ) ) {
+				$contact_url = add_query_arg( 'quote_product', $slug, $contact_url );
+			}
+		}
+
 		if ( '' !== trim( $phone ) ) {
 			$tel = preg_replace( '/[^0-9+]/', '', $phone );
 			if ( '' !== $tel ) {
@@ -922,7 +952,7 @@ add_shortcode(
 			'' !== trim( $heading ) ? '<h2>' . esc_html( $heading ) . '</h2>' : '',
 			'' !== trim( $body ) ? '<p>' . esc_html( $body ) . '</p>' : '',
 			$contact_markup,
-			esc_url( home_url( '/contact/' ) ),
+			esc_url( $contact_url ),
 			esc_html( $label )
 		);
 	}

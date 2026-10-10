@@ -697,6 +697,13 @@ jobs:
           grep -q 'name="product"' /tmp/contact.html
           grep -q 'name="message"' /tmp/contact.html
 
+      - name: Verify live five-product contextual enquiry path
+        shell: bash
+        run: |
+          set -euo pipefail
+          EZB_BASE_URL=http://127.0.0.1:8080 node scripts/test-product-quote-journey.mjs | tee /tmp/product-quote-runtime.log
+          grep -q 'EZB_PRODUCT_QUOTE_RUNTIME_PASS routes=5 invalid=3' /tmp/product-quote-runtime.log
+
       - name: Verify owner-editable product FAQs
         shell: bash
         run: |
