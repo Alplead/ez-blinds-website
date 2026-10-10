@@ -11,6 +11,7 @@
 
 		function clearContactError() {
 			phone.setCustomValidity('');
+			phone.removeAttribute('aria-invalid');
 		}
 
 		phone.addEventListener('input', clearContactError);
@@ -19,6 +20,7 @@
 			clearContactError();
 			if (phone.value.trim() || email.value.trim()) return;
 			phone.setCustomValidity('Please enter a phone number or email address so we can reply.');
+			phone.setAttribute('aria-invalid', 'true');
 			event.preventDefault();
 			phone.focus();
 			phone.reportValidity();

@@ -331,6 +331,12 @@ jobs:
           grep -q 'id="ezb-codespaces-url-bridge"' /tmp/query-advice.html
           grep -q '<meta name="viewport"' /tmp/query-advice.html
 
+      - name: Verify contact interaction script defers page parsing
+        run: |
+          set -euo pipefail
+          curl -LsS 'http://127.0.0.1:8080/contact/' -o /tmp/contact-script-loading.html
+          grep -E 'id="ezb-theme-site-js".*defer|defer.*id="ezb-theme-site-js"' /tmp/contact-script-loading.html
+
       - name: Verify dropdown navigation and prototype media cards
         shell: bash
         run: |

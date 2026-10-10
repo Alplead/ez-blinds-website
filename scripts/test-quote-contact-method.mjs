@@ -7,7 +7,9 @@ const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/si
 function simulate({ reduced = false, formPresent = true, fieldsPresent = true } = {}) {
   const handlers = {};
   const phone = {
-    value: '', error: '', reportCount: 0, focusCount: 0,
+    value: '', error: '', reportCount: 0, focusCount: 0, attributes: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
     focus() { this.focusCount += 1; },
     setCustomValidity(value) { this.error = value; },
     reportValidity() { this.reportCount += 1; return !this.error; },
@@ -61,9 +63,11 @@ assert.equal(empty.send(), true, 'empty contact methods must block submission');
 assert.match(empty.phone.error, /phone number or email address/);
 assert.equal(empty.phone.reportCount, 1, 'browser validity feedback must be shown');
 assert.equal(empty.phone.focusCount, 1, 'missing contact method must receive keyboard focus');
+assert.equal(empty.phone.attributes['aria-invalid'], 'true', 'missing contact method must be identified to assistive tech');
 
 empty.enterEmail('visitor@example.com');
 assert.equal(empty.phone.error, '', 'email input must clear stale phone error');
+assert.equal(empty.phone.attributes['aria-invalid'], undefined, 'corrected contact info clears assistive error state');
 assert.equal(empty.send(), false, 'email-only enquiry must submit');
 
 const phoneOnly = simulate();
@@ -85,4 +89,4 @@ const noFields = simulate({ fieldsPresent: false });
 assert.equal(noFields.handlers['form:submit'], undefined, 'missing markup must degrade safely');
 simulate({ formPresent: false });
 
-console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=6');
+console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=8');

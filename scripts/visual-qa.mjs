@@ -30,7 +30,8 @@ const discoveredInternalRoutes = new Set();
 const viewports = [
   ['desktop', { width: 1440, height: 900 }],
   ['tablet', { width: 834, height: 1112 }],
-  ['mobile', { width: 390, height: 844 }]
+  ['mobile', { width: 390, height: 844 }],
+  ['small-mobile', { width: 320, height: 700 }]
 ];
 
 await fs.mkdir('visual-qa-output', { recursive: true });

@@ -1464,3 +1464,30 @@ html.ezb-motion-ready .ezb-split-panel.ezb-in-view {
 		transition: none;
 	}
 }
+
+
+/* 320px mobile resilience: keep narrow headings within the viewport and
+   preserve minimum 44px targets for the primary quote and navigation paths. */
+@media (max-width: 360px) {
+	.ezb-hero h1,
+	.ezb-product-hero h1,
+	.ezb-project-hero h1,
+	.ezb-section h2,
+	.ezb-section h3,
+	.ezb-card h3,
+	.ezb-article-shell .wp-block-post-title {
+		overflow-wrap: anywhere;
+	}
+
+	.ezb-product-switcher a,
+	.ezb-submit,
+	.ezb-header .wp-block-navigation__responsive-container-open,
+	.ezb-header .wp-block-navigation__responsive-container-close {
+		box-sizing: border-box;
+		min-height: 44px;
+	}
+
+	.ezb-section .wp-block-button__link {
+		overflow-wrap: anywhere;
+	}
+}

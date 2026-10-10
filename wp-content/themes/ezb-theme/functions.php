@@ -41,7 +41,10 @@ add_action(
 			get_stylesheet_directory_uri() . '/assets/js/site.js',
 			array(),
 			$script_version,
-			true
+			array(
+				'strategy'  => 'defer',
+				'in_footer' => true,
+			)
 		);
 	}
 );

@@ -50,11 +50,17 @@ jobs:
           node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
           grep -q 'EZB_SITE_MOTION_TEST_PASS cases=4' /tmp/site-motion.log
 
+      - name: Guard narrow mobile layout and deferred interaction script
+        run: |
+          node --check scripts/test-mobile-speed-guard.mjs
+          node scripts/test-mobile-speed-guard.mjs | tee /tmp/mobile-speed-guard.log
+          grep -q 'EZB_MOBILE_SPEED_GUARD_PASS cases=5' /tmp/mobile-speed-guard.log
+
       - name: Test quote contact-method pre-submit validation
         run: |
           node --check scripts/test-quote-contact-method.mjs
           node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
-          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=6' /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=8' /tmp/quote-contact-method.log
 
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
