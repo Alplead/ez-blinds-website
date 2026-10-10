@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { previewRenderFailures } from './preview-render-guard.mjs';
+import { previewRenderFailures, previewNavigationFailure } from './preview-render-guard.mjs';
 
 const valid = {
   themeStylesheetCount: 1,
@@ -42,5 +42,21 @@ const cases = [
 for (const [delta, expected] of cases) {
   assert.match(previewRenderFailures({ ...valid, ...delta }, true).join('; '), expected);
 }
-assert.equal(cases.length + 2, 18);
-console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=18');
+const requestedRoute = 'https://preview.example.test/contact/';
+const navigationCases = [
+  ['https://preview.example.test/contact/', false, ''],
+  ['https://preview.example.test/', false, 'unexpected navigation'],
+  ['https://other.example.test/contact/', false, 'unexpected navigation'],
+  ['https://preview.example.test/contact/?preview=1', false, 'unexpected navigation'],
+  ['https://preview.example.test/contact/#intro', false, 'unexpected navigation'],
+  ['https://preview.example.test/contact/', true, 'unexpected navigation'],
+  ['https://user:pass@preview.example.test/contact/', false, 'unexpected navigation'],
+  ['not a URL', false, 'invalid preview navigation URL']
+];
+for (const [actual, redirected, expectedFailure] of navigationCases) {
+  const failure = previewNavigationFailure(requestedRoute, actual, redirected);
+  if (expectedFailure) assert.match(failure, new RegExp(expectedFailure));
+  else assert.equal(failure, '');
+}
+assert.equal(cases.length + 2 + navigationCases.length, 26);
+console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=26');

@@ -1,5 +1,23 @@
 // Deterministic, browser-evidence-based guard for Owner preview screenshots.
 // A 200 response, one H1 and no overflow are NOT sufficient proof of styled UI.
+// A 200 response after a redirect can be a screenshot of the wrong page.
+// Reject all redirects, even when the final URL looks like the requested route.
+export function previewNavigationFailure(requestedUrl, finalUrl, redirected = false) {
+  try {
+    const requested = new URL(requestedUrl);
+    const actual = new URL(finalUrl);
+    if (redirected || actual.origin !== requested.origin ||
+        actual.pathname !== requested.pathname ||
+        actual.search !== requested.search || actual.hash !== requested.hash ||
+        actual.username || actual.password) {
+      return `unexpected navigation to ${actual.href}`;
+    }
+    return '';
+  } catch {
+    return 'invalid preview navigation URL';
+  }
+}
+
 export function previewRenderFailures(evidence, isHome = false) {
   const failures = [];
   if (evidence.themeStylesheetCount !== 1 ||

@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { previewRenderFailures } from './preview-render-guard.mjs';
+import { previewRenderFailures, previewNavigationFailure } from './preview-render-guard.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -78,6 +78,11 @@ async function main() {
             if (!response || response.status() !== 200) {
               throw new Error(`HTTP ${response?.status() ?? 'no response'}`);
             }
+
+            const navigationFailure = previewNavigationFailure(
+              fullUrl, page.url(), Boolean(response.request().redirectedFrom())
+            );
+            if (navigationFailure) throw new Error(navigationFailure);
 
             // Catch layout failures that full-page screenshots can conceal,
             // particularly on narrow 320px mobile screens.
