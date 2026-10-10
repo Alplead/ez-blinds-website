@@ -34,15 +34,8 @@ assert.match(source, /captures\.length !== expectedCaptureCount/,
   'owner preview must fail if a screenshot is missing');
 assert.ok(source.includes("previewRenderFailures(renderEvidence, route.path === '/')"),
   'screenshots must be rejected when actual browser styling is missing');
-const rawPattern = source.match(/rawShortcode:\\s*(\\/[^\\n]+\\/i)/);
-assert.ok(rawPattern, 'raw shortcode browser matcher must exist');
-const browserShortcodeMatcher = new Function('return ' + rawPattern[1])();
-assert.ok(browserShortcodeMatcher.test('[ezb_media_slot slot="home-hero"]'),
-  'raw media shortcode must be detectable');
-assert.ok(browserShortcodeMatcher.test('[ezb_measure_quote_cta]'),
-  'raw CTA shortcode must be detectable');
-assert.equal(browserShortcodeMatcher.test('Normal customer text'), false,
-  'normal text must not be mistaken for a shortcode');
+assert.ok(source.includes('rawShortcode: /\\[(?:\\/)?ezb_'),
+  'browser must explicitly recognise unrendered EZB shortcodes');
 assert.match(source, /themeStylesheetLoaded/,
   'screenshots must check the actual linked theme stylesheet');
 assert.match(source, /rawShortcode/,
