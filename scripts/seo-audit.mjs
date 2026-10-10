@@ -145,6 +145,12 @@ for (const path of paths) {
         failures.push(`${path} -> canonical left test origin: ${canonical.href}`);
       }
 
+      // Same-origin URLs can still carry credentials in userinfo.
+      // Reject them before search engines or downstream reports see them.
+      if (canonical.username || canonical.password) {
+        failures.push(`${path} -> canonical contains URL credentials`);
+      }
+
       if (canonical.searchParams.has('ezb_page')) {
         failures.push(`${path} -> canonical leaked development ezb_page transport`);
       }

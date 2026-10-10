@@ -121,7 +121,7 @@ jobs:
         run: |
           node --check scripts/test-seo-audit-guard.mjs
           node scripts/test-seo-audit-guard.mjs | tee /tmp/seo-audit-guard.log
-          grep -q 'EZB_SEO_AUDIT_GUARD_PASS cases=6' /tmp/seo-audit-guard.log
+          grep -q 'EZB_SEO_AUDIT_GUARD_PASS cases=7' /tmp/seo-audit-guard.log
 
       - name: Prevent unfinished photo-upload promises in public contact copy
         run: |

@@ -26,7 +26,9 @@ async function check(name, mode, expectedFailure = '') {
     const port = server.address().port;
     const canonical = mode === 'off-origin-canonical' && path === '/contact/'
       ? 'https://example.com/contact/'
-      : 'http://127.0.0.1:' + port + path;
+      : mode === 'userinfo-canonical' && path === '/contact/'
+        ? 'http://viewer:synthetic@127.0.0.1:' + port + path
+        : 'http://127.0.0.1:' + port + path;
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end('<!doctype html><html><head><title>EZB ' + path +
       '</title><link rel="canonical" href="' + canonical + '"></head><body></body></html>');
@@ -64,4 +66,5 @@ await check('off-origin redirect rejected without fetching destination',
 await check('JSON response rejected', 'non-html', 'expected text/html');
 await check('missing HTML content-type rejected', 'missing-content-type', 'expected text/html');
 await check('off-origin canonical rejected', 'off-origin-canonical', 'canonical left test origin');
-console.log('EZB_SEO_AUDIT_GUARD_PASS cases=6');
+await check('credential-bearing canonical rejected', 'userinfo-canonical', 'canonical contains URL credentials');
+console.log('EZB_SEO_AUDIT_GUARD_PASS cases=7');
