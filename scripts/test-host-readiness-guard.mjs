@@ -136,4 +136,9 @@ await check({ name: 'indexable inline-comment global block rejected', indexable:
 await check({ name: 'indexable named bot block not global', indexable: true, robotsTextOverride: 'User-agent: ExampleBot\nDisallow: /\n\nUser-agent: *\nAllow: /' });
 await check({ name: 'staging commented-out rules are not protection', robotsTextOverride: '# User-agent: *\n# Disallow: /\nUser-agent: *\nAllow: /', expectedError: '/robots.txt does not block the entire site' });
 await check({ name: 'staging wildcard group after blank line', robotsTextOverride: 'User-agent: ExampleBot\nDisallow: /private\n\nUser-agent: *\nDisallow: /' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=49');
+await check({ name: 'indexable percent-encoded underscore in dev query rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb%5Fpage=products">Dev</a>', expectedError: '/products/ leaked development' });
+await check({ name: 'indexable percent-encoded equals in dev query rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb_page%3Dproducts">Dev</a>', expectedError: '/products/ leaked development' });
+await check({ name: 'indexable double-percent-encoded dev query rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb%255Fpage%253Dproducts">Dev</a>', expectedError: '/products/ leaked development' });
+await check({ name: 'staging percent-encoded dev query rejected without opt-in', leakPath: '/advice/', leakText: '<a href="/?ezb%5fpage=advice">Dev</a>', expectedError: '/advice/ leaked development' });
+await check({ name: 'indexable numeric entity encoded percent rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?ezb&#37;5Fpage=contact">Dev</a>', expectedError: '/contact/ leaked development' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=54');
