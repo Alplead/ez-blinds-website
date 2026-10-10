@@ -108,8 +108,21 @@ function findDevelopmentMarker(html) {
 }
 
 function hasDevelopmentTransport(html) {
-  // Fail closed on case variants and HTML numeric references in query keys.
-  return /ezb_page\s*=/i.test(decodeNumericHtmlReferences(html));
+  // Browsers decode HTML entities and URL percent escapes independently.
+  // Check two bounded percent-decoding passes so encoded query keys or equals
+  // signs cannot conceal development transport from indexable host checks.
+  let normalized = decodeNumericHtmlReferences(html);
+  for (let pass = 0; pass <= 2; pass += 1) {
+    if (/ezb_page\s*=/i.test(normalized)) return true;
+    if (pass === 2) break;
+    const decoded = normalized.replace(/%([0-9a-f]{2})/gi, (match, hex) => {
+      const code = Number.parseInt(hex, 16);
+      return code >= 0x21 && code <= 0x7e ? String.fromCharCode(code) : match;
+    });
+    if (decoded === normalized) break;
+    normalized = decoded;
+  }
+  return false;
 }
 
 // Include every current structural top-level route. A staging host must not
