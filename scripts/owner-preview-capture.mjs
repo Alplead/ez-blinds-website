@@ -55,6 +55,18 @@ async function main() {
         for (const route of coreRoutes) {
           console.log(`Capturing ${viewport.name} - ${route.name} (${route.path})`);
           const page = await context.newPage();
+          const pageErrors = [];
+          const assetFailures = [];
+          const themeAsset = /\/wp-content\/themes\/ezb-theme\/(?:style\.css|assets\/js\/site\.js)(?:[?#]|$)/;
+          page.on('pageerror', error => pageErrors.push(error.message));
+          page.on('response', response => {
+            if (themeAsset.test(response.url()) && response.status() !== 200) {
+              assetFailures.push('HTTP ' + response.status() + ' ' + response.url());
+            }
+          });
+          page.on('requestfailed', request => {
+            if (themeAsset.test(request.url())) assetFailures.push('failed ' + request.url());
+          });
 
           try {
             const fullUrl = new URL(route.path, baseUrl).toString();
@@ -119,6 +131,11 @@ async function main() {
             const renderFailures = previewRenderFailures(renderEvidence, route.path === '/');
             if (renderFailures.length) {
               throw new Error('unstyled or incomplete preview: ' + renderFailures.join('; '));
+            }
+
+            if (pageErrors.length || assetFailures.length) {
+              throw new Error('browser or theme asset failure: ' +
+                [...pageErrors, ...assetFailures].join('; '));
             }
 
             await page.waitForTimeout(1000);

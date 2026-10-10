@@ -46,5 +46,11 @@ assert.match(source, /homeCardBorderPx/,
   'screenshots must check real computed card framing');
 assert.match(source, /reducedMotion: 'reduce'/,
   'previews should not force animated visual effects');
+assert.ok(source.includes("page.on('pageerror'"),
+  'owner preview must fail on uncaught browser JavaScript errors');
+assert.ok(source.includes("page.on('response'") && source.includes("page.on('requestfailed'"),
+  'owner preview must detect failed theme CSS/JS requests');
+assert.ok(source.includes('pageErrors.length || assetFailures.length'),
+  'browser errors and failed theme assets must block screenshot acceptance');
 
 console.log('EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56');
