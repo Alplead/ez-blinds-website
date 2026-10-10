@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import { inspectMediaImage, heroImageCountFailure, mediaImageSourceFailure } from './media-image-readiness.mjs';
+import { previewNavigationFailure } from './preview-render-guard.mjs';
 
 const rawBase = process.env.EZB_BASE_URL || '';
 if (!rawBase) throw new Error('EZB_BASE_URL is required');
@@ -35,8 +36,22 @@ try {
   for (const [viewportName, viewport] of viewports) {
     const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
     const page = await context.newPage();
+    const pageErrors = [];
+    const themeAssetFailures = [];
+    const themeAsset = /\/wp-content\/themes\/ezb-theme\/(?:style\.css|assets\/js\/site\.js)(?:[?#]|$)/;
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('response', response => {
+      if (themeAsset.test(response.url()) && response.status() !== 200) {
+        themeAssetFailures.push(`HTTP ${response.status()} ${response.url()}`);
+      }
+    });
+    page.on('requestfailed', request => {
+      if (themeAsset.test(request.url())) themeAssetFailures.push(`failed ${request.url()}`);
+    });
 
     for (const [name, path, galleryCount] of routes) {
+      pageErrors.length = 0;
+      themeAssetFailures.length = 0;
       const isProject = path.startsWith('/projects/');
       const requestedUrl = new URL(path, base);
       const response = await page.goto(requestedUrl.href, { waitUntil: 'networkidle' });
@@ -44,9 +59,12 @@ try {
         failures.push(`${viewportName} ${name}: HTTP ${response?.status() ?? 'no response'}`);
         continue;
       }
-      const finalUrl = new URL(page.url());
-      if (finalUrl.origin !== base.origin || finalUrl.pathname !== requestedUrl.pathname || finalUrl.search || finalUrl.hash) {
-        failures.push(`${viewportName} ${name}: unexpected navigation to ${finalUrl.href}`);
+      // A redirect back to the requested URL is still a broken acceptance path.
+      const navigationFailure = previewNavigationFailure(
+        requestedUrl.href, page.url(), Boolean(response.request().redirectedFrom())
+      );
+      if (navigationFailure) {
+        failures.push(`${viewportName} ${name}: ${navigationFailure}`);
         continue;
       }
 
@@ -119,6 +137,11 @@ try {
         path: `${output}/${viewportName}-${name}.png`,
         fullPage: true
       });
+      if (pageErrors.length || themeAssetFailures.length) {
+        failures.push(`${viewportName} ${name}: browser or theme asset failure: ${[
+          ...pageErrors, ...themeAssetFailures
+        ].join('; ')}`);
+      }
     }
 
     await context.close();

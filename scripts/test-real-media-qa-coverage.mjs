@@ -28,4 +28,14 @@ assert.match(qa, /gallery\.nth\(i\)\.getAttribute\('loading'\) !== 'lazy'/,
   'real-media QA must reject eager-loaded galleries');
 assert.match(qa, /const state = await inspectMediaImage\(gallery\.nth\(i\)\)/,
   'real-media QA must decode lazy-loaded images before asserting readiness');
-console.log('EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=9');
+assert.match(qa, /previewNavigationFailure\(/,
+  'real-media QA must reject redirects, including redirects back to the same route');
+assert.match(qa, /response\.request\(\)\.redirectedFrom\(\)/,
+  'real-media QA must check the actual redirect chain');
+assert.match(qa, /page\.on\('pageerror'/,
+  'real-media QA must catch uncaught browser errors');
+assert.match(qa, /page\.on\('requestfailed'/,
+  'real-media QA must catch failed theme CSS and JavaScript requests');
+assert.match(qa, /pageErrors\.length \|\| themeAssetFailures\.length/,
+  'real-media QA must reject browser and theme asset failures');
+console.log('EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=14');
