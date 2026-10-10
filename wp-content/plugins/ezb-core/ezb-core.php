@@ -255,7 +255,7 @@ add_shortcode(
 			<?php if ( 'sent' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
-				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please add your name and either a phone number or an email address.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please enter your name and a phone number or valid email address. Check any email address you provide.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'too_long' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Your enquiry is too long. Please shorten it and try again.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'error' === $status ) : ?>
@@ -366,7 +366,9 @@ function ezb_handle_quote_form() {
 		exit;
 	}
 
-	if ( '' === $name || ( '' === $phone && ! is_email( $email ) ) ) {
+	// Reject a supplied invalid email even when a phone number is present.
+	// Otherwise an address typo is silently accepted and cannot be replied to.
+	if ( '' === $name || ( '' !== $email && ! is_email( $email ) ) || ( '' === $phone && '' === $email ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
 		exit;
 	}

@@ -838,7 +838,7 @@ jobs:
           grep -qi 'location: .*quote_status=invalid' /tmp/error-submit-headers.txt
 
           curl -LsS 'http://127.0.0.1:8080/contact/?quote_status=invalid' -o /tmp/invalid-contact.html
-          grep -q 'Please add your name and either a phone number or an email address.' /tmp/invalid-contact.html
+          grep -q 'Please enter your name and a phone number or valid email address. Check any email address you provide.' /tmp/invalid-contact.html
           grep -q 'role="alert"' /tmp/invalid-contact.html
 
           INVALID_EMAIL_CODE="$(curl -sS -o /tmp/invalid-email-body.html -D /tmp/invalid-email-headers.txt -w '%{http_code}' \
@@ -849,6 +849,31 @@ jobs:
             --data-urlencode 'email=invalid-email')"
           test "$INVALID_EMAIL_CODE" = "302"
           grep -qi 'location: .*quote_status=invalid' /tmp/invalid-email-headers.txt
+
+          # A phone-only enquiry remains valid, but an invalid supplied email
+          # must not be silently accepted just because a phone was also given.
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
+          PHONE_ONLY_CODE="$(curl -sS -o /tmp/phone-only-body.html -D /tmp/phone-only-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Phone Only' \
+            --data-urlencode 'phone=0400 000 000')"
+          test "$PHONE_ONLY_CODE" = "302"
+          grep -qi 'location: .*quote_status=sent' /tmp/phone-only-headers.txt
+          test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "admin-fallback@example.com"
+
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
+          INVALID_EMAIL_WITH_PHONE_CODE="$(curl -sS -o /tmp/invalid-email-phone-body.html -D /tmp/invalid-email-phone-headers.txt -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+            --data-urlencode 'action=ezb_quote' \
+            --data-urlencode "ezb_quote_nonce=$NONCE" \
+            --data-urlencode 'name=CI Invalid Email With Phone' \
+            --data-urlencode 'phone=0400 000 000' \
+            --data-urlencode 'email=not-an-email')"
+          test "$INVALID_EMAIL_WITH_PHONE_CODE" = "302"
+          grep -qi 'location: .*quote_status=invalid' /tmp/invalid-email-phone-headers.txt
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'test ! -e /tmp/ezb-ci-mail-to.txt'
 
           # A crafted email[] field must be rejected, not crash sanitize_email().
           ARRAY_EMAIL_CODE="$(curl -sS -o /tmp/array-email-body.html -D /tmp/array-email-headers.txt -w '%{http_code}' \
