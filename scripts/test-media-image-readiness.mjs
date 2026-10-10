@@ -61,6 +61,9 @@ const mediaSources = [
   ['/wp-content/uploads/gallery.webp?preview=1', 'query parameters'],
   ['/wp-content/uploads/gallery.webp#image', 'query parameters'],
   ['/wp-content/uploads/', 'uploads attachment'],
+  ['/wp-content/uploads/unapproved.jpg', 'WebP derivative'],
+  ['/wp-content/uploads/unapproved.png', 'WebP derivative'],
+  ['/wp-content/uploads/unapproved.svg', 'WebP derivative'],
   ['https://external.example.test/photo.webp', 'same-origin'],
   ['//external.example.test/photo.webp', 'same-origin'],
   ['data:image/webp;base64,AAAA', 'same-origin'],
@@ -73,4 +76,4 @@ for (const [source, expectedFailure] of mediaSources) {
   if (expectedFailure) assert.match(failure, new RegExp(expectedFailure));
   else assert.equal(failure, '');
 }
-console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=20');
+console.log('EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=23');

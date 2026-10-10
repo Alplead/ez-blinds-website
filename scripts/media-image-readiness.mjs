@@ -40,6 +40,10 @@ export function mediaImageSourceFailure(src, baseUrl) {
     if (image.search || image.hash) {
       return 'image source must not include query parameters or fragments';
     }
+    // This acceptance batch is 25 verified WebP derivatives, not arbitrary uploads.
+    if (!/\.webp$/i.test(image.pathname)) {
+      return 'image source must be a WebP derivative';
+    }
     return '';
   } catch {
     return 'image source URL is invalid';
