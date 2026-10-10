@@ -106,7 +106,7 @@ async function main() {
                 themeStylesheetLoaded: Boolean(themeLink?.sheet),
                 accentValue: getComputedStyle(document.documentElement)
                   .getPropertyValue('--ezb-accent').trim(),
-                rawShortcode: /\\[(?:\\/)?ezb_[a-z0-9_]+(?:\\s|\\])/i
+                rawShortcode: /\[(?:\/)?ezb_[a-z0-9_]+(?:\s|\])/i
                   .test(document.body.textContent || ''),
                 homeHeroPresent: Boolean(hero),
                 homeHeroBackground: hero ? getComputedStyle(hero).backgroundImage : '',
