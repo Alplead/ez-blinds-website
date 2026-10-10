@@ -349,7 +349,10 @@ function ezb_handle_quote_form() {
 	$name    = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
 	$suburb  = isset( $_POST['suburb'] ) ? sanitize_text_field( wp_unslash( $_POST['suburb'] ) ) : '';
 	$phone   = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
-	$email   = isset( $_POST['email'] ) && is_string( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+	// Keep the unsanitised (but unslashed and trimmed) value for validation.
+	// sanitize_email() can turn a malformed supplied address into an empty string.
+	$email_input = isset( $_POST['email'] ) && is_string( $_POST['email'] ) ? trim( wp_unslash( $_POST['email'] ) ) : '';
+	$email       = '' !== $email_input ? sanitize_email( $email_input ) : '';
 	$product = isset( $_POST['product'] ) ? sanitize_text_field( wp_unslash( $_POST['product'] ) ) : '';
 	$message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
 
@@ -366,9 +369,9 @@ function ezb_handle_quote_form() {
 		exit;
 	}
 
-	// Reject a supplied invalid email even when a phone number is present.
-	// Otherwise an address typo is silently accepted and cannot be replied to.
-	if ( '' === $name || ( '' !== $email && ! is_email( $email ) ) || ( '' === $phone && '' === $email ) ) {
+	// Validate the supplied address BEFORE sanitisation can erase an invalid
+	// value; phone-only enquiries remain valid when email was truly left blank.
+	if ( '' === $name || ( '' !== $email_input && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) || ( '' === $phone && '' === $email ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
 		exit;
 	}
