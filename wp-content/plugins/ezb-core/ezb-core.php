@@ -337,6 +337,15 @@ function ezb_handle_quote_form() {
 		exit;
 	}
 
+	// Reject array-valued fields rather than silently dropping submitted details.
+	// Legitimate HTML form controls submit strings; malformed arrays must not mail.
+	foreach ( array( 'name', 'suburb', 'phone', 'email', 'product', 'message' ) as $field ) {
+		if ( isset( $_POST[ $field ] ) && ! is_string( $_POST[ $field ] ) ) {
+			wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
+			exit;
+		}
+	}
+
 	$name    = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
 	$suburb  = isset( $_POST['suburb'] ) ? sanitize_text_field( wp_unslash( $_POST['suburb'] ) ) : '';
 	$phone   = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';

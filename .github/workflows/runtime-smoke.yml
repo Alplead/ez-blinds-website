@@ -854,6 +854,21 @@ jobs:
           test "$ARRAY_EMAIL_CODE" = "302"
           grep -qi 'location: .*quote_status=invalid' /tmp/array-email-headers.txt
 
+          # Optional array-valued fields must not silently disappear from a sent enquiry.
+          docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
+          for field in product message; do
+            MALFORMED_CODE="$(curl -sS -o /tmp/malformed-field-body.html -D /tmp/malformed-field-headers.txt -w '%{http_code}' \
+              -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+              --data-urlencode 'action=ezb_quote' \
+              --data-urlencode "ezb_quote_nonce=$NONCE" \
+              --data-urlencode 'name=CI Malformed Field' \
+              --data-urlencode 'email=ci-malformed@example.com' \
+              --data-urlencode "$field[]=malformed")"
+            test "$MALFORMED_CODE" = "302"
+            grep -qi 'location: .*quote_status=invalid' /tmp/malformed-field-headers.txt
+            docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'test ! -e /tmp/ezb-ci-mail-to.txt'
+          done
+
           # A forged oversized message must be rejected before wp_mail is called.
           OVERSIZED_MESSAGE="$(printf '%16001s' '' | tr ' ' 'x')"
           OVERSIZED_CODE="$(curl -sS -o /tmp/oversized-submit-body.html -D /tmp/oversized-submit-headers.txt -w '%{http_code}' \
