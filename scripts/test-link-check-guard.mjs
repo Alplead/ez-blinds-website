@@ -95,8 +95,8 @@ await check('required route redirect to Home rejected', 'redirect', 'unexpectedl
 await check('discovered link redirect to Home rejected', 'discovered-redirect', 'unexpectedly redirected to');
 await check('off-origin redirect rejected without following', 'off-origin-redirect', 'unexpectedly redirected to https://example.com/off-site/');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
-await check('approved Blog index is a required route', 'blog-missing', 'HTTP 404');
-await check('development-only article route is crawled', 'article-missing', 'HTTP 404');
+await check('approved Blog index is a required route', 'blog-missing', 'required route expected HTTP 200, got 404');
+await check('development-only article route is crawled', 'article-missing', 'required route expected HTTP 200, got 404');
 await check('development transport link rejected', 'transport', 'development ezb_page links');
 await check('required public route must return HTML', 'not-html', 'required route expected text/html');
 await check('required public route must not return 204', 'no-content', 'required route expected HTTP 200');
