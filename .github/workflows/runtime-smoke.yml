@@ -1117,8 +1117,10 @@ jobs:
           # match the public document root, not an internal filesystem folder.
           grep -Fq '/wp-content/themes/ezb-theme/style.css?ver=' /tmp/ezb-asset-path-qa.html
           ! grep -Fq '/wordpress-site/wp-content/' /tmp/ezb-asset-path-qa.html
-          curl -fsS 'http://127.0.0.1:8080/wp-content/themes/ezb-theme/style.css' |
-            grep -Fq -- '--ezb-accent:'
+          # Save the full response before searching; curl | grep -q under
+          # pipefail can terminate curl with SIGPIPE after an early match.
+          curl -fsS 'http://127.0.0.1:8080/wp-content/themes/ezb-theme/style.css' -o /tmp/ezb-asset-path-style.css
+          grep -Fq -- '--ezb-accent:' /tmp/ezb-asset-path-style.css
 
           # WordPress block theme patterns must show the media placeholder,
           # not a literal raw shortcode that reads like unfinished source.
