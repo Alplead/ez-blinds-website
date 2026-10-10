@@ -141,4 +141,6 @@ await check({ name: 'indexable percent-encoded equals in dev query rejected', in
 await check({ name: 'indexable double-percent-encoded dev query rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb%255Fpage%253Dproducts">Dev</a>', expectedError: '/products/ leaked development' });
 await check({ name: 'staging percent-encoded dev query rejected without opt-in', leakPath: '/advice/', leakText: '<a href="/?ezb%5fpage=advice">Dev</a>', expectedError: '/advice/ leaked development' });
 await check({ name: 'indexable numeric entity encoded percent rejected', indexable: true, leakPath: '/contact/', leakText: '<a href="/?ezb&#37;5Fpage=contact">Dev</a>', expectedError: '/contact/ leaked development' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=54');
+await check({ name: 'staging comment-only line preserves wildcard group', robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /' });
+await check({ name: 'indexable comment-only line preserves wildcard block', indexable: true, robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /', expectedError: '/robots.txt blocks the entire site' });
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=56');

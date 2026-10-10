@@ -43,6 +43,8 @@ async function check(name, mode, expectedFailure = '') {
       path === '/' && mode === 'transport-unquoted' ? '<a href=/products/?ezb_page=products>Dev</a>' :
       path === '/' && mode === 'transport-uppercase' ? '<a href="/products/?EZB_PAGE=products">Dev</a>' :
       path === '/' && mode === 'transport-encoded-key' ? '<a href="/products/?ezb%5Fpage=products">Dev</a>' :
+      path === '/' && mode === 'transport-double-encoded-key' ? '<a href="/products/?ezb%255Fpage=products">Dev</a>' :
+      path === '/' && mode === 'transport-html-entity-key' ? '<a href="/products/?ezb&#95;page=products">Dev</a>' :
       path === '/' && mode === 'data-href-decoy' ? '<a data-href="/missing/">No navigation</a>' :
       path === '/' && mode === 'quoted-label-decoy' ? '<a aria-label="href=/missing/" href="/contact/">Contact</a>' :
       path === '/' && mode === 'file-protocol' ? '<a href="file:///private/internal.txt">Unsafe</a>' :
@@ -113,4 +115,6 @@ await check('external HTTPS link remains allowed', 'external-https');
 await check('mail address link remains allowed', 'valid-mailto');
 await check('uppercase development transport key rejected', 'transport-uppercase', 'development ezb_page links');
 await check('percent-encoded development transport key rejected', 'transport-encoded-key', 'development ezb_page links');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=29');
+await check('double-encoded development transport key rejected', 'transport-double-encoded-key', 'development ezb_page links');
+await check('HTML-entity development transport key rejected', 'transport-html-entity-key', 'development ezb_page links');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=31');

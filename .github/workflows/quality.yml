@@ -62,7 +62,7 @@ jobs:
         run: |
           node --check scripts/test-link-check-guard.mjs
           node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
-          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=29' /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=31' /tmp/link-check-guard.log
 
       - name: Test keyboard focus visibility and navigation guard
         run: |
@@ -106,7 +106,7 @@ jobs:
         run: |
           node --check scripts/test-host-readiness-guard.mjs
           node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
-          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=54' /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=56' /tmp/host-readiness-guard.log
 
       - name: Check Owner UI acceptance checker syntax
         run: bash -n scripts/check-owner-ui-acceptance.sh

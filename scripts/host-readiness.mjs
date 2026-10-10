@@ -227,7 +227,8 @@ if (robotsResponse.status !== 200) {
   for (const rawLine of robotsText.replace(/^\uFEFF/, '').split(/\r?\n/)) {
     const line = rawLine.split('#', 1)[0].trim();
     if (!line) {
-      if (agents.length) finishGroup();
+      // A comment-only line is not a blank line and must not end a group.
+      if (!rawLine.trim() && agents.length) finishGroup();
       continue;
     }
     const match = /^([a-z-]+)\s*:\s*(.*?)\s*$/i.exec(line);
