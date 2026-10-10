@@ -62,5 +62,7 @@ assert.deepEqual(previewImageFailures([{ src: '/approved.webp', complete: true, 
 assert.match(previewImageFailures([{ src: '/broken.webp', complete: true, naturalWidth: 0 }]).join('; '), /broken image/);
 assert.match(previewImageFailures([{ src: '/slow.webp', complete: false, naturalWidth: 0 }]).join('; '), /did not finish/);
 assert.match(previewImageFailures([{ src: '', complete: true, naturalWidth: 0 }]).join('; '), /no resolved source/);
-assert.equal(cases.length + 2 + navigationCases.length + 4, 30);
-console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=30');
+assert.deepEqual(previewImageFailures([{ src: '/decorative.webp', complete: true, naturalWidth: 500, hasAlt: true }]), []);
+assert.match(previewImageFailures([{ src: '/unlabelled.webp', complete: true, naturalWidth: 500, hasAlt: false }]).join('; '), /missing alt attribute/);
+assert.equal(cases.length + 2 + navigationCases.length + 5, 31);
+console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=31');

@@ -177,7 +177,8 @@ async function main() {
               Array.from(document.images).map(image => ({
                 src: image.currentSrc || image.src,
                 complete: image.complete,
-                naturalWidth: image.naturalWidth
+                naturalWidth: image.naturalWidth,
+                hasAlt: image.hasAttribute('alt')
               }))
             );
             const imageFailures = previewImageFailures(imageEvidence);

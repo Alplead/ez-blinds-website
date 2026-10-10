@@ -28,6 +28,8 @@ export function previewImageFailures(images) {
       failures.push(`image did not finish loading: ${image.src}`);
     } else if (!(image.naturalWidth > 0)) {
       failures.push(`broken image: ${image.src}`);
+    } else if (image.hasAlt === false) {
+      failures.push(`image missing alt attribute: ${image.src}`);
     }
   }
   return failures;
