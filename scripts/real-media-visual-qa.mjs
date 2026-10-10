@@ -23,7 +23,8 @@ const routes = [
 const viewports = [
   ['desktop', { width: 1440, height: 900 }],
   ['tablet', { width: 834, height: 1112 }],
-  ['mobile', { width: 390, height: 844 }]
+  ['mobile', { width: 390, height: 844 }],
+  ['small-mobile', { width: 320, height: 700 }]
 ];
 
 await fs.mkdir(output, { recursive: true });
@@ -88,6 +89,11 @@ try {
 
         const seenGallerySources = new Set();
         for (let i = 0; i < count; i += 1) {
+          // Gallery media must remain lazy while the hero is prioritised.
+          // The readiness helper scrolls and decodes before evaluating the image.
+          if (await gallery.nth(i).getAttribute('loading') !== 'lazy') {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} should be lazy-loaded`);
+          }
           const state = await inspectMediaImage(gallery.nth(i));
           if (!state.complete || state.naturalWidth <= 0 || state.naturalHeight <= 0) {
             failures.push(`${viewportName} ${name}: gallery image ${i + 1} failed to load`);

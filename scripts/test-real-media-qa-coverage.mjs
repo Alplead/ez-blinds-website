@@ -22,4 +22,10 @@ assert.match(qa, /reducedMotion: 'reduce'/,
   'real-media QA must request reduced-motion browser contexts');
 assert.match(qa, /document\.documentElement\.classList\.contains\('ezb-motion-ready'\)/,
   'real-media QA must verify reduced-motion is honoured on each route');
-console.log('EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=6');
+assert.match(qa, /\['small-mobile', \{ width: 320, height: 700 \}\]/,
+  'real-media QA must cover narrow 320px mobile screens');
+assert.match(qa, /gallery\.nth\(i\)\.getAttribute\('loading'\) !== 'lazy'/,
+  'real-media QA must reject eager-loaded galleries');
+assert.match(qa, /const state = await inspectMediaImage\(gallery\.nth\(i\)\)/,
+  'real-media QA must decode lazy-loaded images before asserting readiness');
+console.log('EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=9');

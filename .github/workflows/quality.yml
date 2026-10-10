@@ -152,7 +152,7 @@ jobs:
         run: |
           node --check scripts/test-real-media-qa-coverage.mjs
           node scripts/test-real-media-qa-coverage.mjs | tee /tmp/media-qa-coverage.log
-          grep -q 'EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=6' /tmp/media-qa-coverage.log
+          grep -q 'EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=9' /tmp/media-qa-coverage.log
 
       - name: Test lazy-media visual QA readiness
         run: |
