@@ -34,6 +34,30 @@ export function mediaImageSourceFailure(src, baseUrl) {
         image.origin !== base.origin || image.username || image.password) {
       return 'image source must use the verified same-origin HTTP(S) host';
     }
+    // Decode bounded layers of escaping before trusting a WordPress upload path.
+    // Approved media names may contain encoded spaces/parentheses, but a
+    // proxy must never be able to reveal a hidden separator or traversal.
+    let decodedPath = image.pathname;
+    for (let pass = 0; pass < 8; pass += 1) {
+      if (/%(?:2f|5c|00)/i.test(decodedPath) ||
+          /[\\\u0000?#]/.test(decodedPath) ||
+          decodedPath.split('/').some(segment => segment === '..' || segment === '.')) {
+        return 'image source has unsafe encoded path';
+      }
+      if (!decodedPath.includes('%')) break;
+      let next;
+      try {
+        next = decodeURIComponent(decodedPath);
+      } catch {
+        return 'image source has malformed percent encoding';
+      }
+      if (next === decodedPath) return 'image source has unsafe encoded path';
+      decodedPath = next;
+    }
+    if (decodedPath.includes('%') || /[\\\u0000?#]/.test(decodedPath) ||
+        decodedPath.split('/').some(segment => segment === '..' || segment === '.')) {
+      return 'image source has unsafe encoded path';
+    }
     if (!image.pathname.startsWith('/wp-content/uploads/') || image.pathname.endsWith('/')) {
       return 'image source must be a WordPress uploads attachment';
     }
