@@ -38,8 +38,19 @@ jobs:
           # GitHub-hosted runners share an unauthenticated Docker Hub pull quota.
           # ECR's Docker Official Images mirror avoids relying on that quota.
           for image in mariadb:11 wordpress:7.1-php8.3-apache wordpress:cli; do
-            docker pull "public.ecr.aws/docker/library/$image"
-            docker tag "public.ecr.aws/docker/library/$image" "$image"
+            loaded=0
+            for attempt in 1 2 3; do
+              if docker pull "public.ecr.aws/docker/library/$image"; then
+                docker tag "public.ecr.aws/docker/library/$image" "$image"
+                loaded=1
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep "$((attempt * 12))"; fi
+            done
+            if [ "$loaded" -ne 1 ]; then
+              echo "::warning::ECR unavailable for $image; trying Docker Hub"
+              docker pull "$image"
+            fi
           done
 
       - name: Start the same Compose stack used by Codespaces
