@@ -50,6 +50,24 @@ function decodeHref(value) {
     .trim();
 }
 
+function isDevelopmentTransportKey(key) {
+  // URLSearchParams decodes one layer; reject bounded nested encodings too.
+  // This crawler must not treat an encoded development route as public.
+  let normalized = key;
+  for (let pass = 0; pass <= 2; pass += 1) {
+    if (normalized.toLowerCase() === 'ezb_page') return true;
+    if (pass === 2) break;
+    try {
+      const decoded = decodeURIComponent(normalized);
+      if (decoded === normalized) break;
+      normalized = decoded;
+    } catch {
+      break;
+    }
+  }
+  return false;
+}
+
 function shouldSkip(url) {
   return (
     url.pathname.startsWith('/wp-admin/') ||
@@ -187,7 +205,7 @@ while (queue.length) {
 
     if (url.origin !== base.origin || shouldSkip(url)) continue;
 
-    if ([...url.searchParams.keys()].some(key => key.toLowerCase() === 'ezb_page')) {
+    if ([...url.searchParams.keys()].some(key => isDevelopmentTransportKey(key))) {
       devTransportLinks.push(`${href} -> ${url.pathname}${url.search}`);
       continue;
     }
