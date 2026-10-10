@@ -32,8 +32,8 @@ export function mediaImageSourceFailure(src, baseUrl) {
   // traversal into an apparently valid uploads path.
   const source = src.trim();
   if (source.includes('\\')) return 'image source has unsafe encoded path';
-  const rawPath = source.replace(/^(?:[a-z][a-z\\d+.-]*:)?\\/\\/[^/?#]*/i, '').split(/[?#]/, 1)[0];
-  if (rawPath.split('/').some(segment => /^(?:\\.|%2e){1,2}$/i.test(segment))) {
+  const rawPath = source.replace(/^(?:[a-z][a-z\d+.-]*:)?\/\/[^/?#]*/i, '').split(/[?#]/, 1)[0];
+  if (rawPath.split('/').some(segment => /^(?:\.|%2e){1,2}$/i.test(segment))) {
     return 'image source has unsafe encoded path';
   }
   try {
