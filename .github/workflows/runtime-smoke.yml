@@ -1110,7 +1110,8 @@ jobs:
       - name: Verify actual theme asset paths and first-party template shortcodes
         shell: bash
         run: |
-          set -euo pipefail
+          # Verbose only for public local HTML/CSS evidence; no credentials.
+          set -euxo pipefail
           curl -fsS http://127.0.0.1:8080/ -o /tmp/ezb-asset-path-qa.html
 
           # A mere style.css mention is insufficient: its absolute URL must
