@@ -57,6 +57,13 @@ jobs:
           node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
           grep -q 'EZB_SITE_MOTION_TEST_PASS cases=4' /tmp/site-motion.log
 
+      - name: Validate real-photo editorial design and motion safety
+        run: |
+          node --check wp-content/themes/ezb-theme/assets/js/editorial.js
+          node --check scripts/test-editorial-visuals.mjs
+          node scripts/test-editorial-visuals.mjs | tee /tmp/editorial-design.log
+          grep -q 'EZB_EDITORIAL_ART_DIRECTION_TEST_PASS' /tmp/editorial-design.log
+
       - name: Guard narrow mobile layout and deferred interaction script
         run: |
           node --check scripts/test-mobile-speed-guard.mjs
