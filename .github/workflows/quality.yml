@@ -48,7 +48,7 @@ jobs:
           node --check scripts/preview-render-guard.mjs
           node --check scripts/test-preview-render-guard.mjs
           node scripts/test-preview-render-guard.mjs | tee /tmp/preview-render-guard.log
-          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=31' /tmp/preview-render-guard.log
+          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=34' /tmp/preview-render-guard.log
 
       - name: Test reduced-motion preference changes
         run: |

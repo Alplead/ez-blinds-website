@@ -10,7 +10,8 @@ export function previewNavigationFailure(requestedUrl, finalUrl, redirected = fa
         actual.pathname !== requested.pathname ||
         actual.search !== requested.search || actual.hash !== requested.hash ||
         actual.username || actual.password) {
-      return `unexpected navigation to ${actual.href}`;
+      // Avoid echoing Basic-auth userinfo, signed query strings or fragments in CI logs.
+      return 'unexpected navigation (redirect, origin, route or URL credentials)';
     }
     return '';
   } catch {
@@ -21,15 +22,18 @@ export function previewNavigationFailure(requestedUrl, finalUrl, redirected = fa
 // A screenshot can appear correct even if one or more actual <img> assets fail.
 export function previewImageFailures(images) {
   const failures = [];
-  for (const image of images) {
+  for (const [index, image] of images.entries()) {
+    // Identify a broken image by DOM order, never by an untrusted URL that may
+    // contain Basic-auth credentials, signed query parameters or private data.
+    const label = `image ${index + 1}`;
     if (!image.src) {
-      failures.push('image has no resolved source');
+      failures.push(`${label} has no resolved source`);
     } else if (!image.complete) {
-      failures.push(`image did not finish loading: ${image.src}`);
+      failures.push(`${label} did not finish loading`);
     } else if (!(image.naturalWidth > 0)) {
-      failures.push(`broken image: ${image.src}`);
+      failures.push(`broken ${label}`);
     } else if (image.hasAlt === false) {
-      failures.push(`image missing alt attribute: ${image.src}`);
+      failures.push(`${label} missing alt attribute`);
     }
   }
   return failures;

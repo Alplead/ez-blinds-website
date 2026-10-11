@@ -64,5 +64,24 @@ assert.match(previewImageFailures([{ src: '/slow.webp', complete: false, natural
 assert.match(previewImageFailures([{ src: '', complete: true, naturalWidth: 0 }]).join('; '), /no resolved source/);
 assert.deepEqual(previewImageFailures([{ src: '/decorative.webp', complete: true, naturalWidth: 500, hasAlt: true }]), []);
 assert.match(previewImageFailures([{ src: '/unlabelled.webp', complete: true, naturalWidth: 500, hasAlt: false }]).join('; '), /missing alt attribute/);
-assert.equal(cases.length + 2 + navigationCases.length + 5, 31);
-console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=31');
+const sensitiveNavigation = previewNavigationFailure(
+  requestedRoute,
+  'https://viewer:synthetic@preview.example.test/contact/?token=synthetic#synthetic'
+);
+assert.match(sensitiveNavigation, /unexpected navigation/);
+assert.doesNotMatch(sensitiveNavigation, /viewer|synthetic|token=/);
+const sensitiveImageFailure = previewImageFailures([{
+  src: 'https://viewer:synthetic@preview.example.test/image.webp?token=synthetic',
+  complete: true,
+  naturalWidth: 0
+}]).join('; ');
+assert.match(sensitiveImageFailure, /broken image 1/);
+assert.doesNotMatch(sensitiveImageFailure, /viewer|synthetic|token=/);
+const numberedImageFailure = previewImageFailures([
+  { src: '/ok.webp', complete: true, naturalWidth: 100, hasAlt: true },
+  { src: 'https://preview.example.test/slow.webp?token=synthetic', complete: false, naturalWidth: 0 }
+]).join('; ');
+assert.match(numberedImageFailure, /image 2 did not finish loading/);
+assert.doesNotMatch(numberedImageFailure, /synthetic|token=/);
+assert.equal(cases.length + 2 + navigationCases.length + 5 + 3, 34);
+console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=34');
