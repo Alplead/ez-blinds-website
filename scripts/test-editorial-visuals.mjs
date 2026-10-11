@@ -30,6 +30,8 @@ const required = [
   [js, 'mouseenter', 'Pause on hover'],
   [js, 'focusin', 'Pause for keyboard interaction'],
   [js, 'requestAnimationFrame', 'Bound scroll work'],
+  [js, 'toggle.disabled = motionBlocked', 'Autoplay control disabled when motion is blocked'],
+  [js, 'reduced.matches || slides.length < 2', 'Disabled control for reduced-motion or a single slide'],
   [functions, "'ezb-editorial-motion'", 'JS enqueued'],
   [functions, "'ezb-editorial'", 'CSS enqueued'],
 ];
