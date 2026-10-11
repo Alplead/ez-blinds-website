@@ -199,6 +199,12 @@ jobs:
           node scripts/test-media-image-readiness.mjs | tee /tmp/media-image-readiness.log
           grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=39' /tmp/media-image-readiness.log
 
+      - name: Reject uncommitted, untracked and symlinked release sources
+        run: |
+          bash -n scripts/test-release-source-guard.sh
+          bash scripts/test-release-source-guard.sh | tee /tmp/release-source-guard.log
+          grep -q 'EZB_RELEASE_SOURCE_GUARD_TEST_PASS cases=7' /tmp/release-source-guard.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
