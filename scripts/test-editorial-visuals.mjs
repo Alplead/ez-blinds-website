@@ -16,7 +16,7 @@ const required = [
   [php, "'ezb_editorial_interlude'", 'Large editorial photo chapter'],
   [php, "ezb_find_attachment_by_basename", 'Resolve photos from WordPress Media Library'],
   [php, "wp_get_attachment_image", 'WordPress image sources'],
-  [php, "'loading'       => 'lazy'", 'Non-hero images lazy loaded'],
+  [php, "'loading' => 'lazy'", 'Non-hero images lazy loaded'],
   [home, '[ezb_editorial_hero]', 'Home must use curated image hero'],
   [home, '[ezb_editorial_interlude photo="flyscreen"]', 'Flyscreen chapter'],
   [home, '[ezb_editorial_interlude photo="roller"]', 'Roller chapter'],
