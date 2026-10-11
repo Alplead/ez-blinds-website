@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const script = fileURLToPath(new URL('./host-readiness.mjs', import.meta.url));
 const routes = new Set(['/', '/products/', '/roller-blinds/', '/sheer-curtains/', '/plantation-shutters/', '/retractable-flyscreens/', '/motorised-blinds/', '/projects/', '/advice/', '/blog/', '/about/', '/service-areas/', '/contact/', '/projects/prototype-roller-blinds-project/', '/roller-blinds-blockout-vs-sunscreen/']);
 
-async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', leakText = '<a href="/?ezb_page=roller-blinds">dev</a>', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', robotsTextOverride = '', expectRedirects = false, expectedError = '' }) {
+async function check({ name, indexable = false, allowDevTransport = false, missingNoindexPath = '', forceNoindexPath = '', leakPath = '', leakText = '<a href="/?ezb_page=roller-blinds">dev</a>', markerPath = '', markerText = 'Prototype project', redirectPath = '', badRedirectQueryPath = '', badGonePath = '', missingPostSitemap = false, redirectRobots = false, redirectSitemap = false, badIndexedCanonicalPath = '', badCanonicalUserinfoPath = '', badIndexedCanonicalUserinfoPath = '', robotsTextOverride = '', expectRedirects = false, expectedError = '' }) {
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -58,7 +58,12 @@ async function check({ name, indexable = false, allowDevTransport = false, missi
       res.writeHead(404); res.end('not found'); return;
     }
     const noindex = forceNoindexPath === pathname || (!indexable && missingNoindexPath !== pathname);
-    const html = '<link rel="canonical" href="' + origin + (badIndexedCanonicalPath === pathname ? '/wrong-article/' : pathname) + '">' +
+    const canonical = new URL(badIndexedCanonicalPath === pathname ? '/wrong-article/' : pathname, origin);
+    if (badCanonicalUserinfoPath === pathname || badIndexedCanonicalUserinfoPath === pathname) {
+      canonical.username = 'viewer';
+      canonical.password = 'synthetic';
+    }
+    const html = '<link rel="canonical" href="' + canonical.href + '">' +
       '<meta name="robots" content="' + (noindex ? 'noindex, nofollow' : 'index, follow') + '">' +
       (leakPath === pathname ? leakText : '') +
       (markerPath === pathname ? '<div>' + markerText + '</div>' : '');
@@ -108,6 +113,8 @@ await check({ name: 'indexable starter blog in sitemap rejected', indexable: tru
 await check({ name: 'indexable starter blog dev transport rejected', indexable: true, leakPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed development transport leak' });
 await check({ name: 'indexable missing Post sitemap rejected', indexable: true, missingPostSitemap: true, expectedError: 'sitemap index missing required content sitemap: /wp-sitemap-posts-post-1.xml' });
 await check({ name: 'indexable starter blog wrong canonical rejected', indexable: true, badIndexedCanonicalPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed content canonical mismatch' });
+await check({ name: 'staging canonical URL userinfo rejected', badCanonicalUserinfoPath: '/contact/', expectedError: '/contact/ canonical contains URL credentials' });
+await check({ name: 'indexable indexed article canonical URL userinfo rejected', indexable: true, badIndexedCanonicalUserinfoPath: '/roller-blinds-blockout-vs-sunscreen/', expectedError: '/roller-blinds-blockout-vs-sunscreen/ indexed content canonical contains URL credentials' });
 await check({ name: 'all verified 301 and retired 410 routes', expectRedirects: true });
 await check({ name: 'legacy 301 with query rejected', expectRedirects: true, badRedirectQueryPath: '/portfolio/', expectedError: '/portfolio/ -> expected Location' });
 await check({ name: 'retired URL redirect rejected', expectRedirects: true, badGonePath: '/roman-blinds/', expectedError: '/roman-blinds/ -> expected HTTP 410' });
@@ -147,4 +154,4 @@ await check({ name: 'indexable named percent entity rejected', indexable: true, 
 await check({ name: 'indexable mixed numeric and named entities rejected', indexable: true, leakPath: '/products/', leakText: '<a href="/?ezb&#95;page&equals;products">Dev</a>', expectedError: '/products/ leaked development' });
 await check({ name: 'staging comment-only line preserves wildcard group', robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /' });
 await check({ name: 'indexable comment-only line preserves wildcard block', indexable: true, robotsTextOverride: 'User-agent: *\n# guidance for crawlers\nDisallow: /', expectedError: '/robots.txt blocks the entire site' });
-console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=60');
+console.log('EZB_HOST_READINESS_GUARD_TEST_PASS cases=62');

@@ -180,7 +180,10 @@ for (const path of canonicalRoutes) {
   } else {
     const canonical = new URL(canonicals[0], finalUrl);
     const expected = new URL(finalUrl.pathname, base);
-    if (
+    // Userinfo does not change origin. Never print credential-bearing URLs.
+    if (canonical.username || canonical.password) {
+      failures.push(`${path} canonical contains URL credentials`);
+    } else if (
       canonical.origin !== base.origin ||
       canonical.pathname !== expected.pathname ||
       canonical.search ||
@@ -347,7 +350,9 @@ if (expectIndexable) {
           } else {
             try {
               const indexedCanonical = new URL(indexedCanonicals[0], pageUrl);
-              if (indexedCanonical.href !== pageUrl.href) {
+              if (indexedCanonical.username || indexedCanonical.password) {
+                failures.push(pageUrl.pathname + ' indexed content canonical contains URL credentials');
+              } else if (indexedCanonical.href !== pageUrl.href) {
                 failures.push(pageUrl.pathname + ' indexed content canonical mismatch: ' + indexedCanonical.href);
               }
             } catch {
