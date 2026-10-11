@@ -45,4 +45,62 @@ assert.ok(php.includes("return ''; // Missing photo:"), 'Unknown media should fa
 const imageCount = [...php.matchAll(/'file'\s*=>/g)].length;
 assert.equal(imageCount, 4, 'Only four curated and registry-grounded slide sources');
 
+
+import { runInNewContext } from 'node:vm';
+
+// Exercise the real carousel script against a small DOM simulation, not just
+// a substring assertion. Reduced-motion changes must update the control.
+function exerciseMotionPreference(initialReduced) {
+  const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
+  const control = () => ({
+    disabled: false, textContent: '', handlers: {}, attributes: {},
+    addEventListener(event, callback) { this.handlers[event] = callback; },
+    setAttribute(name, value) { this.attributes[name] = value; }
+  });
+  const toggle = control();
+  const previous = control();
+  const next = control();
+  const slides = Array.from({ length: 4 }, () => {
+    const slide = { active: false, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
+      querySelector() { return { loading: 'lazy' }; } };
+    slide.classList = { toggle(_name, active) { slide.active = active; } };
+    return slide;
+  });
+  const selectors = {
+    '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next
+  };
+  const hero = {
+    querySelectorAll() { return slides; },
+    querySelector(selector) { return selectors[selector] || null; },
+    classList: { toggle() {} }, addEventListener() {}
+  };
+  let timerStarts = 0;
+  const window = {
+    matchMedia() { return media; },
+    setInterval() { return ++timerStarts; },
+    clearInterval() {}
+  };
+  const document = {
+    hidden: false, querySelector() { return hero; },
+    querySelectorAll() { return []; }, addEventListener() {}
+  };
+  runInNewContext(js, { window, document });
+  assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
+  assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
+  assert.equal(slides[0].active, true, 'First image must be visible');
+  next.handlers.click();
+  assert.equal(slides[1].active, true, 'Manual Next works without autoplay');
+  previous.handlers.click();
+  assert.equal(slides[0].active, true, 'Manual Previous works without autoplay');
+  media.matches = !initialReduced;
+  media.change();
+  assert.equal(toggle.disabled, !initialReduced, 'Control must react to live preference changes');
+  if (initialReduced) {
+    assert.ok(timerStarts > 0, 'Autoplay can resume when reduced-motion preference is lifted');
+  }
+}
+exerciseMotionPreference(true);
+exerciseMotionPreference(false);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=2');
+
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
