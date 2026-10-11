@@ -66,8 +66,8 @@ add_shortcode(
 				'full',
 				false,
 				array(
-					'class'         => 'ezb-cinema__image',
-					'alt'           => '',
+					'class'         => $active ? 'ezb-cinema__image ezb-media-slot__image' : 'ezb-cinema__image',
+					'alt'           => $active ? 'Full-height sheer curtains in a bright living area' : '',
 					'sizes'         => '100vw',
 					'loading'       => $active ? 'eager' : 'lazy',
 					'fetchpriority' => $active ? 'high' : 'auto',
