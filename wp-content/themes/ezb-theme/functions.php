@@ -48,3 +48,37 @@ add_action(
 		);
 	}
 );
+
+/**
+ * Load photo-led editorial layout after the foundation stylesheet, keeping
+ * media URLs in WordPress rather than the public source repository.
+ */
+add_action(
+	'wp_enqueue_scripts',
+	function () {
+		$css_file = get_stylesheet_directory() . '/assets/css/editorial.css';
+		$js_file  = get_stylesheet_directory() . '/assets/js/editorial.js';
+
+		if ( file_exists( $css_file ) ) {
+			wp_enqueue_style(
+				'ezb-editorial',
+				get_stylesheet_directory_uri() . '/assets/css/editorial.css',
+				array( 'ezb-theme-style' ),
+				(string) filemtime( $css_file )
+			);
+		}
+		if ( file_exists( $js_file ) ) {
+			wp_enqueue_script(
+				'ezb-editorial-motion',
+				get_stylesheet_directory_uri() . '/assets/js/editorial.js',
+				array( 'ezb-theme-site' ),
+				(string) filemtime( $js_file ),
+				array(
+					'strategy'  => 'defer',
+					'in_footer' => true,
+				)
+			);
+		}
+	},
+	20
+);
