@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#17201d">
+<title>EZ2 T2 原型配色研究｜B 暖米棕金邊</title>
+<style>
+:root{--cream:#f1ede5;--ink:#1b2420;--gold:#c5a57b;--caption:#ebe6dc;--display:Georgia,"Times New Roman",serif;--sans:Arial,Helvetica,sans-serif;--header-h:76px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;color:var(--ink);background:var(--cream);font-family:var(--sans);font-size:16px}
+button,a{font:inherit}
+button{cursor:pointer}
+a{color:inherit}
+img{display:block;width:100%;height:100%;object-fit:cover}
+:focus-visible{outline:3px solid #cda767;outline-offset:4px}
+.topnote{background:#27372f;color:white;padding:9px 2rem;font-size:11px;text-transform:uppercase;letter-spacing:.12em;text-align:center}
+.site-header{height:var(--header-h);display:flex;justify-content:space-between;align-items:center;padding:0 clamp(21px,4.5vw,72px);background:#fafaf7;color:#2b302f;z-index:20;position:relative;gap:24px}
+.brand{font-family:var(--display);font-size:25px;letter-spacing:-.05em;font-weight:700;white-space:nowrap;text-decoration:none}
+.brand b{color:#963e2f;font-family:var(--sans);font-size:31px}
+.nav{display:flex;gap:clamp(14px,2vw,33px);align-items:center}
+.nav a{text-decoration:none;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.nav .quote-small{padding:13px 18px;background:#25352d;color:white;letter-spacing:.04em}
+.hero{position:relative;height:calc(100svh - var(--header-h) - 35px);min-height:590px;max-height:1040px;overflow:hidden;background:#1e2829;color:white;isolation:isolate}
+.hero-slide{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity 1.2s ease,visibility 1.2s ease}
+.hero-slide.active{opacity:1;visibility:visible}
+.hero-slide img{object-position:center;transform:scale(1.02)}
+.hero-slide.active img{animation:slowzoom 6.5s linear both}
+.hero.paused .hero-slide img{animation-play-state:paused}
+@keyframes slowzoom{from{transform:scale(1.02)}to{transform:scale(1.10)}}
+.hero-shade{position:absolute;z-index:1;inset:0;background:linear-gradient(90deg,rgba(15,22,19,.65),rgba(14,22,20,.28) 60%,rgba(16,24,21,.07)),linear-gradient(0deg,rgba(16,20,18,.45),transparent 55%)}
+.hero-inner{position:absolute;z-index:2;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:clamp(30px,7vw,120px);max-width:1100px}
+.eyebrow{font-size:12px;letter-spacing:.24em;text-transform:uppercase;font-weight:700;color:#eac99e}
+.hero h1{font-family:var(--display);font-weight:400;line-height:1.08;letter-spacing:-.037em;font-size:clamp(56px,7vw,122px);margin:22px 0 17px;max-width:12ch}
+.hero-copy{max-width:550px;font-size:clamp(15px,1.5vw,20px);line-height:1.65;color:#f6f3ef}
+.cta-row{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin-top:31px}
+.cta{display:inline-flex;align-items:center;justify-content:center;padding:17px 24px;min-height:50px;text-decoration:none;text-transform:uppercase;letter-spacing:.09em;font-size:11px;font-weight:700}
+.cta.primary{background:#e5ccaa;color:#1f2922}
+.cta.ghost{border:1px solid #d9d6d0;color:white}
+.hero-footer{position:absolute;z-index:3;bottom:26px;left:clamp(30px,7vw,120px);right:clamp(30px,7vw,120px);display:flex;align-items:center;justify-content:space-between;gap:20px;color:#fff}
+.hero-control{display:flex;gap:7px;align-items:center}
+.hero-control button{min-width:39px;min-height:39px;border:1px solid #ffffff91;background:#111c17a2;color:white;font-size:16px}
+.hero-control .counter{margin-right:12px;font-size:12px;letter-spacing:.2em}
+.hero-tiny{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:#eee6d8}
+.section{padding:clamp(70px,9vw,145px) clamp(26px,7vw,120px)}
+.section-head{max-width:1400px;margin:0 auto}
+.section h2{font-family:var(--display);font-size:clamp(42px,5.2vw,83px);font-weight:400;line-height:1.13;letter-spacing:-.04em;margin:15px 0 24px}
+.section-sub{font-size:17px;line-height:1.75;max-width:620px;color:#526058}
+.introduction{display:grid;grid-template-columns:1fr 1fr;gap:9vw;align-items:start;max-width:1400px;margin:auto}
+.introduction h2{max-width:11ch}
+.introduction p{padding-top:35px}
+.image-band{height:72svh;min-height:510px;position:relative;isolation:isolate;background:#1b2924;color:#fff;display:flex;align-items:end;overflow:hidden}
+.image-band .backdrop{position:absolute;inset:-6% 0;background-position:center;background-size:cover;background-attachment:fixed}
+.image-band.screen .backdrop{background-image:url('https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=85')}
+.image-band.sheer .backdrop{background-image:url('https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1800&q=85')}
+.image-band::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#121d19e6,transparent 72%)}
+.band-content{position:relative;z-index:2;padding:clamp(32px,7vw,115px);max-width:1200px}
+.band-content h2{font-family:var(--display);font-weight:400;font-size:clamp(49px,6.4vw,98px);line-height:1.06;max-width:14ch;letter-spacing:-.035em;margin:13px 0 20px}
+.band-content a{color:white;display:inline-block;margin-top:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;text-decoration:none;border-bottom:1px solid white;padding-bottom:10px;font-size:12px}
+.products{background:#f7f6f2}
+.product-heading{max-width:1400px;margin:0 auto 50px;display:flex;justify-content:space-between;align-items:end;gap:25px}
+.product-heading h2{max-width:12ch}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:clamp(12px,2vw,28px);max-width:1400px;margin:auto}
+.tile{position:relative;overflow:hidden;min-height:300px;background:#c9c8bf;text-decoration:none;color:white}
+.tile img{transition:transform .9s cubic-bezier(.2,.7,.25,1)}
+.tile:hover img{transform:scale(1.055)}
+.tile:after{position:absolute;content:"";inset:0;background:linear-gradient(0deg,#17211da8,transparent 58%);pointer-events:none}
+.tile-name{position:absolute;z-index:2;bottom:28px;left:32px;font-size:clamp(20px,2.5vw,35px);font-family:var(--display);line-height:1.12;text-shadow:0 1px 9px #0005}
+.tile span{display:block;font-family:var(--sans);font-size:11px;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px}
+.tile:nth-child(1){grid-column:span 7;height:610px}
+.tile:nth-child(2){grid-column:span 5;height:490px;margin-top:120px}
+.tile:nth-child(3){grid-column:span 5;height:470px}
+.tile:nth-child(4){grid-column:span 7;height:590px}
+.quote-panel{background:#25342d;color:#f3e8da;text-align:center;padding:clamp(90px,10vw,150px) 20px}
+.quote-panel h2{font-family:var(--display);font-weight:400;font-size:clamp(40px,6vw,86px);max-width:850px;margin:10px auto 28px;line-height:1.06}
+.footer{background:#171d19;color:#dedbd4;padding:60px clamp(24px,7vw,120px);display:flex;align-items:start;justify-content:space-between;gap:25px}
+.footer small{font-size:12px;color:#b3b0a7}
+.concept-floater{position:fixed;bottom:16px;right:16px;z-index:60;display:flex;align-items:center;gap:7px;background:#f8f5eefa;padding:8px;border:1px solid #c9bdae;box-shadow:0 8px 40px #0003;border-radius:6px}
+.concept-floater button{border:0;padding:10px 12px;font-weight:700;background:#f0ece5;color:#354238;font-size:11px;white-space:nowrap}
+.concept-floater button[aria-pressed=true]{background:#2e463a;color:#fff}
+.concept-floater .tip{font-size:11px;padding:0 12px;max-width:170px;line-height:1.35}
+.note{max-width:1400px;margin:0 auto;font-size:12px;color:#647168;font-style:italic}
+.mode-t2 .hero h1{font-family:var(--sans);font-size:clamp(47px,5.5vw,82px);font-weight:500;letter-spacing:-.035em}
+.mode-t2 .hero-inner{max-width:1150px}
+.mode-t2 .image-band .band-content h2{font-family:var(--sans);font-weight:400}
+.mode-t2 .tile{border-radius:0}
+.mode-t2 .hero-shade{background:linear-gradient(90deg,rgba(16,22,21,.47),rgba(16,22,21,.17) 70%)}
+@media(max-width:800px){:root{--header-h:65px}.site-header{padding:0 20px}.nav{gap:14px}.nav a:not(.quote-small){display:none}.hero{min-height:550px;height:calc(93svh - 65px - 35px)}.hero-inner{padding:40px 24px 80px;justify-content:end}.hero h1{font-size:clamp(45px,10vw,68px)}.hero-copy{font-size:15px}.hero-shade{background:linear-gradient(0deg,rgba(12,22,18,.86) 0%,rgba(12,22,18,.30) 86%)}.hero-footer{left:24px;right:24px;bottom:17px}.hero-tiny{display:none}.introduction{grid-template-columns:1fr;gap:0}.introduction p{padding-top:0}.image-band{height:60svh;min-height:490px}.image-band .backdrop{background-attachment:scroll}.product-heading{display:block}.grid{grid-template-columns:1fr 1fr;gap:13px}.tile:nth-child(n){grid-column:span 1;height:350px;margin-top:0}.tile:nth-child(1),.tile:nth-child(4){grid-column:span 2;height:430px}.concept-floater{left:10px;right:10px;bottom:10px;justify-content:center}.concept-floater .tip{display:none}.footer{flex-direction:column}.image-band .backdrop{background-position:center}}
+@media(max-width:520px){.grid{display:block}.tile:nth-child(n){height:380px;margin-bottom:15px}.hero h1{font-size:49px}.hero-copy{font-size:14px}.cta{padding:14px 16px}.hero-footer{bottom:10px}.hero{min-height:620px}.hero-inner{padding-bottom:105px}.concept-floater button{flex:1}.topnote{font-size:9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.hero-slide{transition:none}.hero-slide.active img{animation:none}.image-band .backdrop{background-attachment:scroll}.tile img{transition:none}}
+
+/* EZ2 T2-first color study. Identical layout + images in both schemes. */
+body.palette-cool {
+  --cream:#F2F7F9; --ink:#31424B; --gold:#AFC6D2; --caption:#E6EFF3;
+}
+body.palette-warm {
+  --cream:#FAF7F0; --ink:#473D32; --gold:#BDA778; --caption:#F5ECE0;
+}
+body.palette-cool .topnote{background:#3C5968;color:#F5FAFC}
+body.palette-warm .topnote{background:#665446;color:#FFF8EE}
+body.palette-cool .site-header{background:#FCFEFF;color:#304550;border-bottom:1px solid #D8E5E9}
+body.palette-warm .site-header{background:#FFFDF8;color:#443A31;border-bottom:1px solid #D6C5A4}
+body.palette-cool .nav .quote-small{background:#E3EFF2;color:#2E4857;border:1px solid #C8DBE3}
+body.palette-warm .nav .quote-small{background:#F6EDE0;color:#5A4A3A;border:1px solid #BEA67C}
+body.palette-cool .brand b{color:#537180}
+body.palette-warm .brand b{color:#A17B46}
+body.palette-cool .eyebrow{color:#DDECF0}
+body.palette-warm .eyebrow{color:#FAE3BB}
+body.palette-cool .section .eyebrow{color:#65808C!important}
+body.palette-warm .section .eyebrow{color:#937748!important}
+body.palette-cool .hero-shade{background:linear-gradient(90deg,rgba(23,43,55,.59),rgba(35,62,76,.13) 72%),linear-gradient(0deg,rgba(24,48,62,.15),transparent 52%)}
+body.palette-warm .hero-shade{background:linear-gradient(90deg,rgba(48,36,27,.56),rgba(54,43,30,.12) 72%),linear-gradient(0deg,rgba(51,36,22,.15),transparent 55%)}
+body.palette-cool .cta.primary{background:#EFF7F9;color:#294452;border:1px solid #A9C5D3}
+body.palette-warm .cta.primary{background:#F4EAD9;color:#4A3B2F;border:1px solid #C4A878}
+body.palette-cool .cta.ghost{border:1px solid #CFE2EA;color:#fff}
+body.palette-warm .cta.ghost{border:1px solid #E3C99F;color:#fff}
+body.palette-cool .hero-control button{border:1px solid #C2D8E1;background:#16354499}
+body.palette-warm .hero-control button{border:1px solid #D9BF94;background:#3A291B99}
+body.palette-cool .section{background:#F2F7F9}
+body.palette-warm .section{background:#FAF7F0}
+body.palette-cool .section-sub,body.palette-cool .note{color:#5C7380}
+body.palette-warm .section-sub,body.palette-warm .note{color:#77695B}
+body.palette-cool .products{background:#E9F1F5}
+body.palette-warm .products{background:#F5EEE2}
+body.palette-cool .tile{border:1px solid #C5D9E3}
+body.palette-warm .tile{border:1px solid #BDA273}
+body.palette-cool .image-band::after{background:linear-gradient(0deg,rgba(20,46,58,.82),transparent 76%)}
+body.palette-warm .image-band::after{background:linear-gradient(0deg,rgba(49,37,26,.81),transparent 76%)}
+body.palette-cool .quote-panel{background:#DDEAF0;color:#2F4753;border-top:1px solid #B9D0D9;border-bottom:1px solid #B9D0D9}
+body.palette-warm .quote-panel{background:#F1E6D7;color:#493D32;border-top:1px solid #B9A277;border-bottom:1px solid #B9A277}
+body.palette-cool .quote-panel .eyebrow{color:#58798A}
+body.palette-warm .quote-panel .eyebrow{color:#927245}
+body.palette-cool .footer{background:#293D49;color:#E5EEF2}
+body.palette-warm .footer{background:#3B3128;color:#F0E3D0}
+body.palette-cool .footer small{color:#C1D5DE}
+body.palette-warm .footer small{color:#D3C2AC}
+body.palette-cool .concept-floater{background:#F8FCFD;border:1px solid #A4BFCD}
+body.palette-warm .concept-floater{background:#FFFBF5;border:1px solid #B9A075}
+body.palette-cool .concept-floater button{background:#E4EFF3;color:#395561}
+body.palette-warm .concept-floater button{background:#F4EBDD;color:#5D4B37}
+body.palette-cool .concept-floater button[aria-pressed=true]{background:#3A6073;color:white}
+body.palette-warm .concept-floater button[aria-pressed=true]{background:#846842;color:white}
+body.palette-cool .focus-note{background:#E6F1F5;border-color:#B6D0DD;color:#34525D}
+body.palette-warm .focus-note{background:#F9F0E3;border-color:#C3AA7E;color:#544332}
+.focus-note{padding:24px 7vw;line-height:1.7;border-top:1px solid;border-bottom:1px solid;font-size:14px}
+.focus-note strong{font-weight:700}
+.concept-floater .tip{max-width:225px}
+@media(max-width:800px){body.palette-cool .hero-shade{background:linear-gradient(0deg,rgba(20,44,55,.84),rgba(20,44,55,.1) 92%)}body.palette-warm .hero-shade{background:linear-gradient(0deg,rgba(48,36,25,.84),rgba(48,36,25,.1) 92%)}}
+
+</style>
+</head>
+<body class="mode-t2 palette-warm">
+<div class="topnote">EZ2 / T2 設計語言配色對照 · 兩版照片與版型相同 · Unsplash 示意照片、非 AI 生成、非 EZ 工程照</div>
+<header class="site-header">
+<a class="brand" href="#top" aria-label="EZ Blinds and Shutters concept"><b>EZ</b> blinds &amp; shutters</a>
+<nav class="nav" aria-label="Page navigation">
+<a href="#products">Products</a><a href="#approach">Projects</a><a href="#story">Advice</a><a href="#quote" class="quote-small">Free measure &amp; quote</a>
+</nav>
+</header>
+<main id="top">
+<section class="hero" id="hero" aria-label="Photographic homepage slideshow">
+<div class="hero-slide active"><img src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&amp;fit=crop&amp;w=1900&amp;q=85" alt="" fetchpriority="high"></div>
+<div class="hero-slide"><img src="https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&amp;fit=crop&amp;w=1900&amp;q=85" alt="" loading="lazy"></div>
+<div class="hero-slide"><img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&amp;fit=crop&amp;w=1900&amp;q=85" alt="" loading="lazy"></div>
+<div class="hero-slide"><img src="https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&amp;fit=crop&amp;w=1900&amp;q=85" alt="" loading="lazy"></div>
+<div class="hero-shade"></div>
+<div class="hero-inner">
+<div class="eyebrow">Melbourne · Measure · Supply · Install</div>
+<h1 id="headline">Transforming Light<br>Elevating Style</h1>
+<p class="hero-copy" id="herocopy">Window furnishings designed around your lifestyle and the qualities of each room.</p>
+<div class="cta-row"><a href="#quote" class="cta primary">Free measure &amp; quote ↗</a><a href="#products" class="cta ghost">Explore our work</a></div>
+</div>
+<div class="hero-footer"><div class="hero-control"><span class="counter" id="count">01 / 04</span><button type="button" id="prev" aria-label="Previous image">←</button><button type="button" id="next" aria-label="Next image">→</button><button type="button" id="pause" aria-label="Pause slideshow">Ⅱ</button></div><div class="hero-tiny">T2 inspired · Slow Zoom In · Fade 1.2s</div></div>
+</section>
+<div class="focus-note"><strong>配色實驗：</strong>本頁採用 T2 的全幅主圖、照片輪播、慢速放大、文字疊圖及攝影背景敘事。A 是淡藍冷色；B 是極淡米棕與局部 1px 細金邊。切換 A／B 時，照片、版型、文字與動態完全不變。這是離線設計討論稿，不是已部署網站。</div>
+<section class="section"><div class="introduction"><div><div class="eyebrow" style="color:#806448">A quieter kind of luxury</div><h2>Make every opening feel considered.</h2></div><p class="section-sub">A home is shaped by its light, its outlook and the way people move through it. Our proposed EZ2 direction puts completed spaces and genuine products first — then gives customers a simple path to the right solution.</p></div></section>
+<section class="image-band screen" id="approach"><div class="backdrop"></div><div class="band-content"><div class="eyebrow">Chapter 01 / Openings</div><h2>Open the room.<br>Keep the comfort.</h2><a href="#products">Explore retractable screens <span aria-hidden="true">↗</span></a></div></section>
+<section class="section products" id="products"><div class="product-heading"><div><div class="eyebrow" style="color:#806448">Curated solutions</div><h2>The right treatment changes the whole room.</h2></div><p class="section-sub">An editorial image layout: one hero photograph, a secondary detail, then a different composition for the next product. Not identical framed cards.</p></div>
+<div class="grid">
+<a href="#quote" class="tile"><img loading="lazy" src="https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&amp;fit=crop&amp;w=1350&amp;q=85" alt="Illustrative interior photograph"><div class="tile-name"><span>01 / Softness &amp; light</span>Sheer Curtains</div></a>
+<a href="#quote" class="tile"><img loading="lazy" src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&amp;fit=crop&amp;w=1000&amp;q=85" alt="Illustrative modern room"><div class="tile-name"><span>02 / Contemporary privacy</span>Roller Blinds</div></a>
+<a href="#quote" class="tile"><img loading="lazy" src="https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&amp;fit=crop&amp;w=1000&amp;q=85" alt="Illustrative interior"><div class="tile-name"><span>03 / Timeless details</span>Plantation Shutters</div></a>
+<a href="#quote" class="tile"><img loading="lazy" src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&amp;fit=crop&amp;w=1350&amp;q=85" alt="Illustrative interior"><div class="tile-name"><span>04 / Air &amp; connection</span>Retractable Flyscreens</div></a>
+</div><p class="note" style="padding-top:24px">The images above are placeholders solely for discussing composition, hierarchy and movement. Product depictions and photography will be replaced with verified, approved EZ images.</p>
+</section>
+<section class="image-band sheer" id="story"><div class="backdrop"></div><div class="band-content"><div class="eyebrow">Chapter 02 / Living with light</div><h2>Texture, transparency<br>and the way daylight moves.</h2><a href="#quote">Start with your room ↗</a></div></section>
+<section class="quote-panel" id="quote"><p class="eyebrow">Let's talk about your windows</p><h2>Every great finish begins with a conversation.</h2><p style="max-width:620px;margin:0 auto 30px;line-height:1.8">Your measure-and-quote journey remains the main action. This concept does not collect messages or send real enquiries.</p><a class="cta primary" href="mailto:placeholder@example.invalid" onclick="event.preventDefault();alert('Design mockup only — no live enquiry is sent.')">Free measure &amp; quote ↗</a></section>
+</main>
+<footer class="footer"><div class="brand"><b>EZ</b> blinds &amp; shutters<br><small>EZ2 T2-inspired A/B color exploration · Melbourne</small></div><div><small>This is a standalone visual study. No client testimonials, prices or production claims are being published.</small></div></footer>
+<aside class="concept-floater" aria-label="Switch visual direction"><div class="tip">只比較配色 · 其他元素保持一致</div><button type="button" id="t2" aria-pressed="false">A · 淡藍冷色</button><button type="button" id="ez2" aria-pressed="true">B · 暖米棕金邊</button><button type="button" id="motion" aria-pressed="false">暫停特效</button></aside>
+<script>
+(function(){
+var slides=Array.from(document.querySelectorAll(".hero-slide")),hero=document.getElementById("hero"),idx=0,timer=null,paused=false;
+var reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
+function render(next){idx=(next+slides.length)%slides.length;slides.forEach(function(x,n){x.classList.toggle("active",n===idx)});document.getElementById("count").textContent=String(idx+1).padStart(2,"0")+" / 04";}
+function run(){if(timer)clearInterval(timer);hero.classList.toggle("paused",paused||reduced.matches);if(!paused&&!reduced.matches&&!document.hidden)timer=setInterval(function(){render(idx+1);},5000);document.getElementById("pause").textContent=paused?"▶":"Ⅱ";document.getElementById("motion").setAttribute("aria-pressed",String(paused));document.getElementById("motion").textContent=paused?"恢復特效":"暫停特效";}
+document.getElementById("prev").onclick=function(){render(idx-1);run()};document.getElementById("next").onclick=function(){render(idx+1);run()};document.getElementById("pause").onclick=document.getElementById("motion").onclick=function(){paused=!paused;run()};
+document.getElementById("t2").onclick=function(){document.body.classList.remove("palette-warm");document.body.classList.add("palette-cool");document.getElementById("t2").setAttribute("aria-pressed","true");document.getElementById("ez2").setAttribute("aria-pressed","false");};
+document.getElementById("ez2").onclick=function(){document.body.classList.remove("palette-cool");document.body.classList.add("palette-warm");document.getElementById("t2").setAttribute("aria-pressed","false");document.getElementById("ez2").setAttribute("aria-pressed","true");};
+document.addEventListener("visibilitychange",run);
+if(reduced.addEventListener)reduced.addEventListener("change",run);
+run();
+})();
+</script>
+</body>
+</html>
