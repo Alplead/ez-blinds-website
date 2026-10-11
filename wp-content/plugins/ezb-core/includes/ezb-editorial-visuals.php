@@ -59,8 +59,9 @@ add_shortcode(
 		}
 
 		$images = '';
-		foreach ( $slides as $index => $slide ) {
-			$active = 0 === $index;
+		$rendered_count = 0;
+		foreach ( $slides as $slide ) {
+			$active = 0 === $rendered_count;
 			$image  = wp_get_attachment_image(
 				$slide['id'],
 				'full',
@@ -77,6 +78,7 @@ add_shortcode(
 			if ( ! $image ) {
 				continue;
 			}
+			$rendered_count++;
 			$images .= sprintf(
 				'<figure class="ezb-cinema__slide%1$s" data-ezb-slide aria-hidden="%2$s">%3$s<figcaption class="ezb-cinema__slide-label">%4$s</figcaption></figure>',
 				$active ? ' is-active' : '',
@@ -87,12 +89,12 @@ add_shortcode(
 		}
 
 		$controls = '';
-		if ( count( $slides ) > 1 ) {
+		if ( $rendered_count > 1 ) {
 			$controls = sprintf(
 				'<nav class="ezb-cinema__controls" aria-label="%1$s"><button type="button" data-ezb-prev aria-label="%2$s">&#8592;</button><span class="ezb-cinema__progress" data-ezb-progress aria-live="off">01 / %3$02d</span><button type="button" data-ezb-next aria-label="%4$s">&#8594;</button><button type="button" class="ezb-cinema__pause" data-ezb-toggle aria-pressed="false">%5$s</button></nav>',
 				esc_attr__( 'Photo slideshow', 'ezb-core' ),
 				esc_attr__( 'Previous photo', 'ezb-core' ),
-				count( $slides ),
+				$rendered_count,
 				esc_attr__( 'Next photo', 'ezb-core' ),
 				esc_html__( 'Pause slideshow', 'ezb-core' )
 			);
