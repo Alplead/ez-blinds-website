@@ -2346,3 +2346,7 @@ add_filter(
 		return do_shortcode( shortcode_unautop( $content ) );
 	}
 );
+
+
+/** Curated full-bleed photos and motion-ready editorial bands. */
+require_once __DIR__ . '/includes/ezb-editorial-visuals.php';
