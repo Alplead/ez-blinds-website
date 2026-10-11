@@ -22,6 +22,9 @@
     function showSlide(index) {
       if (!slides.length) return;
       current = (index + slides.length) % slides.length;
+      // Preload the next photo while the current frame is still on screen.
+      var upcoming = slides[(current + 1) % slides.length].querySelector('img');
+      if (upcoming && upcoming.loading === 'lazy') upcoming.loading = 'eager';
       slides.forEach(function (slide, position) {
         var active = position === current;
         slide.classList.toggle('is-active', active);
