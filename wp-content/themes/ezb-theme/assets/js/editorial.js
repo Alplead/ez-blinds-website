@@ -55,8 +55,13 @@
         interval = window.setInterval(function () { showSlide(current + 1); }, intervalMs);
       }
       if (toggle) {
+        // Manual navigation remains available when autoplay is disallowed.
+        var motionBlocked = reduced.matches || slides.length < 2;
+        toggle.disabled = motionBlocked;
         toggle.setAttribute('aria-pressed', paused ? 'true' : 'false');
-        toggle.textContent = paused ? 'Play slideshow' : 'Pause slideshow';
+        toggle.textContent = motionBlocked
+          ? 'Automatic slideshow unavailable'
+          : (paused ? 'Play slideshow' : 'Pause slideshow');
       }
     }
 
