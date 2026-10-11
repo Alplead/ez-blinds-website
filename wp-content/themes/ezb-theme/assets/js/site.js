@@ -40,6 +40,11 @@
 
 	// Never autoplay from HTML before reduced-motion preference is known.
 	function startAutoplayVideos() {
+		// A background tab must not start or resume autoplay.
+		if (document.hidden) {
+			stopAutoplayVideos();
+			return;
+		}
 		videos.forEach(function (video) {
 			video.autoplay = true;
 			if (typeof video.play !== 'function') return;
@@ -62,6 +67,17 @@
 		stopAutoplayVideos();
 		// Reveal all animated items when reduced motion is enabled mid-session.
 		document.documentElement.classList.remove('ezb-motion-ready');
+	}
+
+	// Visibility changes must never override the reduced-motion preference.
+	if (videos.length && typeof document.addEventListener === 'function') {
+		document.addEventListener('visibilitychange', function () {
+			if (document.hidden || motionPreference.matches) {
+				stopAutoplayVideos();
+			} else {
+				startAutoplayVideos();
+			}
+		});
 	}
 
 	if (motionPreference.addEventListener) {

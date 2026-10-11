@@ -64,6 +64,12 @@ jobs:
           node scripts/test-editorial-visuals.mjs | tee /tmp/editorial-design.log
           grep -q 'EZB_EDITORIAL_ART_DIRECTION_TEST_PASS' /tmp/editorial-design.log
 
+      - name: Verify background-tab video autoplay safety
+        run: |
+          node --check scripts/test-site-video-visibility.mjs
+          node scripts/test-site-video-visibility.mjs | tee /tmp/video-visibility.log
+          grep -q 'EZB_VIDEO_VISIBILITY_REGRESSION_PASS cases=3' /tmp/video-visibility.log
+
       - name: Guard narrow mobile layout and deferred interaction script
         run: |
           node --check scripts/test-mobile-speed-guard.mjs
