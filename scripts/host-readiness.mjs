@@ -4,6 +4,10 @@ if (!rawBase) {
 }
 
 const base = new URL(rawBase);
+// Never accept or print credentials or tokens embedded in the host URL.
+if (base.username || base.password || base.search || base.hash) {
+  throw new Error('host readiness base URL must not contain credentials, query or fragment');
+}
 const allowHttp = process.env.EZB_ALLOW_HTTP === '1';
 const expectIndexable = process.env.EZB_EXPECT_INDEXABLE !== '0';
 const expectRedirects = process.env.EZB_EXPECT_REDIRECTS !== '0';
@@ -156,10 +160,10 @@ for (const path of canonicalRoutes) {
 
   const finalUrl = new URL(response.url);
   if (finalUrl.origin !== base.origin) {
-    failures.push(`${path} redirected off-origin to ${finalUrl.href}`);
+    failures.push(`${path} redirected off-origin`);
   }
   if (finalUrl.pathname !== requested.pathname || finalUrl.search || finalUrl.hash) {
-    failures.push(`${path} resolved to unexpected route ${finalUrl.pathname}${finalUrl.search}${finalUrl.hash}`);
+    failures.push(`${path} resolved to unexpected route (path, query or fragment)`);
   }
 
   const html = await response.text();
@@ -190,7 +194,7 @@ for (const path of canonicalRoutes) {
       canonical.hash
     ) {
       failures.push(
-        `${path} canonical mismatch: expected ${expected.href}, got ${canonical.href}`
+        `${path} canonical mismatch: unexpected origin, path or URL parameters`
       );
     }
   }
@@ -304,7 +308,7 @@ if (expectIndexable) {
       const checkedPages = new Set();
       for (const location of contentSitemaps) {
         const childUrl = new URL(location, base);
-        if (childUrl.origin !== base.origin || childUrl.search || childUrl.hash) {
+        if (childUrl.username || childUrl.password || childUrl.origin !== base.origin || childUrl.search || childUrl.hash) {
           failures.push('content sitemap location is not a clean same-origin URL');
           continue;
         }
@@ -326,7 +330,7 @@ if (expectIndexable) {
             failures.push(childUrl.pathname + ' contains an invalid content URL');
             continue;
           }
-          if (pageUrl.origin !== base.origin || pageUrl.search || pageUrl.hash) {
+          if (pageUrl.username || pageUrl.password || pageUrl.origin !== base.origin || pageUrl.search || pageUrl.hash) {
             failures.push(childUrl.pathname + ' contains a non-canonical or off-origin content URL');
             continue;
           }
@@ -353,7 +357,7 @@ if (expectIndexable) {
               if (indexedCanonical.username || indexedCanonical.password) {
                 failures.push(pageUrl.pathname + ' indexed content canonical contains URL credentials');
               } else if (indexedCanonical.href !== pageUrl.href) {
-                failures.push(pageUrl.pathname + ' indexed content canonical mismatch: ' + indexedCanonical.href);
+                failures.push(pageUrl.pathname + ' indexed content canonical mismatch');
               }
             } catch {
               failures.push(pageUrl.pathname + ' indexed content has malformed canonical');
@@ -405,9 +409,9 @@ if (expectRedirects) {
     const resolved = new URL(location, base);
     const expected = new URL(target, base);
 
-    if (resolved.origin !== base.origin || resolved.pathname !== expected.pathname || resolved.search || resolved.hash) {
+    if (resolved.username || resolved.password || resolved.origin !== base.origin || resolved.pathname !== expected.pathname || resolved.search || resolved.hash) {
       failures.push(
-        `${source} -> expected Location ${expected.href}, got ${resolved.href}`
+        `${source} -> expected Location ${expected.pathname}, got unexpected destination`
       );
     }
   }
@@ -423,7 +427,7 @@ if (expectRedirects) {
   notes.push('verified legacy 301 and 410 checks skipped because EZB_EXPECT_REDIRECTS=0');
 }
 
-console.log(`EZB_HOST_READINESS base=${base.href}`);
+console.log(`EZB_HOST_READINESS base=${base.origin}${base.pathname}`);
 console.log(`mode indexable=${expectIndexable ? 'yes' : 'no'} redirects=${expectRedirects ? 'yes' : 'no'} devTransport=${allowDevTransport ? 'allowed' : 'rejected'}`);
 if (allowDevTransport) notes.push('development ezb_page transport explicitly allowed for prototype runtime only');
 for (const note of notes) console.log(`NOTE ${note}`);
