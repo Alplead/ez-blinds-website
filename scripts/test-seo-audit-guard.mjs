@@ -26,7 +26,9 @@ async function check(name, mode, expectedFailure = '') {
     const port = server.address().port;
     const canonical = mode === 'off-origin-canonical' && path === '/contact/'
       ? 'https://example.com/contact/'
-      : mode === 'userinfo-canonical' && path === '/contact/'
+      : mode === 'off-origin-userinfo-canonical' && path === '/contact/'
+        ? 'https://viewer:synthetic@example.com/contact/'
+        : mode === 'userinfo-canonical' && path === '/contact/'
         ? 'http://viewer:synthetic@127.0.0.1:' + port + path
         : 'http://127.0.0.1:' + port + path;
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -49,6 +51,8 @@ async function check(name, mode, expectedFailure = '') {
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
+  // CI logs must never echo credentials found in untrusted page markup.
+  assert.ok(!result.output.includes('viewer:synthetic@'), name + ': canonical credentials leaked into output');
   if (expectedFailure) {
     assert.notEqual(result.code, 0, name + ': expected failure');
     assert.ok(result.output.includes(expectedFailure), name + ': wrong failure: ' + result.output);
@@ -67,4 +71,5 @@ await check('JSON response rejected', 'non-html', 'expected text/html');
 await check('missing HTML content-type rejected', 'missing-content-type', 'expected text/html');
 await check('off-origin canonical rejected', 'off-origin-canonical', 'canonical left test origin');
 await check('credential-bearing canonical rejected', 'userinfo-canonical', 'canonical contains URL credentials');
-console.log('EZB_SEO_AUDIT_GUARD_PASS cases=7');
+await check('off-origin credential-bearing canonical rejected without logging credentials', 'off-origin-userinfo-canonical', 'canonical left test origin');
+console.log('EZB_SEO_AUDIT_GUARD_PASS cases=8');

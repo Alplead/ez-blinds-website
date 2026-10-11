@@ -59,6 +59,17 @@ function extractTitle(html) {
   };
 }
 
+// Only print the origin and path of an untrusted canonical URL. Never log
+// embedded credentials, query tokens or fragments from page markup.
+function safeCanonicalSummary(raw, baseUrl) {
+  try {
+    const url = new URL(raw, baseUrl);
+    return url.origin + url.pathname;
+  } catch {
+    return 'INVALID_CANONICAL';
+  }
+}
+
 function extractCanonicals(html) {
   const canonicals = [];
   for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
@@ -137,12 +148,12 @@ for (const path of paths) {
     try {
       canonical = new URL(canonicals[0], finalUrl);
     } catch {
-      failures.push(`${path} -> malformed canonical: ${canonicals[0]}`);
+      failures.push(`${path} -> malformed canonical URL`);
     }
 
     if (canonical) {
       if (canonical.origin !== base.origin) {
-        failures.push(`${path} -> canonical left test origin: ${canonical.href}`);
+        failures.push(`${path} -> canonical left test origin`);
       }
 
       // Same-origin URLs can still carry credentials in userinfo.
@@ -173,7 +184,7 @@ for (const path of paths) {
   results.push({
     path,
     title: title.value,
-    canonical: canonicals[0] || ''
+    canonical: canonicals.length ? safeCanonicalSummary(canonicals[0], finalUrl) : ''
   });
 }
 
