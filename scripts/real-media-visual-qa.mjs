@@ -1,0 +1,159 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs/promises';
+import { inspectMediaImage, heroImageCountFailure, mediaImageSourceFailure } from './media-image-readiness.mjs';
+import { previewNavigationFailure } from './preview-render-guard.mjs';
+
+const rawBase = process.env.EZB_BASE_URL || '';
+if (!rawBase) throw new Error('EZB_BASE_URL is required');
+
+const base = new URL(rawBase);
+if (base.protocol !== 'https:' && process.env.EZB_ALLOW_HTTP !== '1') {
+  throw new Error('real-media visual QA requires HTTPS unless EZB_ALLOW_HTTP=1');
+}
+
+const output = process.env.EZB_MEDIA_QA_OUTPUT || 'real-media-qa-output';
+const routes = [
+  ['home', '/', null],
+  ['roller-blinds', '/roller-blinds/', 6],
+  ['plantation-shutters', '/plantation-shutters/', 4],
+  ['retractable-flyscreens', '/retractable-flyscreens/', 10],
+  ['sheer-curtains', '/sheer-curtains/', null],
+  ['retractable-flyscreen-large-opening', '/projects/retractable-flyscreen-large-opening/', 3],
+  ['retractable-flyscreen-indoor-outdoor-opening', '/projects/retractable-flyscreen-indoor-outdoor-opening/', 3]
+];
+const viewports = [
+  ['desktop', { width: 1440, height: 900 }],
+  ['tablet', { width: 834, height: 1112 }],
+  ['mobile', { width: 390, height: 844 }],
+  ['small-mobile', { width: 320, height: 700 }]
+];
+
+await fs.mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const failures = [];
+
+try {
+  for (const [viewportName, viewport] of viewports) {
+    const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    const pageErrors = [];
+    const themeAssetFailures = [];
+    const themeAsset = /\/wp-content\/themes\/ezb-theme\/(?:style\.css|assets\/js\/site\.js)(?:[?#]|$)/;
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('response', response => {
+      if (themeAsset.test(response.url()) && response.status() !== 200) {
+        themeAssetFailures.push(`HTTP ${response.status()} ${response.url()}`);
+      }
+    });
+    page.on('requestfailed', request => {
+      if (themeAsset.test(request.url())) themeAssetFailures.push(`failed ${request.url()}`);
+    });
+
+    for (const [name, path, galleryCount] of routes) {
+      pageErrors.length = 0;
+      themeAssetFailures.length = 0;
+      const isProject = path.startsWith('/projects/');
+      const requestedUrl = new URL(path, base);
+      const response = await page.goto(requestedUrl.href, { waitUntil: 'networkidle' });
+      if (!response || response.status() !== 200) {
+        failures.push(`${viewportName} ${name}: HTTP ${response?.status() ?? 'no response'}`);
+        continue;
+      }
+      // A redirect back to the requested URL is still a broken acceptance path.
+      const navigationFailure = previewNavigationFailure(
+        requestedUrl.href, page.url(), Boolean(response.request().redirectedFrom())
+      );
+      if (navigationFailure) {
+        failures.push(`${viewportName} ${name}: ${navigationFailure}`);
+        continue;
+      }
+
+      // All media routes must respect the user's reduced-motion preference.
+      const motionReady = await page.evaluate(() =>
+        document.documentElement.classList.contains('ezb-motion-ready')
+      );
+      if (motionReady) failures.push(`${viewportName} ${name}: reduced-motion preference ignored`);
+
+      const placeholderCount = await page.locator('.ezb-media-placeholder').count();
+      if (name === 'home' && placeholderCount > 0) {
+        failures.push(`${viewportName} home still contains a media placeholder`);
+      }
+
+      const heroImages = page.locator('img.ezb-media-slot__image');
+      const heroCount = await heroImages.count();
+      const heroCountError = heroImageCountFailure(heroCount, !isProject);
+      if (heroCountError) failures.push(`${viewportName} ${name}: ${heroCountError}`);
+      if (heroCount) {
+        if (await heroImages.first().getAttribute('loading') === 'lazy') {
+          failures.push(`${viewportName} ${name}: hero image should not be lazy-loaded`);
+        }
+        const heroOk = await inspectMediaImage(heroImages.first());
+        if (!heroOk.complete || heroOk.naturalWidth <= 0 || heroOk.naturalHeight <= 0) {
+          failures.push(`${viewportName} ${name}: hero image failed to load`);
+        }
+        if (!heroOk.alt.trim()) {
+          failures.push(`${viewportName} ${name}: hero image has empty alt text`);
+        }
+        const heroSourceFailure = mediaImageSourceFailure(heroOk.src, base);
+        if (heroSourceFailure) failures.push(`${viewportName} ${name}: hero ${heroSourceFailure}`);
+      }
+
+      if (galleryCount !== null) {
+        const gallery = page.locator(isProject ? 'img.ezb-project-gallery__image' : 'img.ezb-product-gallery__image');
+        const count = await gallery.count();
+        if (count !== galleryCount) {
+          failures.push(`${viewportName} ${name}: expected ${galleryCount} gallery images, found ${count}`);
+        }
+
+        const seenGallerySources = new Set();
+        for (let i = 0; i < count; i += 1) {
+          // Gallery media must remain lazy while the hero is prioritised.
+          // The readiness helper scrolls and decodes before evaluating the image.
+          if (await gallery.nth(i).getAttribute('loading') !== 'lazy') {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} should be lazy-loaded`);
+          }
+          const state = await inspectMediaImage(gallery.nth(i));
+          if (!state.complete || state.naturalWidth <= 0 || state.naturalHeight <= 0) {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} failed to load`);
+          }
+          if (!state.alt.trim()) {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} has empty alt text`);
+          }
+          const gallerySourceFailure = mediaImageSourceFailure(state.src, base);
+          if (gallerySourceFailure) failures.push(`${viewportName} ${name}: gallery image ${i + 1} ${gallerySourceFailure}`);
+          if (seenGallerySources.has(state.src)) {
+            failures.push(`${viewportName} ${name}: gallery image ${i + 1} duplicates an earlier image source`);
+          }
+          seenGallerySources.add(state.src);
+        }
+      }
+
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+      );
+      if (overflow) failures.push(`${viewportName} ${name}: horizontal overflow`);
+
+      await page.screenshot({
+        path: `${output}/${viewportName}-${name}.png`,
+        fullPage: true
+      });
+      if (pageErrors.length || themeAssetFailures.length) {
+        failures.push(`${viewportName} ${name}: browser or theme asset failure: ${[
+          ...pageErrors, ...themeAssetFailures
+        ].join('; ')}`);
+      }
+    }
+
+    await context.close();
+  }
+} finally {
+  await browser.close();
+}
+
+if (failures.length) {
+  failures.forEach((failure) => console.error(`FAIL ${failure}`));
+  process.exit(1);
+}
+
+console.log('EZB_REAL_MEDIA_VISUAL_QA_AUTOMATION_PASS');
+console.log('OWNER_VISUAL_JUDGEMENT=MANUAL_GATE');

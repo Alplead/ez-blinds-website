@@ -1,0 +1,158 @@
+name: Release Install Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'scripts/build-release-bundle.sh'
+      - 'scripts/release-install-smoke.sh'
+      - 'scripts/host-readiness.mjs'
+      - 'scripts/test-host-readiness-guard.mjs'
+      - '.github/release-install/**'
+      - '.github/workflows/release-install-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Build release bundle
+        run: |
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+
+      - name: Preload Docker Official Images from public ECR
+        run: |
+          set -euo pipefail
+          # GitHub-hosted runners share an unauthenticated Docker Hub pull quota.
+          # ECR's Docker Official Images mirror avoids relying on that quota.
+          for image in mariadb:11 wordpress:php8.3-apache wordpress:cli; do
+            loaded=0
+            for attempt in 1 2 3; do
+              if docker pull "public.ecr.aws/docker/library/$image"; then
+                docker tag "public.ecr.aws/docker/library/$image" "$image"
+                loaded=1
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep "$((attempt * 12))"; fi
+            done
+            if [ "$loaded" -ne 1 ]; then
+              echo "::warning::ECR unavailable for $image; trying Docker Hub"
+              docker pull "$image"
+            fi
+          done
+
+      - name: Start clean WordPress staging stack
+        run: docker compose -f .github/release-install/docker-compose.yml up -d --wait release-db release-wordpress
+
+      - name: Install release ZIPs into clean WordPress
+        run: |
+          docker compose -f .github/release-install/docker-compose.yml run --rm release-bootstrap | tee /tmp/release-install.log
+          grep -q 'EZB_RELEASE_INSTALL_PASS' /tmp/release-install.log
+
+      - name: Verify installed site responds
+        run: |
+          set -euo pipefail
+          code="$(curl -LsS -o /tmp/release-home.html -w '%{http_code}' http://127.0.0.1:8081/)"
+          test "$code" = "200"
+          grep -q 'ezb-theme-style-css' /tmp/release-home.html
+          grep -q 'Ready to talk through your windows?' /tmp/release-home.html
+          grep -q 'Free Measure &amp; Quote' /tmp/release-home.html
+          ! grep -q 'ezb_page=' /tmp/release-home.html
+
+      - name: Verify release-mode retired routes and truthful redirects
+        run: |
+          set -euo pipefail
+          for path in \
+            /roman-blinds/ \
+            /panel-guide-blinds/ \
+            /venetian-blinds/ \
+            /portfolio/venetian-blinds/ \
+            /2018/02/04/roman-blinds-showcase/ \
+            /2018/02/04/panel-guide-blinds-showcase/ \
+            /2018/02/04/venetian-blinds-showcase/; do
+            code="$(curl -sS -o /tmp/retired-route.html -w '%{http_code}' "http://127.0.0.1:8081$path")"
+            test "$code" = "410"
+          done
+          code="$(curl -sS -o /dev/null -D /tmp/legacy-redirect-headers.txt -w '%{http_code}' 'http://127.0.0.1:8081/retractable-fly-screen/')"
+          test "$code" = "301"
+          grep -qi 'location: .*retractable-flyscreens/' /tmp/legacy-redirect-headers.txt
+
+      - name: Verify public project query rejects malformed input before WordPress parses it
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/release-malformed-project-query.html -w '%{http_code}' 'http://127.0.0.1:8081/?ezb_project%5B%5D=unexpected')"
+          test "$code" = "400"
+          grep -q 'Invalid route request.' /tmp/release-malformed-project-query.html
+          ! grep -q 'Fatal error' /tmp/release-malformed-project-query.html
+          ! grep -q 'Uncaught TypeError' /tmp/release-malformed-project-query.html
+
+      - name: Verify quote status handles malformed array input safely
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = array("sent"); echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-array.html
+          grep -q 'class="ezb-quote-form"' /tmp/quote-status-array.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-array.html
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-sent.html
+          grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
+
+      - name: Verify unapproved flyscreen video stays private in release mode
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (wp_get_environment_type() !== "staging") {
+              throw new Exception("Synthetic privacy check must run in release staging mode");
+            }
+            $filename = "EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4";
+            $video = wp_insert_post(array(
+              "post_type" => "attachment",
+              "post_status" => "inherit",
+              "post_title" => "Synthetic privacy-restricted clip",
+              "post_mime_type" => "video/mp4",
+            ));
+            if (!$video || is_wp_error($video)) { throw new Exception("Synthetic video attachment was not created"); }
+            update_post_meta($video, "_wp_attached_file", "2026/10/" . $filename);
+            if (ezb_find_attachment_by_basename($filename) !== $video ||
+                get_post_mime_type($video) !== "video/mp4" ||
+                !wp_get_attachment_url($video)) {
+              throw new Exception("Synthetic private video fixture is not renderable");
+            }
+            if (do_shortcode("[ezb_retractable_video]") !== "") {
+              throw new Exception("Privacy-restricted video leaked into release mode");
+            }
+            wp_delete_post($video, true);
+            echo "EZB_RELEASE_VIDEO_PRIVACY_PASS" . PHP_EOL;
+          ' --allow-root | tee /tmp/release-video-privacy.log
+          grep -q 'EZB_RELEASE_VIDEO_PRIVACY_PASS' /tmp/release-video-privacy.log
+
+      - name: Publish verified release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezb-release-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .release/ezb-theme.zip
+            .release/ezb-core.zip
+            .release/RELEASE_METADATA.txt
+            .release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show release stack logs on failure
+        if: failure()
+        run: docker compose -f .github/release-install/docker-compose.yml logs --no-color release-db release-wordpress release-bootstrap
+
+      - name: Tear down release stack
+        if: always()
+        run: docker compose -f .github/release-install/docker-compose.yml down -v

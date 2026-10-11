@@ -1,0 +1,14 @@
+{
+  "name": "EZ Blinds WordPress",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/ez-blinds-website",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "WordPress",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "postCreateCommand": "php -v && git --version"
+}

@@ -1,0 +1,204 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'scripts/**'
+      - '.devcontainer/**'
+      - '.github/workflows/**'
+      - '.github/release-install/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Check PHP syntax
+        run: |
+          find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Check Visual QA JavaScript syntax
+        run: node --check scripts/visual-qa.mjs
+
+      - name: Validate Owner preview responsive and route coverage
+        run: |
+          node --check scripts/owner-preview-capture.mjs
+          node --check scripts/test-owner-preview-coverage.mjs
+          node scripts/test-owner-preview-coverage.mjs | tee /tmp/owner-preview-coverage.log
+          grep -q 'EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56' /tmp/owner-preview-coverage.log
+
+      - name: Reject unstyled Owner previews and leaked shortcode content
+        run: |
+          node --check scripts/preview-render-guard.mjs
+          node --check scripts/test-preview-render-guard.mjs
+          node scripts/test-preview-render-guard.mjs | tee /tmp/preview-render-guard.log
+          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=34' /tmp/preview-render-guard.log
+
+      - name: Test reduced-motion preference changes
+        run: |
+          node --check wp-content/themes/ezb-theme/assets/js/site.js
+          node --check scripts/test-site-motion.mjs
+          node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
+          grep -q 'EZB_SITE_MOTION_TEST_PASS cases=4' /tmp/site-motion.log
+
+      - name: Guard narrow mobile layout and deferred interaction script
+        run: |
+          node --check scripts/test-mobile-speed-guard.mjs
+          node scripts/test-mobile-speed-guard.mjs | tee /tmp/mobile-speed-guard.log
+          grep -q 'EZB_MOBILE_SPEED_GUARD_PASS cases=5' /tmp/mobile-speed-guard.log
+
+      - name: Verify five approved product-to-quote journeys (static)
+        run: |
+          node --check scripts/test-product-quote-journey.mjs
+          node scripts/test-product-quote-journey.mjs | tee /tmp/product-quote-static.log
+          grep -q 'EZB_PRODUCT_QUOTE_STATIC_PASS routes=5' /tmp/product-quote-static.log
+
+      - name: Test quote contact-method pre-submit validation
+        run: |
+          node --check scripts/test-quote-contact-method.mjs
+          node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=8' /tmp/quote-contact-method.log
+
+      - name: Check link crawler JavaScript syntax
+        run: node --check scripts/link-check.mjs
+
+      - name: Test bounded link crawler configuration
+        run: |
+          node --check scripts/test-link-check-budget.mjs
+          node scripts/test-link-check-budget.mjs | tee /tmp/link-budget.log
+          grep -q 'EZB_LINK_CHECK_BUDGET_TEST_PASS cases=7' /tmp/link-budget.log
+
+      - name: Test internal-link fail-closed guard
+        run: |
+          node --check scripts/test-link-check-guard.mjs
+          node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=33' /tmp/link-check-guard.log
+
+      - name: Enforce Owner-approved navigation A/B/C without expanding publication authority
+        run: |
+          node --check scripts/test-owner-approved-navigation.mjs
+          node scripts/test-owner-approved-navigation.mjs | tee /tmp/owner-navigation.log
+          grep -q 'EZB_OWNER_APPROVED_NAV_PASS cases=10' /tmp/owner-navigation.log
+
+      - name: Test keyboard focus visibility and navigation guard
+        run: |
+          node --check scripts/test-theme-focus-visibility.mjs
+          node scripts/test-theme-focus-visibility.mjs | tee /tmp/theme-focus.log
+          grep -q 'EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=11' /tmp/theme-focus.log
+
+      - name: Test WordPress template skip-link targets
+        run: |
+          node --check scripts/test-theme-skip-link.mjs
+          node scripts/test-theme-skip-link.mjs | tee /tmp/skip-link.log
+          grep -q 'EZB_SKIP_LINK_TEST_PASS' /tmp/skip-link.log
+
+      - name: Verify home hero media slot remains wired
+        run: |
+          node --check scripts/test-home-hero-guard.mjs
+          node scripts/test-home-hero-guard.mjs | tee /tmp/home-hero-guard.log
+          grep -q 'EZB_HOME_HERO_GUARD_PASS' /tmp/home-hero-guard.log
+
+      - name: Check SEO audit JavaScript syntax
+        run: node --check scripts/seo-audit.mjs
+
+      - name: Reject SEO redirects and non-HTML route responses
+        run: |
+          node --check scripts/test-seo-audit-guard.mjs
+          node scripts/test-seo-audit-guard.mjs | tee /tmp/seo-audit-guard.log
+          grep -q 'EZB_SEO_AUDIT_GUARD_PASS cases=8' /tmp/seo-audit-guard.log
+
+      - name: Prevent unfinished photo-upload promises in public contact copy
+        run: |
+          if grep -Eiq 'Photo upload will be added|upload path is enabled|any useful photos' wp-content/plugins/ezb-core/ezb-core.php wp-content/themes/ezb-theme/templates/page-contact.html; then
+            echo "Customer-facing enquiry text must not promise an unapproved upload path."
+            exit 1
+          fi
+
+      - name: Keep homepage product comparison free of development labels
+        run: |
+          if grep -Eqi 'prototype|working copy|development preview' wp-content/themes/ezb-theme/patterns/core-solutions.php; then
+            echo "Homepage product navigation contains development-only wording."
+            exit 1
+          fi
+
+      - name: Check host readiness JavaScript syntax
+        run: node --check scripts/host-readiness.mjs
+
+      - name: Test host readiness fail-closed guard
+        run: |
+          node --check scripts/test-host-readiness-guard.mjs
+          node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=64' /tmp/host-readiness-guard.log
+
+      - name: Check Owner UI acceptance checker syntax
+        run: bash -n scripts/check-owner-ui-acceptance.sh
+
+      - name: Check mail delivery probe syntax
+        run: bash -n scripts/mail-delivery-probe.sh
+
+      - name: Check media readiness PHP syntax
+        run: php -l scripts/media-library-readiness.php
+
+      - name: Check staging media acceptance syntax
+        run: bash -n scripts/staging-media-acceptance.sh
+
+      - name: Test staging media SHA guard
+        run: |
+          bash -n scripts/test-staging-media-sha-guard.sh
+          bash scripts/test-staging-media-sha-guard.sh | tee /tmp/media-sha-guard.log
+          grep -q 'EZB_STAGING_MEDIA_SHA_GUARD_TEST_PASS cases=7' /tmp/media-sha-guard.log
+
+      - name: Guard the 25 approved media registry filenames
+        run: |
+          node --check scripts/test-media-approved-registry.mjs
+          node scripts/test-media-approved-registry.mjs | tee /tmp/media-registry.log
+          grep -q 'EZB_MEDIA_APPROVED_REGISTRY_TEST_PASS files=25' /tmp/media-registry.log
+
+      - name: Check real-media visual QA JavaScript syntax
+        run: node --check scripts/real-media-visual-qa.mjs
+
+      - name: Test real-media QA route and reduced-motion coverage
+        run: |
+          node --check scripts/test-real-media-qa-coverage.mjs
+          node scripts/test-real-media-qa-coverage.mjs | tee /tmp/media-qa-coverage.log
+          grep -q 'EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=14' /tmp/media-qa-coverage.log
+
+      - name: Test lazy-media visual QA readiness
+        run: |
+          node --check scripts/media-image-readiness.mjs
+          node --check scripts/test-media-image-readiness.mjs
+          node scripts/test-media-image-readiness.mjs | tee /tmp/media-image-readiness.log
+          grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=39' /tmp/media-image-readiness.log
+
+      - name: Build and validate deployment bundle
+        run: |
+          bash -n scripts/build-release-bundle.sh
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+          test -s .release/ezb-theme.zip
+          test -s .release/ezb-core.zip
+          test -s .release/SHA256SUMS
+          (cd .release && sha256sum -c SHA256SUMS)
+
+      - name: Prevent development query URLs in public theme source
+        run: |
+          if grep -R -n -F 'ezb_page=' wp-content/themes/ezb-theme; then
+            echo "Theme source must use pretty public URLs; ezb_page is development transport only."
+            exit 1
+          fi
