@@ -14,6 +14,8 @@ on:
       - 'scripts/host-readiness.mjs'
       - 'scripts/test-host-readiness-guard.mjs'
       - '.github/release-install/**'
+      - 'scripts/ez2_content_guard.py'
+      - 'scripts/test_ez2_content_guard.py'
       - '.github/workflows/release-install-smoke.yml'
   workflow_dispatch:
 

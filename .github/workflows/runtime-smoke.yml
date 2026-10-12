@@ -16,6 +16,8 @@ on:
       - 'scripts/check-owner-ui-acceptance.sh'
       - 'scripts/mail-delivery-probe.sh'
       - 'scripts/staging-media-acceptance.sh'
+      - 'scripts/ez2_content_guard.py'
+      - 'scripts/test_ez2_content_guard.py'
       - '.github/workflows/runtime-smoke.yml'
   workflow_dispatch:
 
