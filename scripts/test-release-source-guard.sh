@@ -5,6 +5,7 @@ FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
 mkdir -p "$FIX/scripts" "$FIX/wp-content/themes/ezb-theme" "$FIX/wp-content/plugins/ezb-core"
 cp "$ROOT/scripts/build-release-bundle.sh" "$FIX/scripts/build-release-bundle.sh"
+cp "$ROOT/scripts/verify_release_scope.py" "$FIX/scripts/verify_release_scope.py"
 cat > "$FIX/wp-content/themes/ezb-theme/style.css" <<'THEME'
 Theme Name: EZB Theme
 Version: 0.2.0
