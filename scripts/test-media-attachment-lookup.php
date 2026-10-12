@@ -21,15 +21,15 @@ class EZB_Fake_WPDB {
             "attachment.post_type = 'attachment'",
             "attachment.post_status <> 'trash'",
             'attachment.post_mime_type = %s',
-            'pm.meta_value LIKE %s',
+            'pm.meta_value = %s', 'pm.meta_value LIKE %s',
         );
         foreach ( $required as $clause ) {
             if ( ! str_contains( $sql, $clause ) ) {
                 throw new RuntimeException( 'Media query missing safety clause: ' . $clause );
             }
         }
-        if ( 2 !== count( $args ) ) {
-            throw new RuntimeException( 'Expected filename and exact MIME parameters.' );
+        if ( 3 !== count( $args ) ) {
+            throw new RuntimeException( 'Expected exact root filename, slash-delimited suffix and MIME parameters.' );
         }
         $this->last = array( 'sql' => $sql, 'args' => $args );
         return $sql;
@@ -38,12 +38,14 @@ class EZB_Fake_WPDB {
         if ( ! $this->last || $sql !== $this->last['sql'] ) {
             throw new RuntimeException( 'Unexpected database query.' );
         }
-        $suffix = substr( $this->last['args'][0], 1 );
-        $mime = $this->last['args'][1];
+        $exact = $this->last['args'][0];
+        $suffix = substr( $this->last['args'][1], 1 );
+        $mime = $this->last['args'][2];
         $found = array();
         foreach ( $this->rows as $row ) {
             if ( 'attachment' !== $row['type'] || 'trash' === $row['status'] ||
-                $mime !== $row['mime'] || ! str_ends_with( $row['file'], $suffix ) ) {
+                $mime !== $row['mime'] ||
+                ( $row['file'] !== $exact && ! str_ends_with( $row['file'], $suffix ) ) ) {
                 continue;
             }
             $found[] = $row['id'];
@@ -77,6 +79,11 @@ $wpdb->rows = array(
     ezb_test_row( 130, '2026/10/recent.webp', 'image/webp' ),
     ezb_test_row( 131, '2026/11/recent.webp', 'image/webp' ),
     ezb_test_row( 140, '2026/10/mismatch.jpg', 'image/png' ),
+    ezb_test_row( 160, 'root-only.webp', 'image/webp' ),
+    ezb_test_row( 161, 'root-jpg.jpg', 'image/jpeg' ),
+    ezb_test_row( 170, 'mixed.webp', 'image/webp' ),
+    ezb_test_row( 180, '2026/10/mixed.webp', 'image/webp' ),
+    ezb_test_row( 190, 'near-root-only.webp', 'image/webp' ),
 );
 eval( $match[0] );
 
@@ -91,4 +98,8 @@ ezb_expect_id( 'space name.jpg', 120 ); // WordPress-sanitised filenames still r
 ezb_expect_id( 'recent.jpg', 131 ); // Newest valid attachment wins.
 
 ezb_expect_id( 'mismatch.jpg', 0 ); // MIME must agree with extension.
-echo "EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=9\n";
+ezb_expect_id( 'root-only.jpg', 160 ); // WebP in upload root, without YYYY/MM path.
+ezb_expect_id( 'root-jpg.jpg', 161 ); // Legacy JPEG in upload root.
+ezb_expect_id( 'mixed.jpg', 180 ); // Newest valid match across root and dated folders.
+ezb_expect_id( 'near-root-only.jpg', 190 ); // Exact near-name must resolve to itself.
+echo "EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=13\n";

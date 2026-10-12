@@ -1859,18 +1859,21 @@ function ezb_find_attachment_by_basename( $basename ) {
 		if ( ! isset( $mime_types[ $candidate_extension ] ) ) {
 			continue;
 		}
+		// WordPress can store uploads at the root when year/month folders are off.
+		// Match root filenames exactly, or a dated subdirectory with a slash boundary.
 		$like = '%' . $wpdb->esc_like( '/' . $candidate );
 		$id   = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT pm.post_id FROM {$wpdb->postmeta} AS pm
 				INNER JOIN {$wpdb->posts} AS attachment ON attachment.ID = pm.post_id
 				WHERE pm.meta_key = '_wp_attached_file'
-				AND pm.meta_value LIKE %s
+				AND (pm.meta_value = %s OR pm.meta_value LIKE %s)
 				AND attachment.post_type = 'attachment'
 				AND attachment.post_status <> 'trash'
 				AND attachment.post_mime_type = %s
 				ORDER BY pm.post_id DESC
 				LIMIT 1",
+				$candidate,
 				$like,
 				$mime_types[ $candidate_extension ]
 			)
