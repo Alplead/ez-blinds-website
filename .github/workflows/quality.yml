@@ -229,6 +229,12 @@ jobs:
           python3 scripts/test_ez2_content_guard.py | tee /tmp/ez2-content-guard.log
           grep -q 'EZ2_CONTENT_GUARD_TEST_PASS cases=16' /tmp/ez2-content-guard.log
 
+      - name: Preflight controlled Elementor exports without importing them
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_export_check.py
+          python3 scripts/test_ez2_elementor_export_check.py | tee /tmp/ez2-elementor-export.log
+          grep -q 'EZ2_ELEMENTOR_EXPORT_PREFLIGHT_PASS cases=15' /tmp/ez2-elementor-export.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
