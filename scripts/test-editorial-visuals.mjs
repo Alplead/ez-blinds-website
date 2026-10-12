@@ -86,10 +86,20 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
     classList: { toggle() {}, add(name) { heroFlags.add(name); } }, addEventListener() {}
   };
   let timerStarts = 0;
+  let timerStops = 0;
+  let observerCallback = null;
+  let observedHero = null;
   const window = {
     matchMedia() { return media; },
     setInterval() { return ++timerStarts; },
-    clearInterval() {}
+    clearInterval() { timerStops++; },
+    IntersectionObserver: class {
+      constructor(callback, options) {
+        observerCallback = callback;
+        assert.equal(options.threshold, 0, 'Offscreen observer watches visibility threshold');
+      }
+      observe(target) { observedHero = target; }
+    }
   };
   const document = {
     hidden: false, querySelector() { return hero; },
@@ -98,6 +108,18 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
   runInNewContext(js, { window, document });
   assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
   assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
+  assert.equal(observedHero, hero, 'Hero is watched for offscreen pause');
+  const startsBeforeOffscreen = timerStarts;
+  const stopsBeforeOffscreen = timerStops;
+  observerCallback([{ target: hero, isIntersecting: false, intersectionRatio: 0 }]);
+  assert.equal(timerStarts, startsBeforeOffscreen, 'Offscreen hero cannot start another timer');
+  assert.equal(timerStops > stopsBeforeOffscreen, !initialReduced, 'Offscreen hero clears an active timer');
+  next.handlers.click();
+  assert.equal(slides[1].active, true, 'Manual navigation still works while offscreen');
+  assert.equal(timerStarts, startsBeforeOffscreen, 'Offscreen manual navigation does not restart autoplay');
+  previous.handlers.click();
+  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.5 }]);
+  assert.equal(timerStarts > startsBeforeOffscreen, !initialReduced, 'Autoplay resumes onscreen only when motion is allowed');
   assert.equal(slides[0].active, true, 'First image must be visible');
   next.handlers.click();
   assert.equal(slides[1].active, true, 'Manual Next works without autoplay');
