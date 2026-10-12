@@ -221,7 +221,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/verify_release_scope.py scripts/test_verify_release_scope.py
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
-          grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=11' /tmp/release-scope-regression.log
+          grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=19' /tmp/release-scope-regression.log
 
       - name: Build and validate deployment bundle
         run: |
