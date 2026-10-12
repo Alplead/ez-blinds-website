@@ -253,6 +253,13 @@ jobs:
           python3 scripts/test_ez2_delivery_preflight.py | tee /tmp/ez2-delivery-preflight.log
           grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=22' /tmp/ez2-delivery-preflight.log
 
+      - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
+        run: |
+          php -l scripts/ez2_wp_runtime_probe.php
+          php -l scripts/test_ez2_wp_runtime_probe.php
+          php scripts/test_ez2_wp_runtime_probe.php | tee /tmp/ez2-wp-runtime-gate.log
+          grep -q 'EZ2_WP_RUNTIME_GATE_PASS cases=21' /tmp/ez2-wp-runtime-gate.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
