@@ -118,7 +118,11 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
   assert.equal(slides[1].active, true, 'Manual navigation still works while offscreen');
   assert.equal(timerStarts, startsBeforeOffscreen, 'Offscreen manual navigation does not restart autoplay');
   previous.handlers.click();
-  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.5 }]);
+  observerCallback([{ target: {}, isIntersecting: true, intersectionRatio: 0.5 }]);
+  assert.equal(timerStarts, startsBeforeOffscreen, 'Unrelated observer entries cannot restart autoplay');
+  // IntersectionObserver may report an edge-touching target with ratio 0.
+  // isIntersecting is the authoritative visibility flag at threshold zero.
+  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0 }]);
   assert.equal(timerStarts > startsBeforeOffscreen, !initialReduced, 'Autoplay resumes onscreen only when motion is allowed');
   assert.equal(slides[0].active, true, 'First image must be visible');
   next.handlers.click();

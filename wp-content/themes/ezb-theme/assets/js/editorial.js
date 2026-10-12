@@ -110,7 +110,7 @@
       var observer = new window.IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.target !== hero) return;
-          inView = entry.isIntersecting && entry.intersectionRatio > 0;
+          inView = entry.isIntersecting;
           syncTimer();
         });
       }, { threshold: 0 });
