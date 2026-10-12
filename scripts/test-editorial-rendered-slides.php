@@ -14,7 +14,8 @@ function wp_get_attachment_image($id, $size, $icon, $attributes) {
     $mode = $GLOBALS['mode'];
     if ($mode === 'all_missing' || ($mode === 'first_missing' && $id === 1) ||
         ($mode === 'single' && $id !== 2)) { return ''; }
-    return '<img alt="">';
+    $alt = htmlspecialchars($attributes['alt'] ?? '', ENT_QUOTES, 'UTF-8');
+    return '<img alt="' . $alt . '">';
 }
 function esc_attr__($value, $domain) { return $value; }
 function esc_html__($value, $domain) { return $value; }
@@ -30,11 +31,22 @@ if (substr_count($html, 'data-ezb-slide') !== 3 ||
     strpos($html, '01 / 03') === false) {
     throw new Exception('Partial media failure must preserve the first visible frame and accurate count.');
 }
+if (strpos($html, 'alt="Roller Blinds installation photograph"') === false ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('First successfully rendered image must describe its actual product.');
+}
+$GLOBALS['mode'] = 'all_available';
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 4 ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') === false) {
+    throw new Exception('Complete gallery must describe its first sheer curtain photo.');
+}
 $GLOBALS['mode'] = 'single';
 $html = $render();
 if (substr_count($html, 'data-ezb-slide') !== 1 ||
     strpos($html, 'ezb-cinema__slide is-active" data-ezb-slide aria-hidden="false"') === false ||
-    strpos($html, 'data-ezb-toggle') !== false) {
+    strpos($html, 'data-ezb-toggle') !== false ||
+    strpos($html, 'alt="Roller Blinds installation photograph"') === false) {
     throw new Exception('One rendered frame must not show autoplay controls.');
 }
 $GLOBALS['mode'] = 'all_missing';
@@ -44,4 +56,4 @@ if (strpos($html, 'ezb-cinema--missing-media') === false ||
     strpos($html, 'data-ezb-toggle') !== false) {
     throw new Exception('No images must display the safe text-only hero.');
 }
-echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=3\n";
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=4\n";

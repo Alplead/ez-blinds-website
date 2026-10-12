@@ -64,6 +64,12 @@ jobs:
           node scripts/test-editorial-visuals.mjs | tee /tmp/editorial-design.log
           grep -q 'EZB_EDITORIAL_ART_DIRECTION_TEST_PASS' /tmp/editorial-design.log
 
+      - name: Test rendered editorial slideshow image selection and accessible labels
+        run: |
+          php -l scripts/test-editorial-rendered-slides.php
+          php scripts/test-editorial-rendered-slides.php | tee /tmp/editorial-rendered-slides.log
+          grep -q 'EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=4' /tmp/editorial-rendered-slides.log
+
       - name: Verify background-tab video autoplay safety
         run: |
           node --check scripts/test-site-video-visibility.mjs
