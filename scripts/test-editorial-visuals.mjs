@@ -50,7 +50,7 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced) {
+function exerciseMotionPreference(initialReduced, failImages = false) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
@@ -61,18 +61,29 @@ function exerciseMotionPreference(initialReduced) {
   const previous = control();
   const next = control();
   const slides = Array.from({ length: 4 }, () => {
-    const slide = { active: false, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
-      querySelector() { return { loading: 'lazy' }; } };
+    const image = {
+      loading: 'lazy', complete: false, naturalWidth: 640, handlers: {},
+      addEventListener(event, callback) { this.handlers[event] = callback; }
+    };
+    const slide = {
+      active: false, removed: false, image, attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      querySelector() { return image; },
+      remove() { this.removed = true; }
+    };
     slide.classList = { toggle(_name, active) { slide.active = active; } };
     return slide;
   });
+  const controls = { hidden: false };
+  const heroFlags = new Set();
   const selectors = {
-    '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next
+    '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next,
+    '.ezb-cinema__controls': controls
   };
   const hero = {
     querySelectorAll() { return slides; },
     querySelector(selector) { return selectors[selector] || null; },
-    classList: { toggle() {} }, addEventListener() {}
+    classList: { toggle() {}, add(name) { heroFlags.add(name); } }, addEventListener() {}
   };
   let timerStarts = 0;
   const window = {
@@ -92,6 +103,20 @@ function exerciseMotionPreference(initialReduced) {
   assert.equal(slides[1].active, true, 'Manual Next works without autoplay');
   previous.handlers.click();
   assert.equal(slides[0].active, true, 'Manual Previous works without autoplay');
+  if (failImages) {
+    slides[0].image.handlers.error();
+    assert.equal(slides[0].removed, true, 'Broken first photo is removed');
+    assert.equal(slides[1].active, true, 'Next available photo becomes active');
+    assert.equal(controls.hidden, false, 'Two or more photos retain controls');
+    slides[1].image.handlers.error();
+    slides[2].image.handlers.error();
+    assert.equal(controls.hidden, true, 'One photo hides unnecessary controls');
+    assert.equal(toggle.disabled, true, 'Single remaining photo cannot autoplay');
+    slides[3].image.handlers.error();
+    assert.equal(heroFlags.has('ezb-cinema--missing-media'), true, 'All failed photos reveal safe text hero');
+    assert.equal(controls.hidden, true, 'No photos leaves controls hidden');
+    return;
+  }
   media.matches = !initialReduced;
   media.change();
   assert.equal(toggle.disabled, !initialReduced, 'Control must react to live preference changes');
@@ -101,6 +126,7 @@ function exerciseMotionPreference(initialReduced) {
 }
 exerciseMotionPreference(true);
 exerciseMotionPreference(false);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=2');
+exerciseMotionPreference(false, true);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=3');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));

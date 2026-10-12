@@ -115,6 +115,7 @@
 }
 .ezb-cinema__actions .ezb-cinema__secondary { background: rgba(0,0,0,.1); }
 .ezb-cinema__controls { margin-top: clamp(30px, 5vw, 66px); }
+.ezb-cinema__controls[hidden] { display: none !important; }
 .ezb-cinema__controls button {
   display: inline-flex;
   min-height: 44px;

@@ -19,6 +19,22 @@
     var focusing = false;
     var intervalMs = 7700; // four images rotate once in about 31 seconds.
 
+    // WordPress may still return markup for a missing media file. Fail closed
+    // on actual browser load errors rather than cycling through blank frames.
+    function discardFailedSlide(slide) {
+      var index = slides.indexOf(slide);
+      if (index < 0) return;
+      slides.splice(index, 1);
+      slide.remove();
+      if (index < current) current -= 1;
+      if (current >= slides.length) current = 0;
+      if (!slides.length) hero.classList.add('ezb-cinema--missing-media');
+      var controls = hero.querySelector('.ezb-cinema__controls');
+      if (controls) controls.hidden = slides.length < 2;
+      showSlide(current);
+      syncTimer();
+    }
+
     function showSlide(index) {
       if (!slides.length) return;
       current = (index + slides.length) % slides.length;
@@ -93,7 +109,14 @@
     } else if (reduced.addListener) {
       reduced.addListener(syncTimer);
     }
-    showSlide(0);
+    slides.slice().forEach(function (slide) {
+      var image = slide.querySelector('img');
+      if (!image) return;
+      image.addEventListener('error', function () { discardFailedSlide(slide); });
+      // An image can fail before this deferred script attaches its listener.
+      if (image.complete && image.naturalWidth === 0) discardFailedSlide(slide);
+    });
+    showSlide(current);
     syncTimer();
   }
 
