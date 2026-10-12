@@ -18,6 +18,7 @@
     var hovering = false;
     var focusing = false;
     var inView = true;
+    var initialising = true;
     var intervalMs = 7700; // four images rotate once in about 31 seconds.
 
     // WordPress may still return markup for a missing media file. Fail closed
@@ -32,8 +33,10 @@
       if (!slides.length) hero.classList.add('ezb-cinema--missing-media');
       var controls = hero.querySelector('.ezb-cinema__controls');
       if (controls) controls.hidden = slides.length < 2;
-      showSlide(current);
-      syncTimer();
+      if (!initialising) {
+        showSlide(current);
+        syncTimer();
+      }
     }
 
     function showSlide(index) {
@@ -129,6 +132,7 @@
       // An image can fail before this deferred script attaches its listener.
       if (image.complete && image.naturalWidth === 0) discardFailedSlide(slide);
     });
+    initialising = false;
     showSlide(current);
     syncTimer();
   }
