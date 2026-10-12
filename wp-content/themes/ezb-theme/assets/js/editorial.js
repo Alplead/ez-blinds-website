@@ -124,7 +124,7 @@
     }
     slides.slice().forEach(function (slide) {
       var image = slide.querySelector('img');
-      if (!image) return;
+      if (!image) { discardFailedSlide(slide); return; }
       image.addEventListener('error', function () { discardFailedSlide(slide); });
       // An image can fail before this deferred script attaches its listener.
       if (image.complete && image.naturalWidth === 0) discardFailedSlide(slide);

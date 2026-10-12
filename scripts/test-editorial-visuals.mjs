@@ -50,7 +50,7 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced, failImages = false) {
+function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
@@ -60,7 +60,7 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
   const toggle = control();
   const previous = control();
   const next = control();
-  const slides = Array.from({ length: 4 }, () => {
+  const slides = Array.from({ length: 4 }, (_, position) => {
     const image = {
       loading: 'lazy', complete: false, naturalWidth: 640, handlers: {},
       addEventListener(event, callback) { this.handlers[event] = callback; }
@@ -68,7 +68,7 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
     const slide = {
       active: false, removed: false, image, attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; },
-      querySelector() { return image; },
+      querySelector() { return missingImage && position === 0 ? null : image; },
       remove() { this.removed = true; }
     };
     slide.classList = { toggle(_name, active) { slide.active = active; } };
@@ -106,6 +106,12 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
     querySelectorAll() { return []; }, addEventListener() {}
   };
   runInNewContext(js, { window, document });
+  if (missingImage) {
+    assert.equal(slides[0].removed, true, 'Empty slide markup is discarded');
+    assert.equal(slides[1].active, true, 'First valid image is shown');
+    assert.equal(timerStarts, 1, 'Autoplay still works with three valid slides');
+    return;
+  }
   assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
   assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
   assert.equal(observedHero, hero, 'Hero is watched for offscreen pause');
@@ -153,6 +159,7 @@ function exerciseMotionPreference(initialReduced, failImages = false) {
 exerciseMotionPreference(true);
 exerciseMotionPreference(false);
 exerciseMotionPreference(false, true);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=3');
+exerciseMotionPreference(false, false, true);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=4');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
