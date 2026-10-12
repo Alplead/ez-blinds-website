@@ -183,6 +183,12 @@ jobs:
           bash scripts/test-staging-media-sha-guard.sh | tee /tmp/media-sha-guard.log
           grep -q 'EZB_STAGING_MEDIA_SHA_GUARD_TEST_PASS cases=7' /tmp/media-sha-guard.log
 
+      - name: Verify attachment-only exact-MIME media resolution
+        run: |
+          php -l scripts/test-media-attachment-lookup.php
+          php scripts/test-media-attachment-lookup.php | tee /tmp/media-attachment-lookup.log
+          grep -q 'EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=9' /tmp/media-attachment-lookup.log
+
       - name: Guard the 25 approved media registry filenames
         run: |
           node --check scripts/test-media-approved-registry.mjs

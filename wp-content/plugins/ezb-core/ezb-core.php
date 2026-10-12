@@ -1821,9 +1821,12 @@ function ezb_find_attachment_by_basename( $basename ) {
 	}
 	$stem       = pathinfo( $basename, PATHINFO_FILENAME );
 	$extension  = strtolower( pathinfo( $basename, PATHINFO_EXTENSION ) );
+	if ( ! in_array( $extension, array( 'webp', 'jpg', 'jpeg', 'png', 'mp4' ), true ) ) {
+		return 0;
+	}
 	$candidates = array( $basename );
 
-	if ( '' !== $stem ) {
+	if ( '' !== $stem && 'mp4' !== $extension ) {
 		// Use the optimized WebP before an original JPG/PNG if both exist.
 		// Exact MP4 filenames must keep their original search priority.
 		if ( in_array( $extension, array( 'jpg', 'jpeg', 'png' ), true ) ) {
@@ -1842,16 +1845,34 @@ function ezb_find_attachment_by_basename( $basename ) {
 		$normalised_candidates[] = sanitize_file_name( $candidate );
 	}
 
+	// Only actual, non-trashed Media Library attachments of the expected MIME
+	// may fill a curated slot. A matching postmeta row alone is not evidence.
+	$mime_types = array(
+		'webp' => 'image/webp',
+		'jpg'  => 'image/jpeg',
+		'jpeg' => 'image/jpeg',
+		'png'  => 'image/png',
+		'mp4'  => 'video/mp4',
+	);
 	foreach ( array_unique( $normalised_candidates ) as $candidate ) {
+		$candidate_extension = strtolower( pathinfo( $candidate, PATHINFO_EXTENSION ) );
+		if ( ! isset( $mime_types[ $candidate_extension ] ) ) {
+			continue;
+		}
 		$like = '%' . $wpdb->esc_like( '/' . $candidate );
 		$id   = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT post_id FROM {$wpdb->postmeta}
-				WHERE meta_key = '_wp_attached_file'
-				AND meta_value LIKE %s
-				ORDER BY post_id DESC
+				"SELECT pm.post_id FROM {$wpdb->postmeta} AS pm
+				INNER JOIN {$wpdb->posts} AS attachment ON attachment.ID = pm.post_id
+				WHERE pm.meta_key = '_wp_attached_file'
+				AND pm.meta_value LIKE %s
+				AND attachment.post_type = 'attachment'
+				AND attachment.post_status <> 'trash'
+				AND attachment.post_mime_type = %s
+				ORDER BY pm.post_id DESC
 				LIMIT 1",
-				$like
+				$like,
+				$mime_types[ $candidate_extension ]
 			)
 		);
 
