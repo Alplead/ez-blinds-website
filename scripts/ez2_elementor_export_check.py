@@ -4,12 +4,14 @@
 This does not install Elementor or import content into WordPress.
 """
 import json
+import math
 import re
 import sys
 from pathlib import Path
 
 ID = re.compile(r"[0-9a-f]{6,16}\Z")
 SLOT = re.compile(r"ez2-media://[a-z0-9][a-z0-9-]{0,79}\Z")
+URI_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 ALLOWED = {"container", "section", "column", "widget"}
 WIDGETS = {"heading", "text-editor", "image", "button", "divider", "spacer", "icon", "image-carousel"}
 
@@ -20,6 +22,9 @@ def unique(pairs):
             raise ValueError("Duplicate JSON key")
         obj[key] = value
     return obj
+
+def reject_nonfinite(value):
+    raise ValueError("Non-finite JSON number")
 
 def check(doc):
     if not isinstance(doc, dict) or set(doc) != {"title", "type", "version", "page_settings", "content"}:
@@ -53,8 +58,11 @@ def check(doc):
                 if not SLOT.fullmatch(value):
                     raise ValueError("Invalid media slot")
                 slots.add(value[len("ez2-media://"):])
-            elif "://" in value or value.startswith("//"):
+            elif ("://" in value or value.lstrip().startswith("//")
+                  or URI_SCHEME.match(value.lstrip())):
                 raise ValueError("External references are not allowed")
+        elif type(value) is float and not math.isfinite(value):
+            raise ValueError("Non-finite settings number")
         elif value is not None and type(value) not in (bool, int, float):
             raise ValueError("Unsupported settings type")
 
@@ -95,7 +103,8 @@ if __name__ == "__main__":
         path = Path(sys.argv[1])
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 256000:
             raise ValueError("Invalid export file")
-        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique,
+                          parse_constant=reject_nonfinite)
         print(json.dumps(check(data), sort_keys=True))
     except (OSError, ValueError, TypeError) as exc:
         print("EZ2_ELEMENTOR_PREFLIGHT_FAIL: " + str(exc), file=sys.stderr)
