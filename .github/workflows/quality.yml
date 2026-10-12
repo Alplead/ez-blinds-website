@@ -247,6 +247,12 @@ jobs:
           python3 scripts/test_ez2_plugin_dependency_check.py | tee /tmp/ez2-plugin-preflight.log
           grep -q 'EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases=22' /tmp/ez2-plugin-preflight.log
 
+      - name: Plan isolated EZ2 full-delivery contract without site writes
+        run: |
+          python3 -m py_compile scripts/ez2_delivery_preflight.py scripts/test_ez2_delivery_preflight.py
+          python3 scripts/test_ez2_delivery_preflight.py | tee /tmp/ez2-delivery-preflight.log
+          grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=22' /tmp/ez2-delivery-preflight.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh

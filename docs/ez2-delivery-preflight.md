@@ -1,0 +1,11 @@
+# EZ2 isolated delivery contract (engineering preflight only)
+
+This integration tool combines existing Elementor-export, third-party-plugin metadata, and Owner-edit conflict guards into a **read-only** exact-SHA delivery plan. It does not install/activate Elementor, change any WordPress site, download or import private media, back up/restore databases, verify a live runtime, or authorise publication.
+
+Run: python3 scripts/ez2_delivery_preflight.py CONTRACT_DIRECTORY EXPECTED_EXACT_40_CHARACTER_SHA
+
+Exit 0 means structurally ready for **future runtime testing only**; exit 2 means blocked by an unresolved media slot, content conflict or missing plugin checksum; exit 1 means malformed/unsafe input. Test: python3 scripts/test_ez2_delivery_preflight.py.
+
+The contract directory contains delivery.json, installed.json, a plugin lock JSON and one controlled Elementor export JSON per template. All paths are single lower-case JSON filenames, not URLs. delivery.json has exactly schema_version: 1, target_site: "ez2-isolated-only", source_sha, plugin_lock, templates and media_slots. Each template declares a managed key, file, and nullable previous_sha256 baseline. The installed.json document contains only managed keys and SHA-256 digests, not Owner content. The plugin lock follows ez2_plugin_dependency_check.py schema. media_slots lists approved symbolic placeholders (e.g. hero-one), not private file bytes, media URLs, customer identifiers or attachment IDs.
+
+No dry-run PASS proves plugin provenance, archive hash verification, Elementor Free feature compatibility, Elementor runtime import, media matching, Owner visual acceptance, LocalWP installation, backup, or rollback. Those require separate isolated WordPress integration and Owner evidence. Existing WPC production, T2, EZ BNS New Dev and main remain NO-WRITE. An isolated EZ2 LP site has not been authorised or created by this code.
