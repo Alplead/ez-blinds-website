@@ -70,10 +70,38 @@ secrets_included=no
 external_mail_delivery=manual_gate
 owner_ui_acceptance=manual_gate
 META
+# Explicitly label this release as first-party theme/core ONLY. The manifest
+# is not a promise of Elementor, third-party plugins, content, or media delivery.
+python3 - "$OUT" "$COMMIT" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+out, commit = Path(sys.argv[1]), sys.argv[2]
+archives = [
+    {"name": name, "install_path": target, "sha256": hashlib.sha256((out / name).read_bytes()).hexdigest()}
+    for name, target in (
+        ("ezb-theme.zip", "wp-content/themes/ezb-theme"),
+        ("ezb-core.zip", "wp-content/plugins/ezb-core"),
+    )
+]
+manifest = {
+    "schema_version": 1,
+    "commit": commit,
+    "delivery_scope": "theme-and-core-only",
+    "archives": archives,
+    "includes": {key: False for key in ("third_party_plugins", "elementor_templates", "wordpress_content", "media", "database")},
+    "localwp_installed": False,
+    "owner_visual_acceptance": False,
+}
+(out / "RELEASE_CONTENTS.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
 (
   cd "$OUT"
-  sha256sum ezb-theme.zip ezb-core.zip RELEASE_METADATA.txt > SHA256SUMS
+  sha256sum ezb-theme.zip ezb-core.zip RELEASE_METADATA.txt RELEASE_CONTENTS.json > SHA256SUMS
 )
+python3 "$ROOT/scripts/verify_release_scope.py" "$OUT" "$COMMIT"
 for archive in "$OUT/ezb-theme.zip" "$OUT/ezb-core.zip"; do
   listing="$(unzip -Z1 "$archive")"
   if printf '%s\n' "$listing" | grep -E '(^|/)(\.env|wp-config\.php|uploads/|\.git/|\.devcontainer/|node_modules/|vendor/|.*\.sql$|.*\.wpress$)' >/dev/null; then

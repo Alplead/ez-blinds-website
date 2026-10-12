@@ -8,6 +8,8 @@ on:
     paths:
       - 'wp-content/**'
       - 'scripts/build-release-bundle.sh'
+      - 'scripts/verify_release_scope.py'
+      - 'scripts/test_verify_release_scope.py'
       - 'scripts/release-install-smoke.sh'
       - 'scripts/host-readiness.mjs'
       - 'scripts/test-host-readiness-guard.mjs'
@@ -32,6 +34,11 @@ jobs:
         run: |
           bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
           grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+
+      - name: Verify exact-head release scope and checksums
+        run: |
+          python3 scripts/verify_release_scope.py .release "${{ github.event.pull_request.head.sha || github.sha }}"
+          (cd .release && sha256sum -c SHA256SUMS)
 
       - name: Preload Docker Official Images from public ECR
         run: |
@@ -145,6 +152,7 @@ jobs:
             .release/ezb-theme.zip
             .release/ezb-core.zip
             .release/RELEASE_METADATA.txt
+            .release/RELEASE_CONTENTS.json
             .release/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
