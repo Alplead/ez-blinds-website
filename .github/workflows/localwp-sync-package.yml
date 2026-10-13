@@ -1,0 +1,59 @@
+name: EZB LocalWP Sync Package
+on:
+  pull_request:
+    branches:
+      - feature/vertical-slice-v1
+    paths:
+      - 'wp-content/plugins/ezb-lp-sync/**'
+      - '.github/workflows/localwp-sync-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: PHP syntax and fail-closed boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=wp-content/plugins/ezb-lp-sync/ezb-lp-sync.php
+          php -l "$file"
+          grep -Fq "const EZB_LP_EXPECTED_HOST = 'ez-bns-new-dev.local';" "$file"
+          grep -Fq "EZB_LP_BRANCH = 'feature/vertical-slice-v1'" "$file"
+          grep -Fq "'Quality' => false" "$file"
+          grep -Fq "'Runtime Smoke' => false" "$file"
+          grep -Fq "'Release Install Smoke' => false" "$file"
+          grep -Fq 'check_admin_referer' "$file"
+          grep -Fq 'current_user_can' "$file"
+          grep -Fq 'wp_get_environment_type' "$file"
+          grep -Fq 'WP_CONTENT_DIR' "$file"
+          grep -Fq 'ezb-lp-sync-backups' "$file"
+          # Protected paths are inspected in code review; comments may mention them.
+          echo 'EZB_LP_SYNC_GUARD_PASS'
+      - name: Package LocalWP WordPress plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          (cd wp-content/plugins && zip -qr ../../build/ezb-lp-sync.zip ezb-lp-sync)
+          test -s build/ezb-lp-sync.zip
+          unzip -t build/ezb-lp-sync.zip | tail -1
+          sha256sum build/ezb-lp-sync.zip | tee build/SHA256SUMS
+          echo "EZB_LP_SYNC_ZIP_READY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EZB_LocalWP_Sync_Plugin_PR_${{ github.event.pull_request.number || github.sha }}
+          path: |
+            build/ezb-lp-sync.zip
+            build/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error
