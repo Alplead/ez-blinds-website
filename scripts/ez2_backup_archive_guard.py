@@ -39,6 +39,8 @@ def safe_member(name, role, is_dir=False):
 
 def inspect_tar(path, role):
     seen = set()
+    regular_paths = set()
+    implied_directories = set()
     members = files = size = 0
     try:
         with tarfile.open(path, mode="r:gz") as archive:
@@ -50,6 +52,16 @@ def inspect_tar(path, role):
                 if key in seen:
                     raise ValueError("Duplicate or case-colliding archive member")
                 seen.add(key)
+                parts = key.split("/")
+                for depth in range(1, len(parts)):
+                    parent = "/".join(parts[:depth])
+                    if parent in regular_paths:
+                        raise ValueError("File cannot contain a nested archive entry")
+                    implied_directories.add(parent)
+                if item.isfile():
+                    if key in implied_directories:
+                        raise ValueError("File conflicts with an archive directory")
+                    regular_paths.add(key)
                 if item.isdir():
                     continue
                 if not item.isfile() or item.size < 0 or item.size > MAX_MEMBER_BYTES:

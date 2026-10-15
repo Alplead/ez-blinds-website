@@ -108,5 +108,9 @@ reject(lambda r: (r / ROLES["database"]).write_bytes(b"not a gzip file"))
 reject(lambda r: (r / ROLES["database"]).write_bytes(gzip.compress(b"")))
 reject(lambda r: (r / ROLES["plugins"]).write_bytes(b"not tar gzip"))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/./bad", b"x", "file")]))
-assert cases == 18, cases
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/parent", b"x", "file"), ("uploads/parent/child", b"y", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/Parent/child", b"x", "file"), ("uploads/parent", b"y", "file")]))
+assert cases == 20, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

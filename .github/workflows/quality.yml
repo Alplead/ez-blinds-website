@@ -282,7 +282,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_archive_guard.py scripts/test_ez2_backup_archive_guard.py
           python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
-          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=18' /tmp/ez2-backup-archive-guard.log
+          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=20' /tmp/ez2-backup-archive-guard.log
 
       - name: Build and validate deployment bundle
         run: |
