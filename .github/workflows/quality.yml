@@ -296,6 +296,12 @@ jobs:
           python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
           grep -q 'EZ2_UPGRADE_GATE_PASS cases=25' /tmp/ez2-upgrade-gate.log
 
+      - name: Test exact-head release evidence auditor (offline fixtures)
+        run: |
+          python3 -m py_compile scripts/ez2_release_evidence.py scripts/test_ez2_release_evidence.py
+          python3 scripts/test_ez2_release_evidence.py | tee /tmp/ez2-release-evidence.log
+          grep -q 'EZ2_RELEASE_EVIDENCE_PASS cases=19' /tmp/ez2-release-evidence.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
