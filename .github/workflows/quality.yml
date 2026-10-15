@@ -284,6 +284,12 @@ jobs:
           python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
           grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=20' /tmp/ez2-backup-archive-guard.log
 
+      - name: Rehearse EZ2 rollback file extraction in disposable scratch (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_scratch_replay.py scripts/test_ez2_backup_scratch_replay.py
+          python3 scripts/test_ez2_backup_scratch_replay.py | tee /tmp/ez2-backup-scratch-replay.log
+          grep -q 'EZ2_BACKUP_SCRATCH_REPLAY_PASS cases=13' /tmp/ez2-backup-scratch-replay.log
+
       - name: Link installed backup and candidate delivery without applying (synthetic only)
         run: |
           python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
