@@ -260,6 +260,12 @@ jobs:
           php scripts/test_ez2_wp_runtime_probe.php | tee /tmp/ez2-wp-runtime-gate.log
           grep -q 'EZ2_WP_RUNTIME_GATE_PASS cases=21' /tmp/ez2-wp-runtime-gate.log
 
+      - name: Test isolated EZ2 Elementor media compiler with synthetic fixtures
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_media_compile.py scripts/test_ez2_elementor_media_compile.py
+          python3 scripts/test_ez2_elementor_media_compile.py | tee /tmp/ez2-elementor-media-compile.log
+          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=25' /tmp/ez2-elementor-media-compile.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
