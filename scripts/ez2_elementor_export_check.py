@@ -17,8 +17,8 @@ ALLOWED = {"container", "section", "column", "widget"}
 WIDGETS = {"heading", "text-editor", "image", "button", "divider", "spacer", "icon", "image-carousel"}
 # Deliberately conservative: this preflight is not an HTML sanitizer.
 # It accepts basic attribute-free formatting; links must use controlled button widgets.
-SAFE_TAG = re.compile(r"<(/?)(p|br|strong|em|b|i|u|ul|ol|li)(\\s*/?)>", re.IGNORECASE)
-DANGEROUS_SCHEME = re.compile(r"(?:javascript|data|vbscript|file|blob)\\s*:", re.IGNORECASE)
+SAFE_TAG = re.compile(r"<(/?)(p|br|strong|em|b|i|u|ul|ol|li)(\s*/?)>", re.IGNORECASE)
+DANGEROUS_SCHEME = re.compile(r"(?:javascript|data|vbscript|file|blob)\s*:", re.IGNORECASE)
 
 def validate_markup(value):
     decoded = unescape(value)
