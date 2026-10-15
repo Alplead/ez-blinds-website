@@ -15,9 +15,12 @@ cases = 0
 
 
 def good_backup():
-    return {"status": "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY",
-            "target_site": "ez2-isolated-only", "byte_integrity_verified": True,
-            "archive_contents_inspected": True}
+    return {"status": "SCRATCH_FILE_REPLAY_VERIFIED_ONLY",
+            "source_sha": OLD, "target_site": "ez2-isolated-only",
+            "scratch_deleted": True, "replayed_files": 3, "replayed_bytes": 30,
+            "database_sql_executed": False, "wordpress_restored": False,
+            "restore_rehearsed": False, "localwp_touched": False,
+            "deployment_authorized": False, "applied": False}
 
 
 def good_delivery():
@@ -35,10 +38,10 @@ def invoke(backup=None, delivery=None, old=OLD, new=NEW):
         a, b = Path(tmp) / "contract", Path(tmp) / "backup"
         a.mkdir()
         b.mkdir()
-        with patch("ez2_backup_archive_guard.inspect", return_value=backup) as inspect, \
+        with patch("ez2_backup_scratch_replay.replay", return_value=backup) as replay, \
              patch("ez2_delivery_preflight.run", return_value=delivery) as run:
             result = evaluate(a, b, old, new)
-            inspect.assert_called_once_with(b, old)
+            replay.assert_called_once_with(b, old)
             run.assert_called_once_with(a, new)
             return result
 
@@ -46,6 +49,9 @@ def invoke(backup=None, delivery=None, old=OLD, new=NEW):
 r = invoke()
 assert r["status"] == "PREFLIGHT_PASS_RUNTIME_GATED"
 assert r["installed_source_sha"] == OLD and r["candidate_source_sha"] == NEW
+assert r["scratch_file_replay_verified"] and r["scratch_deleted"]
+assert r["scratch_replayed_files"] == 3 and r["scratch_replayed_bytes"] == 30
+assert r["database_sql_executed"] is False and r["wordpress_restored"] is False
 assert all(r[k] is False for k in ("site_identity_verified", "wordpress_runtime_verified",
         "elementor_free_visual_verified", "restore_rehearsed", "deployment_authorized", "applied"))
 cases += 1
@@ -65,7 +71,7 @@ def reject(backup=None, delivery=None, old=OLD, new=NEW, same_dir=False):
         a, b = Path(tmp) / "contract", Path(tmp) / "backup"
         a.mkdir()
         b.mkdir()
-        with patch("ez2_backup_archive_guard.inspect", return_value=backup or good_backup()), \
+        with patch("ez2_backup_scratch_replay.replay", return_value=backup or good_backup()), \
              patch("ez2_delivery_preflight.run", return_value=delivery or good_delivery()):
             try:
                 evaluate(a, a if same_dir else b, old, new)
@@ -82,8 +88,17 @@ reject(new="B" * 40)
 reject(old=NEW, new=NEW)
 reject(same_dir=True)
 reject(backup={**good_backup(), "status": "UNKNOWN"})
-reject(backup={**good_backup(), "byte_integrity_verified": False})
-reject(backup={**good_backup(), "archive_contents_inspected": False})
+reject(backup={**good_backup(), "source_sha": NEW})
+reject(backup={**good_backup(), "scratch_deleted": False})
+reject(backup={**good_backup(), "replayed_files": 0})
+reject(backup={**good_backup(), "replayed_files": True})
+reject(backup={**good_backup(), "replayed_bytes": 0})
+reject(backup={**good_backup(), "database_sql_executed": True})
+reject(backup={**good_backup(), "wordpress_restored": True})
+reject(backup={**good_backup(), "restore_rehearsed": True})
+reject(backup={**good_backup(), "localwp_touched": True})
+reject(backup={**good_backup(), "deployment_authorized": True})
+reject(backup={**good_backup(), "applied": True})
 reject(backup={**good_backup(), "target_site": "ezbns.com.au"})
 reject(delivery={**good_delivery(), "target_site": "ez-bns-new-dev.local"})
 reject(delivery={**good_delivery(), "applied": True})
@@ -94,7 +109,7 @@ with tempfile.TemporaryDirectory() as tmp:
     a, b = Path(tmp) / "contract", Path(tmp) / "backup"
     a.mkdir()
     b.mkdir()
-    with patch("ez2_backup_archive_guard.inspect", side_effect=ValueError("tampered archive")):
+    with patch("ez2_backup_scratch_replay.replay", side_effect=ValueError("tampered archive")):
         try:
             evaluate(a, b, OLD, NEW)
         except ValueError:
@@ -102,5 +117,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 16, cases
+assert cases == 25, cases
 print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")

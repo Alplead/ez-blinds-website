@@ -294,7 +294,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
           python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
-          grep -q 'EZ2_UPGRADE_GATE_PASS cases=16' /tmp/ez2-upgrade-gate.log
+          grep -q 'EZ2_UPGRADE_GATE_PASS cases=25' /tmp/ez2-upgrade-gate.log
 
       - name: Build and validate deployment bundle
         run: |

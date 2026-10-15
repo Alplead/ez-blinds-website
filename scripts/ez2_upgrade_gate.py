@@ -3,8 +3,9 @@
 
 A backup belongs to the *installed* source SHA, not the incoming candidate SHA.
 Passing this gate is NOT permission to install: isolated WordPress/Elementor
-runtime checks, real site identity, Owner approval and a rehearsed restore remain
-separate mandatory gates. No WordPress credentials or private files are emitted.
+runtime checks, real site identity, Owner approval and a real database restore
+rehearsal remain separate mandatory gates. File replay occurs only inside an
+auto-deleted private scratch directory; no WordPress site is touched. No WordPress credentials or private files are emitted.
 """
 import json
 import re
@@ -25,16 +26,23 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
     if contract_dir.resolve() == backup_dir.resolve():
         raise ValueError("Backup and delivery contract directories must be separate")
 
-    # Imported only after identity checks, and both helpers are strictly read-only.
-    from ez2_backup_archive_guard import inspect
+    # The scratch helper verifies archive bytes/paths, replays only file components
+    # into a disposable private directory, and deletes it before returning.
+    # The SQL dump is inspected but never executed.
+    from ez2_backup_scratch_replay import replay
     from ez2_delivery_preflight import run
 
-    backup = inspect(backup_dir, installed_sha)
-    if (backup["status"] != "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY"
-            or not backup["byte_integrity_verified"]
-            or not backup["archive_contents_inspected"]
-            or backup["target_site"] != "ez2-isolated-only"):
-        raise ValueError("Backup preflight did not verify bytes and archive structure")
+    scratch = replay(backup_dir, installed_sha)
+    if (scratch["status"] != "SCRATCH_FILE_REPLAY_VERIFIED_ONLY"
+            or scratch["source_sha"] != installed_sha
+            or scratch["target_site"] != "ez2-isolated-only"
+            or scratch["scratch_deleted"] is not True
+            or type(scratch["replayed_files"]) is not int or scratch["replayed_files"] < 1
+            or type(scratch["replayed_bytes"]) is not int or scratch["replayed_bytes"] < 1
+            or any(scratch[key] is not False for key in (
+                "database_sql_executed", "wordpress_restored", "restore_rehearsed",
+                "localwp_touched", "deployment_authorized", "applied"))):
+        raise ValueError("Backup scratch file replay did not pass safely")
     delivery = run(contract_dir, candidate_sha)
     if delivery["target_site"] != "ez2-isolated-only" or delivery["applied"]:
         raise ValueError("Delivery preflight returned an unsafe site or applied state")
@@ -49,6 +57,12 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
         "target_site": "ez2-isolated-only",
         "backup_bytes_verified": True,
         "backup_archive_structure_verified": True,
+        "scratch_file_replay_verified": True,
+        "scratch_deleted": True,
+        "scratch_replayed_files": scratch["replayed_files"],
+        "scratch_replayed_bytes": scratch["replayed_bytes"],
+        "database_sql_executed": False,
+        "wordpress_restored": False,
         "delivery_status": delivery["status"],
         "unresolved_media_slots": delivery["unresolved_media_slots"],
         "missing_plugin_checksums": delivery["missing_plugin_checksums"],
