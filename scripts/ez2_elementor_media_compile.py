@@ -36,6 +36,7 @@ def validate_media_map(mapping, expected_host):
     slots = mapping["slots"]
     if not isinstance(slots, dict) or not 1 <= len(slots) <= 100:
         raise ValueError("Invalid media map size")
+    seen_ids, seen_urls = {}, {}
     for slot, media in slots.items():
         if not isinstance(slot, str) or not SLOT.fullmatch(slot):
             raise ValueError("Invalid media slot key")
@@ -61,6 +62,10 @@ def validate_media_map(mapping, expected_host):
                 or not all(SEGMENT.fullmatch(p) and p not in (".", "..") for p in parts[3:])
                 or not parts[-1].lower().endswith(MIME[mime])):
             raise ValueError("Invalid local WordPress media path")
+        previous_url = seen_ids.setdefault(media["id"], url)
+        previous_id = seen_urls.setdefault(url, media["id"])
+        if previous_url != url or previous_id != media["id"]:
+            raise ValueError("Conflicting attachment ID and URL mapping")
     return slots
 
 def compile_export(doc, mapping, expected_host):

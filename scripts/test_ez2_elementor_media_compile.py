@@ -60,6 +60,22 @@ reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://user@{HOST}/wp-cont
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/photo.webp#frag"))
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/\\photo.webp"))
 
+def add_second_slot(doc, media_map, attachment_id, url):
+    media_map["slots"]["hero-two"] = {"id": attachment_id, "url": url, "mime": "image/webp"}
+    doc["content"][0]["settings"]["background_slideshow_gallery"].append(
+        {"url": "ez2-media://hero-two", "id": ""})
+
+# Reusing the same attachment across slots is allowed; conflicting mappings are not.
+reject(lambda d,m:add_second_slot(d,m,123,
+       f"http://{HOST}/wp-content/uploads/2026/10/other-photo.webp"))
+reject(lambda d,m:add_second_slot(d,m,124,URL))
+d_alias,m_alias=fixture()
+add_second_slot(d_alias,m_alias,123,URL)
+alias_export,alias_meta=compile_export(d_alias,m_alias,HOST)
+assert alias_meta["media_slots_resolved"]==2
+assert alias_export["content"][0]["settings"]["background_slideshow_gallery"][1]=={"url":URL,"id":123}
+cases+=1
+
 with tempfile.TemporaryDirectory() as tmp:
     tmp=Path(tmp)
     target=tmp/"resolved.json"
@@ -83,5 +99,5 @@ with tempfile.TemporaryDirectory() as tmp:
     assert r.returncode==0,r.stderr
     assert json.loads(r.stdout)["wordpress_imported"] is False
     cases+=1
-assert cases==25,cases
+assert cases==28,cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")

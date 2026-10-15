@@ -264,7 +264,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_elementor_media_compile.py scripts/test_ez2_elementor_media_compile.py
           python3 scripts/test_ez2_elementor_media_compile.py | tee /tmp/ez2-elementor-media-compile.log
-          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=25' /tmp/ez2-elementor-media-compile.log
+          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=28' /tmp/ez2-elementor-media-compile.log
 
       - name: Build and validate deployment bundle
         run: |
