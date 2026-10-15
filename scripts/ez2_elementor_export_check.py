@@ -7,6 +7,7 @@ import json
 import math
 import re
 import sys
+from html import unescape
 from pathlib import Path
 
 ID = re.compile(r"[0-9a-f]{6,16}\Z")
@@ -14,6 +15,40 @@ SLOT = re.compile(r"ez2-media://[a-z0-9][a-z0-9-]{0,79}\Z")
 URI_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 ALLOWED = {"container", "section", "column", "widget"}
 WIDGETS = {"heading", "text-editor", "image", "button", "divider", "spacer", "icon", "image-carousel"}
+# Deliberately conservative: this preflight is not an HTML sanitizer.
+# It accepts basic attribute-free formatting; links must use controlled button widgets.
+SAFE_TAG = re.compile(r"<(/?)(p|br|strong|em|b|i|u|ul|ol|li)(\\s*/?)>", re.IGNORECASE)
+DANGEROUS_SCHEME = re.compile(r"(?:javascript|data|vbscript|file|blob)\\s*:", re.IGNORECASE)
+
+def validate_markup(value):
+    decoded = unescape(value)
+    if DANGEROUS_SCHEME.search(decoded):
+        raise ValueError("Unsupported embedded URI scheme")
+    if "<" not in decoded:
+        return
+    stack = []
+    for token in re.split(r"(<[^>]*>)", decoded):
+        if not token:
+            continue
+        if token.startswith("<"):
+            match = SAFE_TAG.fullmatch(token)
+            if not match:
+                raise ValueError("Unsupported HTML markup")
+            closing, tag, self_closing = match.groups()
+            tag = tag.lower()
+            if closing:
+                if self_closing or not stack or stack.pop() != tag:
+                    raise ValueError("Unbalanced HTML markup")
+            elif tag == "br":
+                continue
+            elif self_closing:
+                raise ValueError("Unsupported self-closing HTML markup")
+            else:
+                stack.append(tag)
+        elif "<" in token:
+            raise ValueError("Malformed HTML markup")
+    if stack:
+        raise ValueError("Unclosed HTML markup")
 
 def unique(pairs):
     obj = {}
@@ -54,6 +89,7 @@ def check(doc):
         elif isinstance(value, str):
             if len(value) > 6000:
                 raise ValueError("Settings text limit")
+            validate_markup(value)
             if value.startswith("ez2-media://"):
                 if not SLOT.fullmatch(value):
                     raise ValueError("Invalid media slot")

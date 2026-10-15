@@ -241,6 +241,12 @@ jobs:
           python3 scripts/test_ez2_elementor_hardening.py | tee /tmp/ez2-elementor-hardening.log
           grep -q 'EZ2_ELEMENTOR_HARDENING_PASS cases=12' /tmp/ez2-elementor-hardening.log
 
+      - name: Reject unsafe and encoded Elementor HTML markup
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_html_guard.py
+          python3 scripts/test_ez2_elementor_html_guard.py | tee /tmp/ez2-elementor-html-guard.log
+          grep -q 'EZ2_ELEMENTOR_HTML_GUARD_PASS cases=16' /tmp/ez2-elementor-html-guard.log
+
       - name: Check isolated EZ2 plugin lockfile metadata without installing
         run: |
           python3 -m py_compile scripts/ez2_plugin_dependency_check.py scripts/test_ez2_plugin_dependency_check.py
