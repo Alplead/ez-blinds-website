@@ -284,6 +284,12 @@ jobs:
           python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
           grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=20' /tmp/ez2-backup-archive-guard.log
 
+      - name: Link installed backup and candidate delivery without applying (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
+          python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
+          grep -q 'EZ2_UPGRADE_GATE_PASS cases=16' /tmp/ez2-upgrade-gate.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
