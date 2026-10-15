@@ -16,6 +16,9 @@ on:
       - '.github/release-install/**'
       - 'scripts/ez2_content_guard.py'
       - 'scripts/test_ez2_content_guard.py'
+      # Re-run clean installation whenever EZ2 delivery, dependency or template guards change.
+      - 'scripts/ez2_*'
+      - 'scripts/test_ez2_*'
       - '.github/workflows/release-install-smoke.yml'
   workflow_dispatch:
 
