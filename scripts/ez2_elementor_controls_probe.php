@@ -18,7 +18,6 @@ if (!$container || !method_exists($container, 'get_controls')) {
     fwrite(STDERR, "EZ2_ELEMENTOR_CONTAINER_NOT_REGISTERED\n");
     exit(1);
 }
-$controls = $container->get_controls();
 $required = [
     'background_background', 'background_slideshow_gallery',
     'background_slideshow_slide_duration', 'background_slideshow_slide_transition',
@@ -26,7 +25,14 @@ $required = [
     'background_slideshow_ken_burns_zoom_direction', 'background_overlay_background',
     'background_overlay_opacity',
 ];
-$missing = array_values(array_diff($required, array_keys($controls)));
+// Elementor can store Style-tab controls separately from the default stack.
+// Individual lookups resolve controls in both stacks; bulk lookups may not.
+$missing = [];
+foreach ($required as $control_id) {
+    if (null === $container->get_controls($control_id)) {
+        $missing[] = $control_id;
+    }
+}
 if ($missing) {
     fwrite(STDERR, 'EZ2_ELEMENTOR_MISSING_CONTROLS: ' . implode(',', $missing) . "\n");
     exit(1);
