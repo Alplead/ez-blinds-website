@@ -253,6 +253,12 @@ jobs:
           python3 scripts/test_ez2_plugin_dependency_check.py | tee /tmp/ez2-plugin-preflight.log
           grep -q 'EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases=22' /tmp/ez2-plugin-preflight.log
 
+      - name: Verify pinned isolated EZ2 plugin archive structure (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_archive_verify.py scripts/test_ez2_plugin_archive_verify.py
+          python3 scripts/test_ez2_plugin_archive_verify.py | tee /tmp/ez2-plugin-archive-verify.log
+          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=25' /tmp/ez2-plugin-archive-verify.log
+
       - name: Plan isolated EZ2 full-delivery contract without site writes
         run: |
           python3 -m py_compile scripts/ez2_delivery_preflight.py scripts/test_ez2_delivery_preflight.py
