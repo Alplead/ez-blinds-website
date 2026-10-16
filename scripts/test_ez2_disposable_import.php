@@ -15,4 +15,6 @@ $b=$m;$b['home-hero-one']['url']='http://ez2-review.local.evil.invalid/wp-conten
 $b=$m;unset($b['home-hero-two']);rejectDoc($d,$b);
 $b=$m;$b['home-hero-one']['id']='1';rejectDoc($d,$b);
 $b=$d;$b['content'][0]['elements'][]=$d['content'][0]['elements'][0];rejectDoc($b,$m);
-if($cases!==23)throw new RuntimeException('case count '.$cases);echo "EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=$cases\n";
+$source=file_get_contents(__DIR__.'/ez2_disposable_import.php');
+if(str_contains($source,'wp_get_post_status(')||!str_contains($source,'get_post_status($post)'))throw new RuntimeException('post status API regression');$cases++;
+if($cases!==24)throw new RuntimeException('case count '.$cases);echo "EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=$cases\n";

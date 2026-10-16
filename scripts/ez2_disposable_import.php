@@ -42,7 +42,7 @@ static function execute():void {
  $plugin=\Elementor\Plugin::instance();$document=$plugin->documents->get($post);
  if(!$document||!method_exists($document,'get_elements_data'))throw new RuntimeException('DOCUMENT');
  $loaded=$document->get_elements_data();
- if(!is_array($loaded)||count($loaded)!==1||($loaded[0]['settings']['background_slideshow_gallery']??null)!==$compiled['content'][0]['settings']['background_slideshow_gallery']||wp_get_post_status($post)!=='draft')throw new RuntimeException('ROUNDTRIP');
+ if(!is_array($loaded)||count($loaded)!==1||($loaded[0]['settings']['background_slideshow_gallery']??null)!==$compiled['content'][0]['settings']['background_slideshow_gallery']||get_post_status($post)!=='draft')throw new RuntimeException('ROUNDTRIP');
  $html=$plugin->frontend->get_builder_content_for_display($post,true);
  if(!is_string($html)||!(str_contains($html,'Blinds &amp; Shutters')||str_contains($html,'Blinds & Shutters'))||!str_contains($html,'Request a Quote'))throw new RuntimeException('FRONTEND');
  echo 'EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version='.ELEMENTOR_VERSION.' draft=true attachments=4 gallery=4 frontend_text=true visual_qa_verified=false localwp_installed=false deployment_authorized=false'."\n";
