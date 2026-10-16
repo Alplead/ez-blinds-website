@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory() as tmp:
     output = root / "candidate.zip"
     record = pack(RAW, SHA, output)
     assert record["scope"] == "unpublished-elementor-hero-review-only"
-    assert record["media_slots"] == sorted(("home-hero-one", "home-hero-two", "home-hero-three", "home-hero-four"))
+    assert record["media_slots"] == ["home-hero-one", "home-hero-two", "home-hero-three", "home-hero-four"]
     assert all(record[k] is False for k in ("media_bytes_included", "plugins_included",
         "database_included", "localwp_installed", "deployment_authorized"))
     cases += 1
