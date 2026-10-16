@@ -36,8 +36,27 @@ jobs:
         run: |
           set -euo pipefail
           for image in mariadb:11 wordpress:7.1-php8.3-apache wordpress:cli; do
-            docker pull "public.ecr.aws/docker/library/$image"
-            docker tag "public.ecr.aws/docker/library/$image" "$image"
+            pulled=0
+            # Public ECR occasionally returns "Rate exceeded" before any WP test starts.
+            for attempt in 1 2 3; do
+              if docker pull "public.ecr.aws/docker/library/$image"; then
+                docker tag "public.ecr.aws/docker/library/$image" "$image"
+                pulled=1
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
+            done
+            # Only official public Docker Hub image names; never pull from arbitrary registries.
+            if [ "$pulled" -ne 1 ]; then
+              for attempt in 1 2; do
+                if docker pull "$image"; then
+                  pulled=1
+                  break
+                fi
+                if [ "$attempt" -lt 2 ]; then sleep 10; fi
+              done
+            fi
+            if [ "$pulled" -ne 1 ]; then echo "EZ2_CONTAINER_PULL_UNAVAILABLE image=$image" >&2; exit 1; fi
           done
       - name: Install pinned Elementor Free in disposable WordPress only
         env:

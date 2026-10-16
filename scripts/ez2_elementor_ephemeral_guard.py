@@ -31,6 +31,10 @@ def check_contract(workflow, candidate):
         '"slideshow_ken_burns_verified": false' in workflow and '"deployment_authorized": false' in workflow,
         all(x not in workflow for x in ("ezbns.com.au", "ez-bns-new-dev.local", "t2-ez-blinds-shutters.local", "secrets.")),
         "EZ2_ELEMENTOR_RUNTIME_VERSION_PASS version=$EZ2_ELEMENTOR_VERSION" in workflow,
+        "for attempt in 1 2 3; do" in workflow,
+        'if docker pull "$image"; then' in workflow,
+        'if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi' in workflow,
+        'EZ2_CONTAINER_PULL_UNAVAILABLE image=$image' in workflow,
     ]
     return [index + 1 for index, ok in enumerate(checks) if not ok], len(checks)
 

@@ -223,6 +223,12 @@ jobs:
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
           grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=19' /tmp/release-scope-regression.log
 
+      - name: Test isolated Elementor split Style-tab controls and missing overlay
+        run: |
+          php -l scripts/test_ez2_elementor_controls_probe.php
+          php scripts/test_ez2_elementor_controls_probe.php | tee /tmp/ez2-elementor-controls-regression.log
+          grep -q 'EZ2_ELEMENTOR_CONTROLS_PROBE_REGRESSION_PASS cases=2' /tmp/ez2-elementor-controls-regression.log
+
       - name: Lint isolated Elementor control registration probe
         run: php -l scripts/ez2_elementor_controls_probe.php
 
