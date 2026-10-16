@@ -54,12 +54,13 @@ services:
       WORDPRESS_DB_NAME: wordpress
       # wp-config-docker.php evaluates the caller container's environment.
       # The CLI bootstrap must agree with the web container on HTTP warning display.
-      WORDPRESS_CONFIG_EXTRA: "define('WP_DEBUG_DISPLAY', false);"
+      WORDPRESS_CONFIG_EXTRA: "define('WP_ENVIRONMENT_TYPE', 'development'); define('WP_DEBUG_DISPLAY', false);"
     volumes:
       - wp_data:/var/www/html
       - ../wp-content/themes/ezb-theme:/var/www/html/wp-content/themes/ezb-theme
       - ../wp-content/plugins/ezb-core:/var/www/html/wp-content/plugins/ezb-core
       - ../scripts:/opt/ezb-scripts:ro
+      - ../design/ez2-home-hero-candidate.json:/opt/ezb-design/ez2-home-hero-candidate.json:ro
     entrypoint: ["/bin/sh", "/opt/ezb-scripts/bootstrap-compose.sh"]
     restart: "no"
 

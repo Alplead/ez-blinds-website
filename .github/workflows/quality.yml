@@ -223,6 +223,13 @@ jobs:
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
           grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=19' /tmp/release-scope-regression.log
 
+      - name: Test synthetic Elementor draft import fail-closed guards
+        run: |
+          php -l scripts/ez2_disposable_import.php
+          php -l scripts/test_ez2_disposable_import.php
+          php scripts/test_ez2_disposable_import.php | tee /tmp/ez2-disposable-import-guard.log
+          grep -q 'EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=23' /tmp/ez2-disposable-import-guard.log
+
       - name: Test isolated Elementor split Style-tab controls and missing overlay
         run: |
           php -l scripts/test_ez2_elementor_controls_probe.php
