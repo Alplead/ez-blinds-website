@@ -14,7 +14,7 @@ from pathlib import Path
 from ez2_home_candidate_check import check as check_candidate
 from ez2_elementor_export_check import unique, reject_nonfinite
 
-SHA = re.compile(r"[0-9a-f]{40}\\Z")
+SHA = re.compile(r"[0-9a-f]{40}\Z")
 TEMPLATE = "design/ez2-home-hero-candidate.json"
 METADATA = "CANDIDATE_METADATA.json"
 MAX_BYTES = 256000
