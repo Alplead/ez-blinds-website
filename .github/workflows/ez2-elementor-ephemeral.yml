@@ -1,0 +1,55 @@
+name: EZ2 Elementor Ephemeral Runtime (No Deployment)
+
+on:
+  pull_request:
+    paths:
+      - 'design/ez2-home-hero-candidate.json'
+      - 'scripts/ez2_wp_runtime_probe.php'
+      - 'scripts/ez2_elementor_ephemeral_guard.py'
+      - '.github/workflows/ez2-elementor-ephemeral.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-elementor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Validate exact candidate and ephemeral-only workflow
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_elementor_ephemeral_guard.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Pull official container images
+        run: |
+          set -euo pipefail
+          for image in mariadb:11 wordpress:7.1-php8.3-apache wordpress:cli; do
+            docker pull "public.ecr.aws/docker/library/$image"
+            docker tag "public.ecr.aws/docker/library/$image" "$image"
+          done
+      - name: Install pinned Elementor Free in disposable WordPress only
+        env:
+          EZ2_PROJECT: ez2ci${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml up -d --wait db wordpress
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm bootstrap
+          for key in home siteurl; do
+            docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update "$key" http://ez2-review.local --allow-root
+          done
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ez2_site_identity ez2-isolated-only --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap plugin install elementor --version=4.3.4 --activate --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap plugin is-active elementor --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION=4.3.4 --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_wp_runtime_probe.php --allow-root | tee /tmp/ez2-runtime.json
+          grep -Fq '"status": "READY_FOR_MANUAL_ELEMENTOR_FEATURE_TEST"' /tmp/ez2-runtime.json
+          grep -Fq '"slideshow_ken_burns_verified": false' /tmp/ez2-runtime.json
+          grep -Fq '"deployment_authorized": false' /tmp/ez2-runtime.json
+      - name: Destroy disposable test database and files
+        if: always()
+        env:
+          EZ2_PROJECT: ez2ci${{ github.run_id }}
+        run: docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml down -v --remove-orphans

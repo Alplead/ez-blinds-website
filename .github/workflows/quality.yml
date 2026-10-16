@@ -223,6 +223,12 @@ jobs:
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
           grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=19' /tmp/release-scope-regression.log
 
+      - name: Guard isolated Elementor CI scope and pinned version
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_ephemeral_guard.py
+          python3 scripts/ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-ephemeral-guard.log
+          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=16' /tmp/ez2-elementor-ephemeral-guard.log
+
       - name: Verify EZ2 managed-content conflict dry-run guard
         run: |
           python3 -m py_compile scripts/ez2_content_guard.py scripts/test_ez2_content_guard.py
