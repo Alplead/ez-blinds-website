@@ -1,0 +1,21 @@
+name: EZ2 Hero Candidate (No Deployment)
+
+on:
+  pull_request:
+    paths:
+      - 'design/ez2-home-hero-candidate.json'
+      - 'scripts/ez2_home_candidate_check.py'
+      - 'scripts/test_ez2_home_candidate_check.py'
+      - 'scripts/ez2_elementor_export_check.py'
+      - 'scripts/ez2_elementor_media_compile.py'
+      - '.github/workflows/ez2-hero-candidate.yml'
+
+jobs:
+  offline-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check unpublished hero candidate without WordPress writes
+        run: python3 scripts/test_ez2_home_candidate_check.py
