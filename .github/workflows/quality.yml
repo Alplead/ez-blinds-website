@@ -265,6 +265,12 @@ jobs:
           python3 scripts/test_ez2_plugin_official_fetch.py | tee /tmp/ez2-official-plugin-fetch.log
           grep -q 'EZ2_OFFICIAL_PLUGIN_FETCH_PASS cases=14' /tmp/ez2-official-plugin-fetch.log
 
+      - name: Observe plugin checksum candidates safely (offline fixtures only)
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_checksum_probe.py scripts/test_ez2_plugin_checksum_probe.py
+          python3 scripts/test_ez2_plugin_checksum_probe.py | tee /tmp/ez2-checksum-probe.log
+          grep -q 'EZ2_PLUGIN_CHECKSUM_PROBE_PASS cases=16' /tmp/ez2-checksum-probe.log
+
       - name: Plan isolated EZ2 full-delivery contract without site writes
         run: |
           python3 -m py_compile scripts/ez2_delivery_preflight.py scripts/test_ez2_delivery_preflight.py
