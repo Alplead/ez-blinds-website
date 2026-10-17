@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { HOST, VIEWPORTS, validateScope, reviewEvidence } from './ez2_isolated_frontend_browser.mjs';
 let cases = 0;
 const validEnv = { EZ2_ISOLATED_BROWSER: 'YES_DISPOSABLE_ONLY',
@@ -35,5 +36,8 @@ for (const change of [
   { contactMethod: 'get' }, { contactSubmitLabel: false },
   { contactHorizontalOverflow: true }
 ]) { assert.ok(reviewEvidence({ ...good, ...change }).length); cases++; }
-assert.equal(cases, 29);
+const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
+assert.ok(source.includes("form.getAttribute('action')"),
+  'Form input named action must not shadow the HTMLFormElement action property'); cases++;
+assert.equal(cases, 30);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);

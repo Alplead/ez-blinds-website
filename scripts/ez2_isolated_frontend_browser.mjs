@@ -78,13 +78,17 @@ export async function run(env = process.env) {
           styleSheets: document.styleSheets.length,
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
+        await page.screenshot({
+          path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '-home.png'),
+          fullPage: true
+        });
         // Read-only contact journey: never click submit or call admin-post.
         const contactResponse = await page.goto('http://' + HOST + '/contact/', {
           waitUntil: 'networkidle', timeout: 45000
         });
         const contact = await page.evaluate(() => {
           const form = document.querySelector('.ezb-quote-form');
-          const action = form ? new URL(form.action, location.href) : null;
+          const action = form ? new URL(form.getAttribute('action') || '', location.href) : null;
           return {
             contactHost: location.hostname,
             contactFormPresent: Boolean(form),
