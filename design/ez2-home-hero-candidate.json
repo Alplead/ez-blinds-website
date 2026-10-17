@@ -1,0 +1,77 @@
+{
+  "title": "EZ2 Home Hero - Unpublished Owner Review Candidate",
+  "type": "page",
+  "version": "4.3.4",
+  "page_settings": {
+    "hide_title": "yes"
+  },
+  "content": [
+    {
+      "id": "e2a10001",
+      "elType": "container",
+      "settings": {
+        "content_width": "full",
+        "min_height": {
+          "unit": "vh",
+          "size": 90
+        },
+        "background_background": "slideshow",
+        "background_slideshow_gallery": [
+          {
+            "id": "",
+            "url": "ez2-media://home-hero-one"
+          },
+          {
+            "id": "",
+            "url": "ez2-media://home-hero-two"
+          },
+          {
+            "id": "",
+            "url": "ez2-media://home-hero-three"
+          },
+          {
+            "id": "",
+            "url": "ez2-media://home-hero-four"
+          }
+        ],
+        "background_slideshow_loop": "yes",
+        "background_slideshow_slide_duration": 5000,
+        "background_slideshow_slide_transition": "fade",
+        "background_slideshow_transition_duration": 1200,
+        "background_slideshow_ken_burns": "yes",
+        "background_slideshow_ken_burns_zoom_direction": "in",
+        "background_slideshow_size": "cover",
+        "background_overlay_background": "classic",
+        "background_overlay_color": "#000000",
+        "background_overlay_opacity": {
+          "unit": "px",
+          "size": 0.45
+        }
+      },
+      "elements": [
+        {
+          "id": "e2a10002",
+          "elType": "widget",
+          "widgetType": "heading",
+          "settings": {
+            "title": "Blinds & Shutters",
+            "header_size": "h1"
+          },
+          "elements": []
+        },
+        {
+          "id": "e2a10003",
+          "elType": "widget",
+          "widgetType": "button",
+          "settings": {
+            "text": "Request a Quote",
+            "link": {
+              "url": "/contact/"
+            }
+          },
+          "elements": []
+        }
+      ]
+    }
+  ]
+}

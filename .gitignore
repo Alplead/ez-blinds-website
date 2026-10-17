@@ -1,0 +1,44 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+wp-config.php
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+secrets/
+.local-secrets/
+
+# Databases / backups
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.wpress
+*.bak
+backups/
+
+# WordPress runtime / generated
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup*/
+
+# Dependencies / build
+node_modules/
+vendor/
+
+# Logs
+*.log
+
+# Local release bundles
+.release/
