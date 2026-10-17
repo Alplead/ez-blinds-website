@@ -89,7 +89,8 @@ export async function run(env = process.env) {
             li.querySelector(':scope > a')?.textContent?.trim() || ''),
           navServiceAreasTopLevel: [...document.querySelectorAll('header .wp-block-navigation__container > li > a')].some(a =>
             new URL(a.href, location.href).pathname === '/service-areas/'),
-          footerServiceAreasLink: Boolean(document.querySelector('footer a[href="/service-areas/"]')),
+          footerServiceAreasLink: [...document.querySelectorAll('footer a[href]')].some(a =>
+            new URL(a.href, location.href).pathname === '/service-areas/'),
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
         await page.screenshot({
@@ -114,7 +115,8 @@ export async function run(env = process.env) {
             contactActionHost: action?.hostname || '',
             contactMethod: form?.method?.toLowerCase() || '',
             contactSubmitLabel: Boolean(form?.querySelector('button[type="submit"]')?.textContent?.includes('Send enquiry')),
-            contactServiceAreasLink: Boolean(document.querySelector('.ezb-contact-service-areas a[href="/service-areas/"]')),
+            contactServiceAreasLink: [...document.querySelectorAll('.ezb-contact-service-areas a[href]')].some(a =>
+              new URL(a.href, location.href).pathname === '/service-areas/'),
             contactHorizontalOverflow: document.documentElement.scrollWidth >
               document.documentElement.clientWidth + 1
           };
