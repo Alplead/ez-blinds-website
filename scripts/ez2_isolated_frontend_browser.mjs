@@ -88,10 +88,10 @@ export async function run(env = process.env) {
           navProductChildren: [...document.querySelectorAll('header .wp-block-navigation__container > li:first-child > ul > li')].map(li =>
             li.querySelector(':scope > a')?.textContent?.trim() || ''),
           navServiceAreasTopLevel: [...document.querySelectorAll('header .wp-block-navigation__container > li > a')].some(a =>
-            new URL(a.href, location.href).pathname.replace(/\\/+$/, '') === '/service-areas'),
+            ['/service-areas', '/service-areas/'].includes(new URL(a.href, location.href).pathname)),
           footerLinkPaths: [...document.querySelectorAll('footer a[href]')].map(a => new URL(a.href, location.href).pathname),
           footerServiceAreasLink: [...document.querySelectorAll('footer a[href]')].some(a =>
-            new URL(a.href, location.href).pathname.replace(/\\/+$/, '') === '/service-areas'),
+            ['/service-areas', '/service-areas/'].includes(new URL(a.href, location.href).pathname)),
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
         await page.screenshot({
@@ -118,7 +118,7 @@ export async function run(env = process.env) {
             contactSubmitLabel: Boolean(form?.querySelector('button[type="submit"]')?.textContent?.includes('Send enquiry')),
             contactLinkPaths: [...document.querySelectorAll('.ezb-contact-service-areas a[href]')].map(a => new URL(a.href, location.href).pathname),
             contactServiceAreasLink: [...document.querySelectorAll('.ezb-contact-service-areas a[href]')].some(a =>
-              new URL(a.href, location.href).pathname.replace(/\\/+$/, '') === '/service-areas'),
+              ['/service-areas', '/service-areas/'].includes(new URL(a.href, location.href).pathname)),
             contactHorizontalOverflow: document.documentElement.scrollWidth >
               document.documentElement.clientWidth + 1
           };
