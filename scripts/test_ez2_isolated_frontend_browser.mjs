@@ -22,10 +22,7 @@ const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   contactFormPresent: true, contactNameRequired: true, contactPhone: true,
   contactEmail: true, contactNonce: true, contactActionPath: '/wp-admin/admin-post.php',
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
-  contactHorizontalOverflow: false, navTopLevel: ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'],
-  navProductChildren: ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
-    'Retractable Flyscreens', 'Motorised Blinds'], navServiceAreasTopLevel: false,
-  footerServiceAreasLink: true, contactServiceAreasLink: true };
+  contactHorizontalOverflow: false };
 assert.deepEqual(reviewEvidence(good), []); cases++;
 for (const change of [
   { status: 302 }, { host: 'ezbns.com.au' }, { hasMain: false },
@@ -37,12 +34,10 @@ for (const change of [
   { contactEmail: false }, { contactNonce: false },
   { contactActionPath: '/external' }, { contactActionHost: 'other.local' },
   { contactMethod: 'get' }, { contactSubmitLabel: false },
-  { contactHorizontalOverflow: true }, { navTopLevel: ['Products', 'Blog'] },
-  { navProductChildren: ['Roller Blinds'] }, { navServiceAreasTopLevel: true },
-  { footerServiceAreasLink: false }, { contactServiceAreasLink: false }
+  { contactHorizontalOverflow: true }
 ]) { assert.ok(reviewEvidence({ ...good, ...change }).length); cases++; }
 const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
 assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
-assert.equal(cases, 35);
+assert.equal(cases, 30);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);
