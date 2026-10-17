@@ -34,6 +34,14 @@ export function reviewEvidence(e) {
       e.contactActionHost !== HOST || !e.contactSubmitLabel ||
       e.contactMethod !== 'post') errors.push('contact form render');
   if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
+  const expectedTop = ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'];
+  const expectedProducts = ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
+    'Retractable Flyscreens', 'Motorised Blinds'];
+  if (JSON.stringify(e.navTopLevel) !== JSON.stringify(expectedTop)) errors.push('D-017 top-level navigation');
+  if (JSON.stringify(e.navProductChildren) !== JSON.stringify(expectedProducts)) errors.push('D-017 product submenu');
+  if (e.navServiceAreasTopLevel || e.footerServiceAreasCount !== 1 ||
+      e.contactServiceAreasCount !== 1 || !e.serviceAreaFooterValid ||
+      !e.serviceAreaContactValid) errors.push('D-017 Service Areas destination');
   return errors;
 }
 
@@ -76,6 +84,14 @@ export async function run(env = process.env) {
           horizontalOverflow: document.documentElement.scrollWidth >
             document.documentElement.clientWidth + 1,
           styleSheets: document.styleSheets.length,
+          navTopLevel: [...document.querySelectorAll('header .wp-block-navigation__container > li')].map(li =>
+            li.querySelector(':scope > a')?.textContent?.trim() || ''),
+          navProductChildren: [...document.querySelectorAll('header .wp-block-navigation__container > li:first-child > ul > li')].map(li =>
+            li.querySelector(':scope > a')?.textContent?.trim() || ''),
+          navServiceAreasTopLevel: [...document.querySelectorAll('header .wp-block-navigation__container > li > a')].some(a =>
+            a.textContent?.trim() === 'Service Areas'),
+          footerServiceAreasLinks: [...document.querySelectorAll('footer a[href]')].filter(a =>
+            a.textContent?.trim() === 'Service Areas').map(a => a.href),
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
         await page.screenshot({
@@ -99,13 +115,34 @@ export async function run(env = process.env) {
             contactActionPath: action?.pathname || '',
             contactActionHost: action?.hostname || '',
             contactMethod: form?.method?.toLowerCase() || '',
+            contactServiceAreasLinks: [...document.querySelectorAll('.ezb-contact-service-areas a[href]')].filter(a =>
+              a.textContent?.trim() === 'Service Areas').map(a => a.href),
             contactSubmitLabel: Boolean(form?.querySelector('button[type="submit"]')?.textContent?.includes('Send enquiry')),
             contactHorizontalOverflow: document.documentElement.scrollWidth >
               document.documentElement.clientWidth + 1
           };
         });
+        // Disposable WordPress may use ?page_id= permalinks: test the actual destination.
+        // Only read-only GET requests are allowed; no form submission or production access.
+        const checkServiceDestination = async links => {
+          if (links.length !== 1) return false;
+          let u;
+          try { u = new URL(links[0]); } catch { return false; }
+          if (u.protocol !== 'http:' || u.hostname !== HOST || u.port ||
+              u.username || u.password) return false;
+          const target = await page.goto(u.href, { waitUntil: 'networkidle', timeout: 45000 });
+          const heading = await page.evaluate(() =>
+            document.querySelector('main h1')?.textContent?.trim() || '');
+          return target?.status() === 200 && heading === 'Melbourne service area' &&
+            new URL(page.url()).hostname === HOST;
+        };
+        const serviceAreaFooterValid = await checkServiceDestination(observed.footerServiceAreasLinks);
+        const serviceAreaContactValid = await checkServiceDestination(contact.contactServiceAreasLinks);
         const result = {
           viewport: viewport.name, status: response?.status() || 0, ...observed,
+          footerServiceAreasCount: observed.footerServiceAreasLinks.length,
+          contactServiceAreasCount: contact.contactServiceAreasLinks.length,
+          serviceAreaFooterValid, serviceAreaContactValid,
           contactStatus: contactResponse?.status() || 0, ...contact,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
           pageErrors, failedLocalRequests,
@@ -117,7 +154,7 @@ export async function run(env = process.env) {
         evidence.push(result);
         if (!result.failures.length) {
           await page.screenshot({
-            path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '-contact.png'),
+            path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '-service-areas.png'),
             fullPage: true
           });
         }
