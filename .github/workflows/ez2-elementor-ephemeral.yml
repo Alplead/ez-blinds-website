@@ -11,6 +11,8 @@ on:
       - '.devcontainer/docker-compose.yml'
       - 'scripts/ez2_elementor_ephemeral_guard.py'
       - 'scripts/test_ez2_elementor_ephemeral_guard.py'
+      - 'scripts/ez2_isolated_frontend_browser.mjs'
+      - 'scripts/test_ez2_isolated_frontend_browser.mjs'
       - '.github/workflows/ez2-elementor-ephemeral.yml'
 
 permissions:
@@ -83,6 +85,33 @@ jobs:
           grep -Fq "EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version=$EZ2_ELEMENTOR_VERSION" /tmp/ez2-synthetic-import.log
           grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
           echo "EZ2_ELEMENTOR_RUNTIME_VERSION_PASS version=$EZ2_ELEMENTOR_VERSION"
+      - name: Install pinned Chromium and run isolated browser guards
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock playwright@1.56.1
+          node --check scripts/ez2_isolated_frontend_browser.mjs
+          node scripts/test_ez2_isolated_frontend_browser.mjs | tee /tmp/ez2-browser-guard.log
+          grep -Fq 'EZ2_ISOLATED_BROWSER_GUARD_PASS cases=17' /tmp/ez2-browser-guard.log
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser-check isolated WordPress public homepage (not Elementor draft)
+        env:
+          EZ2_ISOLATED_BROWSER: YES_DISPOSABLE_ONLY
+          EZ2_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          EZ2_BROWSER_OUTPUT: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}
+        run: |
+          set -euo pipefail
+          node scripts/ez2_isolated_frontend_browser.mjs
+          test -s "$EZ2_BROWSER_OUTPUT/evidence.json"
+          grep -Fq '"elementorDraftVerified": false' "$EZ2_BROWSER_OUTPUT/evidence.json"
+          grep -Fq '"localwpVerified": false' "$EZ2_BROWSER_OUTPUT/evidence.json"
+      - name: Preserve synthetic browser QA evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-synthetic-browser-${{ matrix.elementor_version }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Destroy disposable test database and files
         if: always()
         env:
