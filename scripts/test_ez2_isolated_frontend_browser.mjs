@@ -44,7 +44,7 @@ for (const change of [
   { navServiceAreasTopLevel: true }, { footerServiceAreasCount: 0 },
   { contactServiceAreasCount: 0 }, { serviceAreaFooterValid: false },
   { serviceAreaContactValid: false }
-] { assert.ok(reviewEvidence({ ...good, ...change }).length); cases++; }
+]) { assert.ok(reviewEvidence({ ...good, ...change }).length); cases++; }
 const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
 assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
