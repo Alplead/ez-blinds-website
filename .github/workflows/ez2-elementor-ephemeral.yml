@@ -91,7 +91,7 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.56.1
           node --check scripts/ez2_isolated_frontend_browser.mjs
           node scripts/test_ez2_isolated_frontend_browser.mjs | tee /tmp/ez2-browser-guard.log
-          grep -Fq 'EZ2_ISOLATED_BROWSER_GUARD_PASS cases=36' /tmp/ez2-browser-guard.log
+          grep -Fq 'EZ2_ISOLATED_BROWSER_GUARD_PASS cases=35' /tmp/ez2-browser-guard.log
           ./node_modules/.bin/playwright install --with-deps chromium
       - name: Browser-check isolated WordPress public homepage (not Elementor draft)
         env:

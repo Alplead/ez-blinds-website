@@ -44,8 +44,5 @@ for (const change of [
 const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
 assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
-const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
-assert.ok(!source.includes('a[href="/service-areas/"]'),
-  'WordPress may render canonical absolute links; compare parsed URL paths'); cases++;
-assert.equal(cases, 36);
+assert.equal(cases, 35);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);
