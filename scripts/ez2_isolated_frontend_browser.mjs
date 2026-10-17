@@ -27,6 +27,13 @@ export function reviewEvidence(e) {
   if (e.horizontalOverflow) errors.push('horizontal overflow');
   if (e.reducedMotion !== e.expectedReducedMotion) errors.push('reduced-motion');
   if (e.pageErrors.length || e.failedLocalRequests.length) errors.push('browser/asset errors');
+  if (e.contactStatus !== 200 || e.contactHost !== HOST ||
+      !e.contactFormPresent || !e.contactNameRequired ||
+      !e.contactPhone || !e.contactEmail || !e.contactNonce ||
+      e.contactActionPath !== '/wp-admin/admin-post.php' ||
+      e.contactActionHost !== HOST || !e.contactSubmitLabel ||
+      e.contactMethod !== 'post') errors.push('contact form render');
+  if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
   return errors;
 }
 
@@ -71,8 +78,31 @@ export async function run(env = process.env) {
           styleSheets: document.styleSheets.length,
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
+        // Read-only contact journey: never click submit or call admin-post.
+        const contactResponse = await page.goto('http://' + HOST + '/contact/', {
+          waitUntil: 'networkidle', timeout: 45000
+        });
+        const contact = await page.evaluate(() => {
+          const form = document.querySelector('.ezb-quote-form');
+          const action = form ? new URL(form.action, location.href) : null;
+          return {
+            contactHost: location.hostname,
+            contactFormPresent: Boolean(form),
+            contactNameRequired: Boolean(form?.querySelector('input[name="name"][required]')),
+            contactPhone: Boolean(form?.querySelector('input[name="phone"]')),
+            contactEmail: Boolean(form?.querySelector('input[name="email"]')),
+            contactNonce: Boolean(form?.querySelector('input[name="ezb_quote_nonce"]')),
+            contactActionPath: action?.pathname || '',
+            contactActionHost: action?.hostname || '',
+            contactMethod: form?.method?.toLowerCase() || '',
+            contactSubmitLabel: Boolean(form?.querySelector('button[type="submit"]')?.textContent?.includes('Send enquiry')),
+            contactHorizontalOverflow: document.documentElement.scrollWidth >
+              document.documentElement.clientWidth + 1
+          };
+        });
         const result = {
           viewport: viewport.name, status: response?.status() || 0, ...observed,
+          contactStatus: contactResponse?.status() || 0, ...contact,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
           pageErrors, failedLocalRequests,
           elementorDraftVerified: false, realMediaVerified: false,
@@ -83,7 +113,7 @@ export async function run(env = process.env) {
         evidence.push(result);
         if (!result.failures.length) {
           await page.screenshot({
-            path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '.png'),
+            path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '-contact.png'),
             fullPage: true
           });
         }
@@ -94,7 +124,7 @@ export async function run(env = process.env) {
     await fs.mkdir(env.EZ2_BROWSER_OUTPUT, { recursive: true });
     await fs.writeFile(path.join(env.EZ2_BROWSER_OUTPUT, 'evidence.json'),
       JSON.stringify({ sourceSha: env.EZ2_SOURCE_SHA,
-        scope: 'isolated-wordpress-public-home-only',
+        scope: 'isolated-wordpress-public-home-and-contact-read-only',
         evidence, realMediaVerified: false, elementorDraftVerified: false,
         localwpVerified: false, deploymentAuthorized: false }, null, 2) + '\n');
   }
@@ -102,7 +132,7 @@ export async function run(env = process.env) {
   if (errors.length || evidence.length !== VIEWPORTS.length) {
     throw Error('EZ2_ISOLATED_BROWSER_FAIL ' + errors.join('; '));
   }
-  console.log('EZ2_ISOLATED_BROWSER_PASS viewports=3 draft=false real_media=false localwp=false');
+  console.log('EZ2_ISOLATED_BROWSER_PASS viewports=3 contact_read_only=true mail_sent=false draft=false real_media=false localwp=false');
 }
 
 if (process.argv[1]?.endsWith('/ez2_isolated_frontend_browser.mjs')) {
