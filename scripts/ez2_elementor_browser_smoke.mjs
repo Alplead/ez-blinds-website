@@ -31,7 +31,11 @@ export function reviewEvidence(e) {
   if (!e.quoteLink) errors.push('local quote link');
   if (e.horizontalOverflow) errors.push('horizontal overflow');
   if (e.syntheticGalleryCount !== 4) errors.push('synthetic image mapping');
-  if (e.pageErrors.length || e.failedLocalRequests.length) errors.push('browser/asset errors');
+  if (!Number.isSafeInteger(e.slideshowContainers) || e.slideshowContainers < 1) errors.push('Elementor slideshow not rendered');
+  if (e.pageErrors.length || e.failedLocalRequests.length ||
+      e.failedLocalResponses.length || e.blockedExternalRequests.length) {
+    errors.push('browser/asset errors');
+  }
   if (e.reducedMotion !== e.expectedReducedMotion) errors.push('reduced motion');
   return errors;
 }
@@ -60,10 +64,14 @@ async function run() {
       try {
         await context.addCookies([{ name: auth.cookie_name, value: auth.cookie_value,
           url: 'http://' + HOST + '/', httpOnly: true, sameSite: 'Lax' }]);
+        const blockedExternalRequests = [];
         await context.route('**/*', async route => {
           const u = new URL(route.request().url());
           if (u.protocol !== 'http:' || u.hostname !== HOST || u.port ||
-              u.username || u.password) return route.abort('blockedbyclient');
+              u.username || u.password) {
+            blockedExternalRequests.push(u.origin + u.pathname);
+            return route.abort('blockedbyclient');
+          }
           const target = 'http://127.0.0.1:8080' + u.pathname + u.search;
           try {
             const response = await route.fetch({
@@ -74,12 +82,17 @@ async function run() {
           } catch { return route.abort('failed'); }
         });
         const page = await context.newPage();
-        const pageErrors = [], failedLocalRequests = [];
+        const pageErrors = [], failedLocalRequests = [], failedLocalResponses = [];
         page.on('pageerror', e => pageErrors.push(e.message));
         page.on('requestfailed', r => {
           if (new URL(r.url()).hostname === HOST) failedLocalRequests.push(r.url().split('?')[0]);
         });
-        const response = await page.goto('http://' + HOST + '/?p=' + auth.draft_id + '&preview=true',
+        page.on('response', r => {
+          if (new URL(r.url()).hostname === HOST && r.status() >= 400) {
+            failedLocalResponses.push({ status: r.status(), path: new URL(r.url()).pathname });
+          }
+        });
+        const response = await page.goto('http://' + HOST + '/?page_id=' + auth.draft_id + '&preview=true',
           { waitUntil: 'networkidle', timeout: 45000 });
         const body = await page.content();
         const observed = await page.evaluate(() => ({
@@ -102,7 +115,8 @@ async function run() {
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
           syntheticGalleryCount: [1, 2, 3, 4].filter(i =>
             body.includes('ez2-ci-synthetic-hero-' + i + '.png')).length,
-          pageErrors, failedLocalRequests, realMediaUsed: false,
+          pageErrors, failedLocalRequests, failedLocalResponses, blockedExternalRequests,
+          realMediaUsed: false,
           localwpInstalled: false, animationTimingVerified: false,
           ownerVisualApproved: false, deploymentAuthorized: false
         };
