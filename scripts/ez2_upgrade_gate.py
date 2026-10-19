@@ -62,6 +62,8 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
         if not isinstance(delivery.get(field), list) or any(
                 not isinstance(value, str) or not value for value in delivery[field]):
             raise ValueError("Malformed delivery preflight blockers: " + field)
+        if delivery[field] != sorted(set(delivery[field])):
+            raise ValueError("Duplicate or unordered delivery preflight blockers: " + field)
     content = delivery.get("content")
     if not isinstance(content, dict) or type(content.get("conflict_count")) is not int \
             or content["conflict_count"] < 0:
