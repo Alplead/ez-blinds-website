@@ -34,7 +34,7 @@ export function reviewEvidence(e) {
       !e.contactFormPresent || !e.contactNameRequired ||
       !e.contactPhone || !e.contactEmail || !e.contactNonce ||
       e.contactActionPath !== '/wp-admin/admin-post.php' ||
-      e.contactActionHost !== HOST || !e.contactSubmitLabel ||
+      e.contactActionHost !== HOST || !e.contactSubmitLabel || !e.contactPreviewNote ||
       e.contactMethod !== 'post') errors.push('contact form render');
   if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
   const expectedTop = ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'];
@@ -130,7 +130,9 @@ export async function run(env = process.env) {
             contactMethod: form?.method?.toLowerCase() || '',
             contactServiceAreasLinks: [...document.querySelectorAll('.ezb-contact-service-areas a[href]')].filter(a =>
               a.textContent?.trim() === 'Service Areas').map(a => a.href),
-            contactSubmitLabel: Boolean(form?.querySelector('button[type="submit"]')?.textContent?.includes('Send enquiry')),
+            contactSubmitLabel: form?.querySelector('button[type="submit"]')?.textContent?.trim() === 'Test form (no email sent)',
+            contactPreviewNote: [...document.querySelectorAll('.ezb-form-note[role="note"]')].some(note =>
+              note.textContent?.trim() === 'Preview only: this form does not send email.'),
             contactHorizontalOverflow: document.documentElement.scrollWidth >
               document.documentElement.clientWidth + 1
           };

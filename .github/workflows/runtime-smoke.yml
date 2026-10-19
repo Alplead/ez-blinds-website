@@ -815,7 +815,8 @@ jobs:
             --data-urlencode 'email=preview@example.invalid')"
           test "$PREVIEW_CODE" = "302"
           grep -qi 'location: .*quote_status=preview' /tmp/quote-preview-headers.txt
-          curl -LsS 'http://127.0.0.1:8080/contact/?quote_status=preview' | grep -Fq 'Preview only — no enquiry was sent.'
+          curl -fsSL 'http://127.0.0.1:8080/contact/?quote_status=preview' -o /tmp/quote-preview-result.html
+          grep -Fq 'Preview only — no enquiry was sent.' /tmp/quote-preview-result.html
 
           docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc '
             mkdir -p /var/www/html/wp-content/mu-plugins

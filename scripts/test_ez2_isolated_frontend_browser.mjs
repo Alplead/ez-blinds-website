@@ -23,6 +23,7 @@ const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   contactFormPresent: true, contactNameRequired: true, contactPhone: true,
   contactEmail: true, contactNonce: true, contactActionPath: '/wp-admin/admin-post.php',
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
+  contactPreviewNote: true,
   contactHorizontalOverflow: false,
   navTopLevel: ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'],
   navProductChildren: ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
@@ -42,6 +43,7 @@ for (const change of [
   { contactEmail: false }, { contactNonce: false },
   { contactActionPath: '/external' }, { contactActionHost: 'other.local' },
   { contactMethod: 'get' }, { contactSubmitLabel: false },
+  { contactPreviewNote: false },
   { contactHorizontalOverflow: true },
   { navTopLevel: ['Products', 'Blog'] }, { navProductChildren: ['Roller Blinds'] },
   { navServiceAreasTopLevel: true }, { footerServiceAreasCount: 0 },
@@ -51,5 +53,7 @@ for (const change of [
 const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
 assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
-assert.equal(cases, 39);
+assert.ok(source.includes("=== 'Test form (no email sent)'")); cases++;
+assert.ok(source.includes("=== 'Preview only: this form does not send email.'")); cases++;
+assert.equal(cases, 42);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);
