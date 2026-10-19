@@ -180,4 +180,4 @@ with tempfile.TemporaryDirectory() as tmp:
             raise AssertionError("Tampered archive was not rejected")
 
 assert cases == 61, cases
-print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")
+print(f"EZ2_UPGRADE_GATE_PASS cases=57 additional=4 total={cases}")
