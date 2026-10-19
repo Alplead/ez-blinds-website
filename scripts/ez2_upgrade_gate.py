@@ -75,6 +75,13 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
             or type(content.get("unmanaged_existing_count")) is not int
             or content["unmanaged_existing_count"] < 0):
         raise ValueError("Unsafe nested content preflight")
+    unmanaged = content.get("unmanaged_existing_keys")
+    if (not isinstance(unmanaged, list)
+            or len(unmanaged) != content["unmanaged_existing_count"]
+            or any(not isinstance(key, str) or not re.fullmatch(
+                r"ez2-[a-z0-9-]{1,80}", key) for key in unmanaged)
+            or unmanaged != sorted(set(unmanaged))):
+        raise ValueError("Malformed or inconsistent unmanaged Owner content keys")
     actions = content.get("actions")
     if not isinstance(actions, list) or len(actions) > 100:
         raise ValueError("Malformed content action list")
@@ -93,6 +100,8 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
             raise ValueError("Invalid or duplicate content action")
         keys.add(key)
         conflict_actions += state.startswith("conflict")
+    if keys.intersection(unmanaged):
+        raise ValueError("Unmanaged Owner content overlaps managed actions")
     if conflict_actions != content["conflict_count"]:
         raise ValueError("Content conflict count disagrees with actions")
     plugin_status = delivery.get("plugin_status")
@@ -123,6 +132,7 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
         "unresolved_media_slots": delivery["unresolved_media_slots"],
         "missing_plugin_checksums": delivery["missing_plugin_checksums"],
         "content_conflicts": delivery["content"]["conflict_count"],
+        "unmanaged_existing_keys": unmanaged,
         "site_identity_verified": False,
         "wordpress_runtime_verified": False,
         "elementor_free_visual_verified": False,

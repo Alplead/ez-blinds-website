@@ -33,6 +33,7 @@ r = check(c, i, p, e, SHA)
 assert r["status"] == "READY_FOR_RUNTIME_TEST_ONLY" and not r["applied"]
 assert not r["deployment_authorized"] and not r["localwp_verified"]
 assert r["content"]["actions"][0]["action"] == "create"
+assert r["content"]["unmanaged_existing_keys"] == []
 cases += 1
 
 def reject(mutate):

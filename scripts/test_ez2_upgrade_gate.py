@@ -32,7 +32,7 @@ def good_delivery():
             "plugin_status": "METADATA_ONLY",
             "content": {"mode": "dry-run-only", "applied": False,
                         "deployment_authorized": False, "unmanaged_existing_count": 0,
-                        "actions": [], "conflict_count": 0}}
+                        "unmanaged_existing_keys": [], "actions": [], "conflict_count": 0}}
 
 
 def invoke(backup=None, delivery=None, old=OLD, new=NEW):
@@ -58,6 +58,7 @@ assert r["installed_source_sha"] == OLD and r["candidate_source_sha"] == NEW
 assert r["scratch_file_replay_verified"] and r["scratch_deleted"]
 assert r["scratch_replayed_files"] == 3 and r["scratch_replayed_bytes"] == 30
 assert r["database_sql_executed"] is False and r["wordpress_restored"] is False
+assert r["unmanaged_existing_keys"] == []
 assert all(r[k] is False for k in ("site_identity_verified", "wordpress_runtime_verified",
         "elementor_free_visual_verified", "restore_rehearsed", "deployment_authorized", "applied"))
 cases += 1
@@ -154,6 +155,23 @@ reject(delivery={**good_delivery(), "plugin_status": "UNKNOWN"})
 reject(delivery={**good_delivery(), "plugin_status": "PENDING_CHECKSUM"})
 reject(delivery={**good_delivery(), "missing_plugin_checksums": ["elementor"]})
 
+# The Owner's unmanaged records are disclosed without being changed or deleted.
+r = invoke(delivery={**good_delivery(), "content": {
+    **good_delivery()["content"], "unmanaged_existing_count": 1,
+    "unmanaged_existing_keys": ["ez2-owner-note"]}})
+assert r["unmanaged_existing_keys"] == ["ez2-owner-note"]
+cases += 1
+reject(delivery={**good_delivery(), "content": {
+    **good_delivery()["content"], "unmanaged_existing_count": 1,
+    "unmanaged_existing_keys": []}})
+reject(delivery={**good_delivery(), "content": {
+    **good_delivery()["content"], "unmanaged_existing_count": 2,
+    "unmanaged_existing_keys": ["ez2-z", "ez2-a"]}})
+reject(delivery={**good_delivery(), "content": {
+    **good_delivery()["content"], "unmanaged_existing_count": 1,
+    "unmanaged_existing_keys": ["ez2-home"], "actions": [
+        {"key": "ez2-home", "action": "create", "desired_sha256": "c" * 64}]}})
+
 # Blocker lists are canonical, sorted and unique; conflicting reports fail closed.
 reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
                  "unresolved_media_slots": ["hero-two", "hero-one"]})
@@ -179,5 +197,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 61, cases
-print(f"EZ2_UPGRADE_GATE_PASS cases=57 additional=4 total={cases}")
+assert cases == 65, cases
+print(f"EZ2_UPGRADE_GATE_PASS cases=57 additional=8 total={cases}")
