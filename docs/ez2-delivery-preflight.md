@@ -8,6 +8,8 @@ Exit 0 means structurally ready for **future runtime testing only**; exit 2 mean
 
 The contract directory contains delivery.json, installed.json, a plugin lock JSON and one controlled Elementor export JSON per template. All paths are single lower-case JSON filenames, not URLs. delivery.json has exactly schema_version: 1, target_site: "ez2-isolated-only", source_sha, plugin_lock, templates and media_slots. Each template declares a managed key, file, and nullable previous_sha256 baseline. The installed.json document contains only managed keys and SHA-256 digests, not Owner content. The plugin lock follows ez2_plugin_dependency_check.py schema. media_slots lists approved symbolic placeholders (e.g. hero-one), not private file bytes, media URLs, customer identifiers or attachment IDs.
 
+The content plan now reports both `unmanaged_existing_count` and the sorted `unmanaged_existing_keys`. These are existing Owner-managed records omitted from the candidate template set: they are disclosed for review and left untouched, never silently deleted. The upgrade linkage rejects missing, duplicated, unordered or contradictory keys rather than trusting a summary count. The list contains only managed record keys, not Owner text or private media.
+
 No dry-run PASS proves plugin provenance, archive hash verification, Elementor Free feature compatibility, Elementor runtime import, media matching, Owner visual acceptance, LocalWP installation, backup, or rollback. Those require separate isolated WordPress integration and Owner evidence. Existing WPC production, T2, EZ BNS New Dev and main remain NO-WRITE. An isolated EZ2 LP site has not been authorised or created by this code.
 
 ## Upgrade linkage and disposable scratch replay
