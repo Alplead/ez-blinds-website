@@ -103,6 +103,15 @@ reject(backup={**good_backup(), "target_site": "ezbns.com.au"})
 reject(delivery={**good_delivery(), "target_site": "ez-bns-new-dev.local"})
 reject(delivery={**good_delivery(), "applied": True})
 reject(delivery={**good_delivery(), "status": "UNKNOWN"})
+reject(delivery={**good_delivery(), "unresolved_media_slots": ["hero-one"]})
+reject(delivery={**good_delivery(), "missing_plugin_checksums": ["elementor"]})
+reject(delivery={**good_delivery(), "content": {"conflict_count": 1}})
+reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT"})
+reject(delivery={**good_delivery(), "applied": 0})
+reject(delivery={**good_delivery(), "unresolved_media_slots": "hero-one"})
+reject(delivery={**good_delivery(), "content": {"conflict_count": -1}})
+reject(delivery={**good_delivery(), "content": {"conflict_count": True}})
+reject(delivery={**good_delivery(), "content": None})
 
 # Verify that a failing real preflight propagates rather than being interpreted as PASS.
 with tempfile.TemporaryDirectory() as tmp:
@@ -117,5 +126,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 25, cases
+assert cases == 34, cases
 print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")

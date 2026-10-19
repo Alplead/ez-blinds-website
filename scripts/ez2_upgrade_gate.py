@@ -44,10 +44,22 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
                 "localwp_touched", "deployment_authorized", "applied"))):
         raise ValueError("Backup scratch file replay did not pass safely")
     delivery = run(contract_dir, candidate_sha)
-    if delivery["target_site"] != "ez2-isolated-only" or delivery["applied"]:
+    if delivery["target_site"] != "ez2-isolated-only" or delivery["applied"] is not False:
         raise ValueError("Delivery preflight returned an unsafe site or applied state")
     if delivery["status"] not in ("BLOCKED_PREFLIGHT", "READY_FOR_RUNTIME_TEST_ONLY"):
         raise ValueError("Unexpected delivery preflight result")
+    for field in ("unresolved_media_slots", "missing_plugin_checksums"):
+        if not isinstance(delivery.get(field), list) or any(
+                not isinstance(value, str) or not value for value in delivery[field]):
+            raise ValueError("Malformed delivery preflight blockers: " + field)
+    content = delivery.get("content")
+    if not isinstance(content, dict) or type(content.get("conflict_count")) is not int \
+            or content["conflict_count"] < 0:
+        raise ValueError("Malformed delivery preflight content conflicts")
+    has_blockers = bool(delivery["unresolved_media_slots"] or
+                        delivery["missing_plugin_checksums"] or content["conflict_count"])
+    if (delivery["status"] == "BLOCKED_PREFLIGHT") != has_blockers:
+        raise ValueError("Delivery preflight status contradicts its blockers")
 
     return {
         "status": ("BLOCKED_DELIVERY_PREFLIGHT" if delivery["status"] == "BLOCKED_PREFLIGHT"
