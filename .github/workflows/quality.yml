@@ -337,7 +337,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
           python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
-          grep -q 'EZ2_UPGRADE_GATE_PASS cases=41' /tmp/ez2-upgrade-gate.log
+          grep -q 'EZ2_UPGRADE_GATE_PASS cases=57' /tmp/ez2-upgrade-gate.log
 
       - name: Test exact-head release evidence auditor (offline fixtures)
         run: |

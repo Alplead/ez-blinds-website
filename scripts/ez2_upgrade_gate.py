@@ -66,6 +66,38 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
     if not isinstance(content, dict) or type(content.get("conflict_count")) is not int \
             or content["conflict_count"] < 0:
         raise ValueError("Malformed delivery preflight content conflicts")
+    # Nested reports must remain read-only and internally consistent. A
+    # fabricated READY summary cannot override conflicting content evidence.
+    if (content.get("mode") != "dry-run-only" or content.get("applied") is not False
+            or content.get("deployment_authorized") is not False
+            or type(content.get("unmanaged_existing_count")) is not int
+            or content["unmanaged_existing_count"] < 0):
+        raise ValueError("Unsafe nested content preflight")
+    actions = content.get("actions")
+    if not isinstance(actions, list) or len(actions) > 100:
+        raise ValueError("Malformed content action list")
+    keys, conflict_actions = set(), 0
+    for action in actions:
+        if not isinstance(action, dict) or set(action) != {
+                "key", "action", "desired_sha256"}:
+            raise ValueError("Malformed content action")
+        key, state, digest = action["key"], action["action"], action["desired_sha256"]
+        if (not isinstance(key, str) or not re.fullmatch(r"ez2-[a-z0-9-]{1,80}", key)
+                or key in keys or state not in (
+                    "create", "update", "unchanged", "conflict_missing",
+                    "conflict_owner_edit")
+                or not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)):
+            raise ValueError("Invalid or duplicate content action")
+        keys.add(key)
+        conflict_actions += state.startswith("conflict")
+    if conflict_actions != content["conflict_count"]:
+        raise ValueError("Content conflict count disagrees with actions")
+    plugin_status = delivery.get("plugin_status")
+    if (plugin_status not in ("PENDING_CHECKSUM", "METADATA_ONLY")
+            or (plugin_status == "PENDING_CHECKSUM") !=
+            bool(delivery["missing_plugin_checksums"])):
+        raise ValueError("Plugin preflight status contradicts checksums")
     has_blockers = bool(delivery["unresolved_media_slots"] or
                         delivery["missing_plugin_checksums"] or content["conflict_count"])
     if (delivery["status"] == "BLOCKED_PREFLIGHT") != has_blockers:

@@ -29,7 +29,10 @@ def good_delivery():
             "localwp_verified": False, "deployment_authorized": False,
             "media_bytes_included": False, "applied": False,
             "unresolved_media_slots": [], "missing_plugin_checksums": [],
-            "content": {"conflict_count": 0}}
+            "plugin_status": "METADATA_ONLY",
+            "content": {"mode": "dry-run-only", "applied": False,
+                        "deployment_authorized": False, "unmanaged_existing_count": 0,
+                        "actions": [], "conflict_count": 0}}
 
 
 def invoke(backup=None, delivery=None, old=OLD, new=NEW):
@@ -61,7 +64,10 @@ cases += 1
 
 r = invoke(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
                      "unresolved_media_slots": ["hero-one"], "missing_plugin_checksums": ["elementor"],
-                     "content": {"conflict_count": 1}})
+                     "plugin_status": "PENDING_CHECKSUM",
+                     "content": {**good_delivery()["content"], "conflict_count": 1,
+                                 "actions": [{"key": "ez2-home", "action": "conflict_owner_edit",
+                                              "desired_sha256": "c" * 64}]}})
 assert r["status"] == "BLOCKED_DELIVERY_PREFLIGHT"
 assert r["unresolved_media_slots"] == ["hero-one"]
 assert r["missing_plugin_checksums"] == ["elementor"] and r["content_conflicts"] == 1
@@ -123,6 +129,31 @@ reject(delivery={**good_delivery(), "localwp_verified": True})
 reject(delivery={**good_delivery(), "deployment_authorized": True})
 reject(delivery={**good_delivery(), "media_bytes_included": True})
 
+# Reject nested preflight claims, malformed managed actions and plugin status lies.
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "mode": "write"}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "applied": True}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "deployment_authorized": True}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "unmanaged_existing_count": -1}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "unmanaged_existing_count": True}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "unmanaged_existing_count": "0"}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": "bad"}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "ez2-home", "action": "create", "desired_sha256": "bad"}]}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "ez2-home", "action": "conflict_owner_edit", "desired_sha256": "c" * 64}]}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "ez2-home", "action": "create", "desired_sha256": "c" * 64},
+    {"key": "ez2-home", "action": "create", "desired_sha256": "c" * 64}]}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "bad", "action": "create", "desired_sha256": "c" * 64}]}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "ez2-home", "action": "delete", "desired_sha256": "c" * 64}]}})
+reject(delivery={**good_delivery(), "content": {**good_delivery()["content"], "actions": [
+    {"key": "ez2-home", "action": "create", "desired_sha256": "c" * 64, "extra": True}]}})
+reject(delivery={**good_delivery(), "plugin_status": "UNKNOWN"})
+reject(delivery={**good_delivery(), "plugin_status": "PENDING_CHECKSUM"})
+reject(delivery={**good_delivery(), "missing_plugin_checksums": ["elementor"]})
+
 # Verify that a failing real preflight propagates rather than being interpreted as PASS.
 with tempfile.TemporaryDirectory() as tmp:
     a, b = Path(tmp) / "contract", Path(tmp) / "backup"
@@ -136,5 +167,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 41, cases
+assert cases == 57, cases
 print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")
