@@ -840,12 +840,23 @@ jobs:
             --data-urlencode 'name=CI Honeypot' \
             --data-urlencode 'email=ci-honeypot@example.com')"
           test "$HONEYPOT_CODE" = "302"
-          grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
+          grep -qi 'location: .*quote_status=ignored' /tmp/honeypot-submit-headers.txt
           docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'test ! -e /tmp/ezb-ci-mail-to.txt'
 
           VALID_CODE="$(curl -sS -o /tmp/valid-submit-body.html -D /tmp/valid-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'name=CI Form Test'             --data-urlencode 'email=ci-form@example.com'             --data-urlencode 'suburb=Melbourne 3000'             --data-urlencode 'product=Roller Blinds'             --data-urlencode 'message=Runtime submission contract test.')"
           test "$VALID_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/valid-submit-headers.txt
+          # A query-string alone must not forge successful delivery; only a
+          # short-lived server-signed receipt from a successful POST may show it.
+          curl -fsSL 'http://127.0.0.1:8080/contact/?quote_status=sent' -o /tmp/quote-forged-sent.html
+          if grep -Fq 'Thanks — your enquiry has been sent.' /tmp/quote-forged-sent.html; then
+            echo 'Forged quote_status=sent displayed an unverified success message.'
+            exit 1
+          fi
+          RECEIPT_URL="$(grep -i '^location:' /tmp/valid-submit-headers.txt | tr -d '\r' | awk '{print $2}' | tail -1)"
+          test -n "$RECEIPT_URL"
+          curl -fsSL "$RECEIPT_URL" -o /tmp/quote-verified-sent.html
+          grep -Fq 'Thanks — your enquiry has been sent.' /tmp/quote-verified-sent.html
           test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "quotes-ci@example.com"
           # The sender's editable name must never influence mail header syntax.
           test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-headers.json')" = '["Reply-To: ci-form@example.com"]'
@@ -967,7 +978,7 @@ jobs:
           grep -q 'Your enquiry is too long.' /tmp/too-long-contact.html
           HONEYPOT_CODE="$(curl -sS -o /tmp/honeypot-submit-body.html -D /tmp/honeypot-submit-headers.txt -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode "ezb_quote_nonce=$NONCE"             --data-urlencode 'website=bot-filled-this'             --data-urlencode 'name=Bot')"
           test "$HONEYPOT_CODE" = "302"
-          grep -qi 'location: .*quote_status=sent' /tmp/honeypot-submit-headers.txt
+          grep -qi 'location: .*quote_status=ignored' /tmp/honeypot-submit-headers.txt
 
           INVALID_NONCE_CODE="$(curl -sS -o /tmp/invalid-nonce-body.html -w '%{http_code}'             -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php'             --data-urlencode 'action=ezb_quote'             --data-urlencode 'ezb_quote_nonce=invalid-nonce'             --data-urlencode 'name=Bad Nonce'             --data-urlencode 'phone=0400000000')"
           test "$INVALID_NONCE_CODE" = "403"

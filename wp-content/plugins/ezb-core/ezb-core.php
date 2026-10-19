@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once __DIR__ . '/includes/ezb-quote-receipt.php';
+
 /**
  * Make Page excerpts available to the Owner as the shared source for concise
  * introductory/SEO copy where a Page uses one.
@@ -271,8 +273,10 @@ add_shortcode(
 		ob_start();
 		?>
 		<div class="ezb-form-wrap">
-			<?php if ( 'sent' === $status ) : ?>
+			<?php if ( 'sent' === $status && ezb_quote_live_mail_authorized() && ezb_quote_receipt_valid( isset( $_GET['quote_receipt'] ) ? wp_unslash( $_GET['quote_receipt'] ) : null ) ) : ?>
 				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
+			<?php elseif ( 'sent' === $status ) : ?>
+				<p class="ezb-form-message" role="status"><?php esc_html_e( 'We could not verify an enquiry from this link. Please use the form below.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'preview' === $status ) : ?>
 				<p class="ezb-form-message" role="status"><?php esc_html_e( 'Preview only — no enquiry was sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
@@ -363,7 +367,7 @@ function ezb_handle_quote_form() {
 		isset( $_POST['website'] ) &&
 		( ! is_string( $_POST['website'] ) || '' !== trim( wp_unslash( $_POST['website'] ) ) )
 	) {
-		wp_safe_redirect( home_url( '/contact/?quote_status=sent' ) );
+		wp_safe_redirect( home_url( '/contact/?quote_status=ignored' ) );
 		exit;
 	}
 
@@ -433,7 +437,8 @@ Message:
 
 	$recipient = ezb_quote_recipient_email();
 	$sent      = $recipient ? wp_mail( $recipient, $subject, $body, $headers ) : false;
-	wp_safe_redirect( home_url( '/contact/?quote_status=' . ( $sent ? 'sent' : 'error' ) ) );
+	$redirect_status = $sent ? 'sent&quote_receipt=' . rawurlencode( ezb_quote_receipt_issue() ) : 'error';
+	wp_safe_redirect( home_url( '/contact/?quote_status=' . $redirect_status ) );
 	exit;
 }
 add_action( 'admin_post_nopriv_ezb_quote', 'ezb_handle_quote_form' );
