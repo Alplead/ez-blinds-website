@@ -154,6 +154,18 @@ reject(delivery={**good_delivery(), "plugin_status": "UNKNOWN"})
 reject(delivery={**good_delivery(), "plugin_status": "PENDING_CHECKSUM"})
 reject(delivery={**good_delivery(), "missing_plugin_checksums": ["elementor"]})
 
+# Blocker lists are canonical, sorted and unique; conflicting reports fail closed.
+reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
+                 "unresolved_media_slots": ["hero-two", "hero-one"]})
+reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
+                 "unresolved_media_slots": ["hero-one", "hero-one"]})
+reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
+                 "missing_plugin_checksums": ["elementor", "elementor"],
+                 "plugin_status": "PENDING_CHECKSUM"})
+reject(delivery={**good_delivery(), "status": "BLOCKED_PREFLIGHT",
+                 "missing_plugin_checksums": ["z-plugin", "a-plugin"],
+                 "plugin_status": "PENDING_CHECKSUM"})
+
 # Verify that a failing real preflight propagates rather than being interpreted as PASS.
 with tempfile.TemporaryDirectory() as tmp:
     a, b = Path(tmp) / "contract", Path(tmp) / "backup"
@@ -167,5 +179,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 57, cases
+assert cases == 61, cases
 print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")
