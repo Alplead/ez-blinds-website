@@ -28,7 +28,12 @@ for want, have, action in [
     assert result["actions"][0]["action"] == action
     assert result["applied"] is False and result["deployment_authorized"] is False
     cases += 1
-assert plan(desired(), {"schema_version": 1, "items": installed()["items"] + [{"key": "ez2-extra", "current_sha256": h_old}]})["unmanaged_existing_count"] == 1
+unmanaged = plan(desired(), {"schema_version": 1, "items": installed()["items"] + [
+    {"key": "ez2-z-extra", "current_sha256": h_old},
+    {"key": "ez2-a-extra", "current_sha256": h_old}]})
+assert unmanaged["unmanaged_existing_count"] == 2
+assert unmanaged["unmanaged_existing_keys"] == ["ez2-a-extra", "ez2-z-extra"]
+assert unmanaged["applied"] is False
 cases += 1
 assert digest({"b": 2, "a": 1}) == digest({"a": 1, "b": 2})
 cases += 1

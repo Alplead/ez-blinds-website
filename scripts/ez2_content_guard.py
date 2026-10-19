@@ -78,9 +78,12 @@ def plan(desired, installed):
             action = "conflict_owner_edit"
         actions.append({"key": key, "action": action, "desired_sha256": target})
     count = sum(row["action"].startswith("conflict") for row in actions)
+    # Surface Owner-managed records that the candidate release will leave intact.
+    # Never silently delete or overwrite content omitted from the new template set.
+    unmanaged = sorted(set(have) - set(want))
     return {"mode": "dry-run-only", "applied": False, "deployment_authorized": False,
-            "conflict_count": count, "unmanaged_existing_count": len(set(have) - set(want)),
-            "actions": actions}
+            "conflict_count": count, "unmanaged_existing_count": len(unmanaged),
+            "unmanaged_existing_keys": unmanaged, "actions": actions}
 
 
 if __name__ == "__main__":
