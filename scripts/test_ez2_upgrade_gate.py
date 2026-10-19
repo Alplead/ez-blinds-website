@@ -25,7 +25,10 @@ def good_backup():
 
 def good_delivery():
     return {"status": "READY_FOR_RUNTIME_TEST_ONLY", "target_site": "ez2-isolated-only",
-            "applied": False, "unresolved_media_slots": [], "missing_plugin_checksums": [],
+            "source_sha": NEW, "mode": "read-only", "installed": False,
+            "localwp_verified": False, "deployment_authorized": False,
+            "media_bytes_included": False, "applied": False,
+            "unresolved_media_slots": [], "missing_plugin_checksums": [],
             "content": {"conflict_count": 0}}
 
 
@@ -112,6 +115,13 @@ reject(delivery={**good_delivery(), "unresolved_media_slots": "hero-one"})
 reject(delivery={**good_delivery(), "content": {"conflict_count": -1}})
 reject(delivery={**good_delivery(), "content": {"conflict_count": True}})
 reject(delivery={**good_delivery(), "content": None})
+reject(delivery={**good_delivery(), "source_sha": OLD})
+reject(delivery={**good_delivery(), "source_sha": None})
+reject(delivery={**good_delivery(), "mode": "write"})
+reject(delivery={**good_delivery(), "installed": True})
+reject(delivery={**good_delivery(), "localwp_verified": True})
+reject(delivery={**good_delivery(), "deployment_authorized": True})
+reject(delivery={**good_delivery(), "media_bytes_included": True})
 
 # Verify that a failing real preflight propagates rather than being interpreted as PASS.
 with tempfile.TemporaryDirectory() as tmp:
@@ -126,5 +136,5 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 34, cases
+assert cases == 41, cases
 print(f"EZ2_UPGRADE_GATE_PASS cases={cases}")

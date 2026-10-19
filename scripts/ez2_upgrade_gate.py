@@ -44,6 +44,16 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
                 "localwp_touched", "deployment_authorized", "applied"))):
         raise ValueError("Backup scratch file replay did not pass safely")
     delivery = run(contract_dir, candidate_sha)
+    # Upstream preflight must describe this exact candidate and remain strictly
+    # read-only. Never accept a fabricated or stale READY response.
+    if delivery.get("source_sha") != candidate_sha:
+        raise ValueError("Delivery preflight source SHA mismatch")
+    if delivery.get("mode") != "read-only":
+        raise ValueError("Delivery preflight was not read-only")
+    for field in ("installed", "localwp_verified", "deployment_authorized",
+                  "media_bytes_included"):
+        if delivery.get(field) is not False:
+            raise ValueError("Unsafe delivery preflight claim: " + field)
     if delivery["target_site"] != "ez2-isolated-only" or delivery["applied"] is not False:
         raise ValueError("Delivery preflight returned an unsafe site or applied state")
     if delivery["status"] not in ("BLOCKED_PREFLIGHT", "READY_FOR_RUNTIME_TEST_ONLY"):
