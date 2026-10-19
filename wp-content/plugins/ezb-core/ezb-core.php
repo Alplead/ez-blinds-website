@@ -271,9 +271,9 @@ add_shortcode(
 		ob_start();
 		?>
 		<div class="ezb-form-wrap">
-			<?php if ( 'sent' === $status ) : ?>
+			<?php if ( 'sent' === $status && ezb_quote_live_mail_authorized() ) : ?>
 				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
-			<?php elseif ( 'preview' === $status ) : ?>
+			<?php elseif ( 'preview' === $status || ( 'sent' === $status && ! ezb_quote_live_mail_authorized() ) ) : ?>
 				<p class="ezb-form-message" role="status"><?php esc_html_e( 'Preview only — no enquiry was sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please enter your name and a phone number or valid email address. Check any email address you provide.', 'ezb-core' ); ?></p>
@@ -363,7 +363,8 @@ function ezb_handle_quote_form() {
 		isset( $_POST['website'] ) &&
 		( ! is_string( $_POST['website'] ) || '' !== trim( wp_unslash( $_POST['website'] ) ) )
 	) {
-		wp_safe_redirect( home_url( '/contact/?quote_status=sent' ) );
+		// Honeypot submissions are never sent; never claim delivery.
+		wp_safe_redirect( home_url( '/contact/?quote_status=error' ) );
 		exit;
 	}
 
