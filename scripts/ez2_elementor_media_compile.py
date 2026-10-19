@@ -112,9 +112,21 @@ def write_private(path, doc):
         json.dump(doc, stream, ensure_ascii=False, allow_nan=False, indent=2)
         stream.write("\n")
 
+def ensure_private_media_map(path):
+    """Refuse to consume private attachment mappings staged in the public repo."""
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        raise ValueError("Private media map must use an absolute path outside the public repository")
+    root = Path(__file__).resolve().parents[1]
+    resolved = candidate.resolve(strict=True)
+    if resolved == root or root in resolved.parents:
+        raise ValueError("Private media map must not be inside the public repository")
+
+
 def main(argv):
     if len(argv) != 5:
         raise ValueError("Usage: ez2_elementor_media_compile.py EXPORT.json PRIVATE_MEDIA_MAP.json EXPECTED_EZ2_HOST ABSOLUTE_PRIVATE_OUTPUT.json")
+    ensure_private_media_map(argv[2])
     compiled, result = compile_export(read_json(argv[1], 256000), read_json(argv[2], 65536), argv[3])
     write_private(argv[4], compiled)
     print(json.dumps(result, sort_keys=True))
