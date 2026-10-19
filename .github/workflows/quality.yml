@@ -88,6 +88,12 @@ jobs:
           node scripts/test-product-quote-journey.mjs | tee /tmp/product-quote-static.log
           grep -q 'EZB_PRODUCT_QUOTE_STATIC_PASS routes=5' /tmp/product-quote-static.log
 
+      - name: Fail closed on unapproved live enquiry mail
+        run: |
+          node --check scripts/test-quote-mail-authorization.mjs
+          node scripts/test-quote-mail-authorization.mjs | tee /tmp/quote-mail-auth.log
+          grep -q 'EZB_QUOTE_MAIL_AUTHORIZATION_GUARD_PASS cases=5' /tmp/quote-mail-auth.log
+
       - name: Test quote contact-method pre-submit validation
         run: |
           node --check scripts/test-quote-contact-method.mjs

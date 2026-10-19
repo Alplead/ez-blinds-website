@@ -273,12 +273,17 @@ add_shortcode(
 		<div class="ezb-form-wrap">
 			<?php if ( 'sent' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--success" role="status"><?php esc_html_e( 'Thanks — your enquiry has been sent.', 'ezb-core' ); ?></p>
+			<?php elseif ( 'preview' === $status ) : ?>
+				<p class="ezb-form-message" role="status"><?php esc_html_e( 'Preview only — no enquiry was sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please enter your name and a phone number or valid email address. Check any email address you provide.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'too_long' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Your enquiry is too long. Please shorten it and try again.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'error' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Something went wrong. Please check the form and try again.', 'ezb-core' ); ?></p>
+			<?php endif; ?>
+			<?php if ( ! ezb_quote_live_mail_authorized() ) : ?>
+				<p class="ezb-form-note" role="note"><?php esc_html_e( 'Preview only: this form does not send email.', 'ezb-core' ); ?></p>
 			<?php endif; ?>
 			<form class="ezb-quote-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="ezb_quote">
@@ -300,9 +305,9 @@ add_shortcode(
 						<select name="product">
 							<option value=""><?php esc_html_e( 'Select one', 'ezb-core' ); ?></option>
 							<option <?php selected( $selected_product, 'Roller Blinds' ); ?>><?php esc_html_e( 'Roller Blinds', 'ezb-core' ); ?></option>
-							<option <?php selected( $selected_product, 'Retractable Flyscreens' ); ?>><?php esc_html_e( 'Retractable Flyscreens', 'ezb-core' ); ?></option>
-							<option <?php selected( $selected_product, 'Plantation Shutters' ); ?>><?php esc_html_e( 'Plantation Shutters', 'ezb-core' ); ?></option>
 							<option <?php selected( $selected_product, 'Sheer Curtains' ); ?>><?php esc_html_e( 'Sheer Curtains', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Plantation Shutters' ); ?>><?php esc_html_e( 'Plantation Shutters', 'ezb-core' ); ?></option>
+							<option <?php selected( $selected_product, 'Retractable Flyscreens' ); ?>><?php esc_html_e( 'Retractable Flyscreens', 'ezb-core' ); ?></option>
 							<option <?php selected( $selected_product, 'Motorised Blinds' ); ?>><?php esc_html_e( 'Motorised Blinds', 'ezb-core' ); ?></option>
 							<option><?php esc_html_e( 'Other / Not sure', 'ezb-core' ); ?></option>
 						</select>
@@ -311,13 +316,19 @@ add_shortcode(
 
 				<p><label><?php esc_html_e( 'Message', 'ezb-core' ); ?><br><textarea name="message" rows="6" maxlength="4000"></textarea></label></p>
 				<p class="ezb-form-note"><?php esc_html_e( 'We can discuss how to share photos after your enquiry.', 'ezb-core' ); ?></p>
-				<p><button class="ezb-submit" type="submit"><?php esc_html_e( 'Send enquiry', 'ezb-core' ); ?></button></p>
+				<p><button class="ezb-submit" type="submit"><?php echo ezb_quote_live_mail_authorized() ? esc_html__( 'Send enquiry', 'ezb-core' ) : esc_html__( 'Test form (no email sent)', 'ezb-core' ); ?></button></p>
 			</form>
 		</div>
 		<?php
 		return ob_get_clean();
 	}
 );
+
+/** Live customer mail is Owner-gated, independently of recipient settings. */
+function ezb_quote_live_mail_authorized() {
+	return defined( 'EZB_QUOTE_LIVE_MAIL_OWNER_APPROVED' ) &&
+		true === EZB_QUOTE_LIVE_MAIL_OWNER_APPROVED;
+}
 
 function ezb_quote_recipient_email() {
 	$setting   = ezb_get_site_setting( 'ezb_quote_recipient_email' );
@@ -392,6 +403,13 @@ function ezb_handle_quote_form() {
 	// value; phone-only enquiries remain valid when email was truly left blank.
 	if ( '' === $name || ( '' !== $email_input && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) || ( '' === $phone && '' === $email ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
+		exit;
+	}
+
+	// Preview submissions are discarded. No live customer mail is permitted
+	// until the Owner explicitly authorizes the production mail channel.
+	if ( ! ezb_quote_live_mail_authorized() ) {
+		wp_safe_redirect( home_url( '/contact/?quote_status=preview' ) );
 		exit;
 	}
 

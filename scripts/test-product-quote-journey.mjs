@@ -13,6 +13,12 @@ for (const [slug] of approved) {
   assert.equal(html.includes('/contact/?quote_product=' + slug), true,
     'product page must preserve chosen product in its quote CTA: ' + slug);
 }
+const core = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
+const productSelect = core.match(/<select name="product">([\s\S]*?)<\/select>/)?.[1];
+assert.ok(productSelect, 'contact form must contain product selector');
+const optionLabels = [...productSelect.matchAll(/selected\( \$selected_product, '([^']+)' \)/g)].map(match => match[1]);
+assert.deepEqual(optionLabels, approved.map(([, label]) => label),
+  'contact form choices must follow D-017 Owner-approved product order');
 console.log('EZB_PRODUCT_QUOTE_STATIC_PASS routes=5');
 
 if (process.env.EZB_BASE_URL) {
