@@ -369,4 +369,4 @@ jobs:
           node --check scripts/ez2_elementor_browser_smoke.mjs
           node --check scripts/test_ez2_elementor_browser_smoke.mjs
           node scripts/test_ez2_elementor_browser_smoke.mjs | tee /tmp/ez2-browser-guard.log
-          grep -q 'EZ2_SYNTHETIC_BROWSER_GUARD_PASS cases=22' /tmp/ez2-browser-guard.log
+          grep -q 'EZ2_SYNTHETIC_BROWSER_GUARD_PASS cases=26' /tmp/ez2-browser-guard.log

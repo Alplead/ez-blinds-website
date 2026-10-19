@@ -18,7 +18,8 @@ assert.deepEqual(VIEWPORTS.map(v => v.reducedMotion),
   ['no-preference', 'no-preference', 'reduce']); cases++;
 const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   horizontalOverflow: false, reducedMotion: true, expectedReducedMotion: true,
-  pageErrors: [], failedLocalRequests: [], contactStatus: 200, contactHost: HOST,
+  pageErrors: [], failedLocalRequests: [], failedLocalResponses: [],
+  blockedExternalRequests: [], contactStatus: 200, contactHost: HOST,
   contactFormPresent: true, contactNameRequired: true, contactPhone: true,
   contactEmail: true, contactNonce: true, contactActionPath: '/wp-admin/admin-post.php',
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
@@ -33,7 +34,9 @@ for (const change of [
   { status: 302 }, { host: 'ezbns.com.au' }, { hasMain: false },
   { styleSheets: 0 }, { horizontalOverflow: true },
   { reducedMotion: false }, { pageErrors: ['script failed'] },
-  { failedLocalRequests: ['missing.css'] }, { contactStatus: 302 },
+  { failedLocalRequests: ['missing.css'] },
+  { failedLocalResponses: [{ status: 404, path: '/missing.css' }] },
+  { blockedExternalRequests: ['https://example.invalid/style.css'] }, { contactStatus: 302 },
   { contactHost: 'other.local' }, { contactFormPresent: false },
   { contactNameRequired: false }, { contactPhone: false },
   { contactEmail: false }, { contactNonce: false },
@@ -48,5 +51,5 @@ for (const change of [
 const source = readFileSync(new URL('./ez2_isolated_frontend_browser.mjs', import.meta.url), 'utf8');
 assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
-assert.equal(cases, 37);
+assert.equal(cases, 39);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);

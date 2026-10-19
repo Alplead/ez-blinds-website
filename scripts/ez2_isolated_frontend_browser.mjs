@@ -26,7 +26,10 @@ export function reviewEvidence(e) {
   if (!e.hasMain || e.styleSheets < 1) errors.push('missing layout/styles');
   if (e.horizontalOverflow) errors.push('horizontal overflow');
   if (e.reducedMotion !== e.expectedReducedMotion) errors.push('reduced-motion');
-  if (e.pageErrors.length || e.failedLocalRequests.length) errors.push('browser/asset errors');
+  if (e.pageErrors.length || e.failedLocalRequests.length ||
+      e.failedLocalResponses.length || e.blockedExternalRequests.length) {
+    errors.push('browser/asset errors');
+  }
   if (e.contactStatus !== 200 || e.contactHost !== HOST ||
       !e.contactFormPresent || !e.contactNameRequired ||
       !e.contactPhone || !e.contactEmail || !e.contactNonce ||
@@ -57,10 +60,14 @@ export async function run(env = process.env) {
         reducedMotion: viewport.reducedMotion, serviceWorkers: 'block'
       });
       try {
+        const blockedExternalRequests = [];
         await context.route('**/*', async route => {
           const u = new URL(route.request().url());
           if (u.protocol !== 'http:' || u.hostname !== HOST || u.port ||
-              u.username || u.password) return route.abort('blockedbyclient');
+              u.username || u.password) {
+            blockedExternalRequests.push(u.origin + u.pathname);
+            return route.abort('blockedbyclient');
+          }
           try {
             const response = await route.fetch({
               url: 'http://127.0.0.1:8080' + u.pathname + u.search,
@@ -70,8 +77,14 @@ export async function run(env = process.env) {
           } catch { return route.abort('failed'); }
         });
         const page = await context.newPage();
-        const pageErrors = [], failedLocalRequests = [];
+        const pageErrors = [], failedLocalRequests = [], failedLocalResponses = [];
         page.on('pageerror', e => pageErrors.push(e.message));
+        page.on('response', r => {
+          const u = new URL(r.url());
+          if (u.hostname === HOST && r.status() >= 400) {
+            failedLocalResponses.push({ status: r.status(), path: u.pathname });
+          }
+        });
         page.on('requestfailed', r => {
           if (new URL(r.url()).hostname === HOST) failedLocalRequests.push(r.url().split('?')[0]);
         });
@@ -145,7 +158,7 @@ export async function run(env = process.env) {
           serviceAreaFooterValid, serviceAreaContactValid,
           contactStatus: contactResponse?.status() || 0, ...contact,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
-          pageErrors, failedLocalRequests,
+          pageErrors, failedLocalRequests, failedLocalResponses, blockedExternalRequests,
           elementorDraftVerified: false, realMediaVerified: false,
           localwpVerified: false, animationTimingVerified: false,
           deploymentAuthorized: false
