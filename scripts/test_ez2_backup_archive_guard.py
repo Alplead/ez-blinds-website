@@ -101,6 +101,8 @@ reject(lambda r: archive(r / ROLES["theme"], "theme",
                          [("theme/file", b"a", "file"), ("theme/FILE", b"b", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/CON.txt", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/evil\\path", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/photo.webp/", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads//", b"", "dir"), ("uploads/photo.webp", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/evil:name", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/trailing. ", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["theme"], "theme", []))
@@ -114,5 +116,5 @@ reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/parent", b"x", "file"), ("uploads/parent/child", b"y", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/Parent/child", b"x", "file"), ("uploads/parent", b"y", "file")]))
-assert cases == 20, cases
+assert cases == 22, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

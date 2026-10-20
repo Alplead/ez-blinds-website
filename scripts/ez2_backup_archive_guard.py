@@ -25,6 +25,8 @@ RESERVED = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z", re.I)
 def safe_member(name, role, is_dir=False):
     if not isinstance(name, str) or not 0 < len(name) <= 512 or "\\" in name or "\x00" in name:
         raise ValueError("Unsafe archive member name")
+    if name.endswith("/") and (not is_dir or name.endswith("//")):
+        raise ValueError("Ambiguous archive member trailing separator")
     parts = name.rstrip("/").split("/")
     if (name.startswith("/") or any(not part or part in (".", "..") or
         part.endswith((" ", ".")) or ":" in part or
