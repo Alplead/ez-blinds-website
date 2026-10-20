@@ -8,6 +8,7 @@ import json
 import re
 import stat
 import sys
+import unicodedata
 import zipfile
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def check_archive(file: Path, name: str) -> None:
                 if (parts[0] != root_name or any(p in ("", ".", "..") for p in parts)
                         or (not is_dir and len(parts) < 2)):
                     raise ValueError("ZIP entry outside expected plugin/theme root")
-                folded = raw.rstrip("/").casefold()
+                folded = unicodedata.normalize("NFC", raw.rstrip("/")).casefold()
                 if folded in seen:
                     raise ValueError("Duplicate or case-colliding ZIP path")
                 seen.add(folded)
