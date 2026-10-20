@@ -109,7 +109,7 @@ reject(lambda r: (r / ROLES["database"]).write_bytes(gzip.compress(b"")))
 reject(lambda r: (r / ROLES["plugins"]).write_bytes(b"not tar gzip"))
 # Unicode-normalisation aliases must not overwrite one another on restore.
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
-    ("uploads/caf\\u00e9.txt", b"x", "file"), ("uploads/cafe\\u0301.txt", b"y", "file")]))
+    ("uploads/caf\u00e9.txt", b"x", "file"), ("uploads/cafe\u0301.txt", b"y", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/parent", b"x", "file"), ("uploads/parent/child", b"y", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
