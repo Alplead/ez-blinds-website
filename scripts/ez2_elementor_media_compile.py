@@ -118,9 +118,11 @@ def ensure_private_media_map(path):
     if not candidate.is_absolute():
         raise ValueError("Private media map must use an absolute path outside the public repository")
     root = Path(__file__).resolve().parents[1]
+    lexical = Path(os.path.abspath(candidate))
     resolved = candidate.resolve(strict=True)
-    if resolved == root or root in resolved.parents:
-        raise ValueError("Private media map must not be inside the public repository")
+    if (candidate.is_symlink() or lexical == root or root in lexical.parents
+            or resolved == root or root in resolved.parents):
+        raise ValueError("Private media map must not be linked or inside the public repository")
 
 
 def main(argv):
