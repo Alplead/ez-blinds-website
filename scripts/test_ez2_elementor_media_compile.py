@@ -99,22 +99,25 @@ with tempfile.TemporaryDirectory() as tmp:
     assert r.returncode==0,r.stderr
     assert json.loads(r.stdout)["wordpress_imported"] is False
     cases+=1
+    private_guard_cases=0
     with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as checkout_tmp:
         inside=Path(checkout_tmp)/"synthetic-map.json"
         inside.write_text(json.dumps(m))
         try:ensure_private_media_map(str(inside))
-        except ValueError:cases+=1
+        except ValueError:private_guard_cases+=1
         else:raise AssertionError("Accepted public-checkout media map")
         if os.name!="nt":
             alias=Path(checkout_tmp)/"linked-map.json"
             alias.symlink_to(tmp/"media.json")
             try:ensure_private_media_map(str(alias))
-            except ValueError:cases+=1
+            except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted in-checkout symlink to private media map")
             linked_dir=Path(checkout_tmp)/"linked-directory"
             linked_dir.symlink_to(tmp, target_is_directory=True)
             try:ensure_private_media_map(str(linked_dir/"media.json"))
-            except ValueError:cases+=1
+            except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted map through in-checkout linked directory")
-assert cases==(29 if os.name=="nt" else 31),cases
+assert cases==28,cases
+assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
+print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
