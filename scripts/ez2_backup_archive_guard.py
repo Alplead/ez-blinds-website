@@ -7,6 +7,7 @@ live-site identity check or deployment occurs. Never commit actual backups.
 import gzip
 import json
 import re
+import unicodedata
 import sys
 import tarfile
 from pathlib import Path
@@ -34,7 +35,7 @@ def safe_member(name, role, is_dir=False):
         return role.casefold()
     if len(parts) < 2 or parts[0] != role:
         raise ValueError("Backup member escapes its declared component")
-    return "/".join(parts).casefold()
+    return unicodedata.normalize("NFC", "/".join(parts)).casefold()
 
 
 def inspect_tar(path, role):
