@@ -118,7 +118,11 @@ jobs:
           grep -q 'class="ezb-quote-form"' /tmp/quote-status-array.html
           ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-array.html
           docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-sent.html
-          grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
+          grep -q 'We could not verify an enquiry from this link.' /tmp/quote-status-sent.html
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; $_GET["quote_receipt"] = "forged"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-forged.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-forged.html
+          grep -q 'We could not verify an enquiry from this link.' /tmp/quote-status-forged.html
 
       - name: Verify unapproved flyscreen video stays private in release mode
         run: |

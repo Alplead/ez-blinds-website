@@ -14,7 +14,7 @@ function ezb_quote_receipt_issue( $now = null ) {
 }
 
 function ezb_quote_receipt_valid( $token, $now = null ) {
-    if ( ! is_string( $token ) || ! preg_match( '/\A([0-9]{10})\.([a-f0-9]{64})\z/D', $token, $matches ) ) {
+    if ( ! is_string( $token ) || 75 !== strlen( $token ) || ! preg_match( '/\A([0-9]{10})\.([a-f0-9]{64})\z/D', $token, $matches ) ) {
         return false;
     }
     $issued = (int) $matches[1];

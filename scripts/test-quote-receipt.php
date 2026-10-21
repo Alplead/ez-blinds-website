@@ -30,4 +30,6 @@ expect_receipt( ezb_quote_receipt_valid( substr( $receipt, 0, -1 ) . ( substr( $
 expect_receipt( ezb_quote_receipt_valid( (string) ( $now - 1 ) . substr( $receipt, 10 ), $now ), false, 'tampered timestamp' );
 expect_receipt( ezb_quote_receipt_valid( strtoupper( $receipt ), $now ), false, 'uppercase signature rejected' );
 expect_receipt( ezb_quote_receipt_valid( $receipt . 'junk', $now ), false, 'suffix rejected' );
+expect_receipt( ezb_quote_receipt_valid( array( $receipt ), $now ), false, 'array receipt rejected' );
+expect_receipt( ezb_quote_receipt_valid( str_repeat( 'x', 100000 ), $now ), false, 'oversized receipt rejected' );
 echo 'EZB_QUOTE_RECEIPT_PASS cases=' . $cases . PHP_EOL;
