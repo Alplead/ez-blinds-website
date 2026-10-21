@@ -47,7 +47,8 @@ def evaluate(sha, runs, artifacts, now=None):
     chosen = {}
     for run in runs:
         if (not isinstance(run, dict) or run.get("name") not in REQUIRED
-                or run.get("head_sha") != sha or run.get("event") != "pull_request"):
+                or run.get("head_sha") != sha or run.get("event") != "pull_request"
+                or type(run.get("id")) is not int or run["id"] <= 0):
             continue
         name = run["name"]
         if (name not in chosen or (run.get("created_at", ""), run.get("run_attempt", 0), run.get("id", 0))
@@ -67,9 +68,15 @@ def evaluate(sha, runs, artifacts, now=None):
             continue
         if item.get("name") != "ezb-release-" + sha or item.get("expired") is not False:
             continue
-        if type(item.get("size_in_bytes")) is not int or item["size_in_bytes"] <= 0:
+        if (type(item.get("id")) is not int or item["id"] <= 0
+                or type(item.get("size_in_bytes")) is not int or item["size_in_bytes"] <= 0):
             continue
-        if not release or item.get("workflow_run", {}).get("id") != release.get("id"):
+        provenance = item.get("workflow_run")
+        # GitHub artifact metadata must bind the ZIP to both the successful
+        # release run and the exact commit; a name alone is not evidence.
+        if (not release or not isinstance(provenance, dict)
+                or provenance.get("id") != release.get("id")
+                or provenance.get("head_sha") != sha):
             continue
         try:
             expiry = dt.datetime.fromisoformat(item["expires_at"].replace("Z", "+00:00"))

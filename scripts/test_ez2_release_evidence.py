@@ -17,7 +17,7 @@ def fixture():
                  ("Quality", "Runtime Smoke", "Release Install Smoke"), 101)]
     artifacts = [{"id": 900, "name": "ezb-release-" + SHA, "expired": False,
                   "size_in_bytes": 1234, "expires_at": "2026-10-30T00:00:00Z",
-                  "workflow_run": {"id": 103}}]
+                  "workflow_run": {"id": 103, "head_sha": SHA}}]
     return pr, runs, artifacts
 
 
@@ -52,6 +52,11 @@ bad_changes = (
     lambda r, a: a[0].update(name="other"),
     lambda r, a: a[0]["workflow_run"].update(id=999),
     lambda r, a: a[0].update(size_in_bytes=0),
+    lambda r, a: a[0].update(id=0),
+    lambda r, a: a[0].update(workflow_run=None),
+    lambda r, a: a[0]["workflow_run"].update(head_sha="b" * 40),
+    lambda r, a: a[0]["workflow_run"].pop("head_sha"),
+    lambda r, a: r[2].update(id=0),
     lambda r, a: a[0].update(expires_at="2026-10-15T00:00:00Z"),
 )
 for change in bad_changes:
@@ -97,5 +102,5 @@ except ValueError:
 else:
     raise AssertionError("Changing PR head accepted")
 
-assert cases == 19, cases
+assert cases == 24, cases
 print(f"EZ2_RELEASE_EVIDENCE_PASS cases={cases}")
