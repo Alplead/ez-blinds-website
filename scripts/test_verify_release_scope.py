@@ -111,4 +111,23 @@ with tempfile.TemporaryDirectory() as temp:
     symlink.external_attr = (stat.S_IFLNK | 0o777) << 16
     reject(lambda r: changed_archive(r, "ezb-theme.zip",
            valid_theme + [(symlink, "../../outside")]), "ZIP symlink")
+    # Synthetic Windows extraction hazards: reserved names, trailing dots/spaces,
+    # forbidden punctuation and device-name superscripts. No customer media.
+    for invalid_path in (
+        "ezb-theme/CON.txt",
+        "ezb-theme/lpt1.log",
+        "ezb-theme/LPT¹.log",
+        "ezb-theme/nested./photo.webp",
+        "ezb-theme/trailing ",
+        "ezb-theme/name?.txt",
+        'ezb-theme/name".txt',
+    ):
+        reject(lambda r, path=invalid_path: changed_archive(
+            r, "ezb-theme.zip", valid_theme + [(path, b"synthetic")]),
+            "Windows-incompatible ZIP path: " + invalid_path)
+    fixture(root)
+    changed_archive(root, "ezb-theme.zip",
+                    valid_theme + [("ezb-theme/normal-name.webp", b"synthetic")])
+    check(root, SHA)
+    cases += 1
 print(f"EZB_RELEASE_SCOPE_REGRESSION_PASS cases={cases}")
