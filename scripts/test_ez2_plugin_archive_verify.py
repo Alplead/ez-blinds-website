@@ -82,6 +82,18 @@ with tempfile.TemporaryDirectory() as temp:
     attempt(GOOD + [('elementor/./bad.php', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/sub//bad.php', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/x\x01.php', 'bad', stat.S_IFREG | 0o644)])
+    # Windows LocalWP must not receive device names, ADS or ambiguous paths.
+    attempt(GOOD + [('elementor/CON.txt', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/AUX', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/COM1.js', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/LPT9.txt', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/trailing.', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/trailing ', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/evil:ads.php', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/bad?.js', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/\u202ephp.txt', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/caf\u00e9.js', 'a', stat.S_IFREG | 0o644),
+                    ('elementor/cafe\u0301.js', 'b', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/bomb.bin', 'A' * (26 * 1024 * 1024), stat.S_IFREG | 0o644)])
     attempt([('elementor/elementor.php', 'Version: 4.3.3', stat.S_IFREG | 0o644), GOOD[1]])
     attempt([GOOD[1]])
@@ -134,5 +146,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 25, cases
+assert cases == 35, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')

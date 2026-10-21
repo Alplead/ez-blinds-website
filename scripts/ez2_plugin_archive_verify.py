@@ -5,9 +5,14 @@ import json
 import re
 import stat
 import sys
+import unicodedata
 import zipfile
 from pathlib import Path
 from ez2_plugin_dependency_check import check, read
+
+# Windows LocalWP extracts on a case-insensitive filesystem; reject device names,
+# alternate data streams and paths that collapse during Windows extraction.
+WINDOWS_DEVICE = re.compile(r'(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z', re.I)
 
 
 def verify(lock, archive_dir, repo_root=None):
@@ -48,7 +53,15 @@ def verify(lock, archive_dir, repo_root=None):
                     if (parts[0] != slug or any(p in ('', '.', '..') for p in parts)
                             or (len(parts) < 2 and not (name == slug + '/' and member.is_dir()))):
                         raise ValueError('ZIP member outside pinned plugin')
-                    folded = '/'.join(parts).casefold()
+                    if any(
+                        segment.endswith((' ', '.')) or
+                        WINDOWS_DEVICE.fullmatch(segment) or
+                        any(ch in '<>:"|?*' or unicodedata.category(ch) in ('Cc', 'Cf')
+                            for ch in segment)
+                        for segment in parts
+                    ):
+                        raise ValueError('Unsafe Windows plugin member path')
+                    folded = unicodedata.normalize('NFC', '/'.join(parts)).casefold()
                     if folded in seen:
                         raise ValueError('Duplicate ZIP member')
                     seen.add(folded)
