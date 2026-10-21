@@ -17,6 +17,9 @@ ARCHIVES = {
     "ezb-core.zip": "wp-content/plugins/ezb-core",
 }
 EXCLUDED = {"third_party_plugins", "elementor_templates", "wordpress_content", "media", "database"}
+# Reserved Windows device names remain unsafe even when a suffix is present.
+WINDOWS_DEVICES = re.compile(r"(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?\Z", re.IGNORECASE)
+WINDOWS_INVALID_CHARS = frozenset('<>:"|?*')
 
 
 
@@ -48,6 +51,13 @@ def check_archive(file: Path, name: str) -> None:
                 if (parts[0] != root_name or any(p in ("", ".", "..") for p in parts)
                         or (not is_dir and len(parts) < 2)):
                     raise ValueError("ZIP entry outside expected plugin/theme root")
+                # LocalWP may extract releases on a Windows-hosted VM.
+                for part in parts:
+                    normal = unicodedata.normalize("NFC", part)
+                    if (normal.endswith((" ", "."))
+                            or any(char in WINDOWS_INVALID_CHARS for char in normal)
+                            or WINDOWS_DEVICES.fullmatch(normal)):
+                        raise ValueError("Windows-incompatible ZIP entry name")
                 folded = unicodedata.normalize("NFC", raw.rstrip("/")).casefold()
                 if folded in seen:
                     raise ValueError("Duplicate or case-colliding ZIP path")
