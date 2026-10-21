@@ -114,5 +114,17 @@ reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/parent", b"x", "file"), ("uploads/parent/child", b"y", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/Parent/child", b"x", "file"), ("uploads/parent", b"y", "file")]))
-assert cases == 20, cases
+
+# Windows LocalWP rejects device aliases, forbidden punctuation, bidi controls,
+# and non-normalised names even when no other archive entry collides.
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/COM¹.log", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/LPT²", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/bad?.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/bad|name.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/evil<name.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/name\"bad.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/part*name.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/\u202ephoto.webp", b"x", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/cafe\u0301.webp", b"x", "file")]))
+assert cases == 29, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

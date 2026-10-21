@@ -295,7 +295,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_plugin_archive_verify.py scripts/test_ez2_plugin_archive_verify.py
           python3 scripts/test_ez2_plugin_archive_verify.py | tee /tmp/ez2-plugin-archive-verify.log
-          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=36' /tmp/ez2-plugin-archive-verify.log
+          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=38' /tmp/ez2-plugin-archive-verify.log
 
       - name: Test opt-in WordPress.org pinned plugin fetch (offline fixtures only)
         run: |
@@ -338,7 +338,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_archive_guard.py scripts/test_ez2_backup_archive_guard.py
           python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
-          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=20' /tmp/ez2-backup-archive-guard.log
+          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=29' /tmp/ez2-backup-archive-guard.log
 
       - name: Rehearse EZ2 rollback file extraction in disposable scratch (synthetic only)
         run: |

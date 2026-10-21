@@ -86,6 +86,8 @@ with tempfile.TemporaryDirectory() as temp:
     attempt(GOOD + [('elementor/CON.txt', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/AUX', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/COM1.js', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/COM¹.log', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/LPT²', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/LPT9.txt', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/trailing.', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/trailing ', 'bad', stat.S_IFREG | 0o644)])
@@ -147,5 +149,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 36, cases
+assert cases == 38, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')

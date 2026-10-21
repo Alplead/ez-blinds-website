@@ -19,7 +19,7 @@ MAX_MEMBER_BYTES = 2 * 1024 ** 3
 MAX_ARCHIVE_BYTES = 16 * 1024 ** 3
 MAX_SQL_BYTES = 16 * 1024 ** 3
 CHUNK = 1024 * 1024
-RESERVED = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z", re.I)
+RESERVED = re.compile(r"(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?\Z", re.I)
 
 
 def safe_member(name, role, is_dir=False):
@@ -30,7 +30,9 @@ def safe_member(name, role, is_dir=False):
     parts = name.rstrip("/").split("/")
     if (name.startswith("/") or any(not part or part in (".", "..") or
         part.endswith((" ", ".")) or ":" in part or
-        any(ord(ch) < 32 or ord(ch) == 127 for ch in part) or
+        unicodedata.normalize("NFC", part) != part or
+        any(ch in '<>"|?*' or unicodedata.category(ch) in ("Cc", "Cf", "Cs")
+            for ch in part) or
         RESERVED.fullmatch(part) for part in parts)):
         raise ValueError("Unsafe archive member path")
     if len(parts) == 1 and parts[0] == role and is_dir:

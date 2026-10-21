@@ -12,7 +12,7 @@ from ez2_plugin_dependency_check import check, read
 
 # Windows LocalWP extracts on a case-insensitive filesystem; reject device names,
 # alternate data streams and paths that collapse during Windows extraction.
-WINDOWS_DEVICE = re.compile(r'(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z', re.I)
+WINDOWS_DEVICE = re.compile(r'(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?\Z', re.I)
 
 
 def verify(lock, archive_dir, repo_root=None):
@@ -57,7 +57,7 @@ def verify(lock, archive_dir, repo_root=None):
                         segment.endswith((' ', '.')) or
                         unicodedata.normalize('NFC', segment) != segment or
                         WINDOWS_DEVICE.fullmatch(segment) or
-                        any(ch in '<>:"|?*' or unicodedata.category(ch) in ('Cc', 'Cf')
+                        any(ch in '<>:"|?*' or unicodedata.category(ch) in ('Cc', 'Cf', 'Cs')
                             for ch in segment)
                         for segment in parts
                     ):
