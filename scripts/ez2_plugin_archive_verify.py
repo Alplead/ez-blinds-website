@@ -55,6 +55,7 @@ def verify(lock, archive_dir, repo_root=None):
                         raise ValueError('ZIP member outside pinned plugin')
                     if any(
                         segment.endswith((' ', '.')) or
+                        unicodedata.normalize('NFC', segment) != segment or
                         WINDOWS_DEVICE.fullmatch(segment) or
                         any(ch in '<>:"|?*' or unicodedata.category(ch) in ('Cc', 'Cf')
                             for ch in segment)

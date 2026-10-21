@@ -92,6 +92,7 @@ with tempfile.TemporaryDirectory() as temp:
     attempt(GOOD + [('elementor/evil:ads.php', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/bad?.js', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/\u202ephp.txt', 'bad', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/cafe\u0301.js', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/caf\u00e9.js', 'a', stat.S_IFREG | 0o644),
                     ('elementor/cafe\u0301.js', 'b', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/bomb.bin', 'A' * (26 * 1024 * 1024), stat.S_IFREG | 0o644)])
@@ -146,5 +147,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 35, cases
+assert cases == 36, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')
