@@ -3,14 +3,19 @@ import { readFileSync } from 'node:fs';
 import { HOST, VIEWPORTS, validateScope, reviewEvidence } from './ez2_isolated_frontend_browser.mjs';
 let cases = 0;
 const validEnv = { EZ2_ISOLATED_BROWSER: 'YES_DISPOSABLE_ONLY',
-  EZ2_SOURCE_SHA: 'a'.repeat(40), EZ2_BROWSER_OUTPUT: '/tmp/ez2-synthetic-browser' };
+  EZ2_SOURCE_SHA: 'a'.repeat(40), EZ2_BROWSER_OUTPUT: '/tmp/ez2-synthetic-browser',
+  EZ2_CI_DRAFT_ID: '123' };
 assert.doesNotThrow(() => validateScope(validEnv)); cases++;
 for (const change of [
   { EZ2_ISOLATED_BROWSER: 'YES' },
   { EZ2_SOURCE_SHA: 'main' },
   { EZ2_SOURCE_SHA: 'A'.repeat(40) },
   { EZ2_BROWSER_OUTPUT: 'relative/path' },
-  { EZ2_BROWSER_OUTPUT: '' }
+  { EZ2_BROWSER_OUTPUT: '' },
+  { EZ2_CI_DRAFT_ID: '' },
+  { EZ2_CI_DRAFT_ID: '0' },
+  { EZ2_CI_DRAFT_ID: 'bad-id' },
+  { EZ2_CI_DRAFT_ID: '12345678901' }
 ]) { assert.throws(() => validateScope({ ...validEnv, ...change })); cases++; }
 assert.deepEqual(VIEWPORTS.map(v => [v.width, v.height]),
   [[1440, 900], [390, 844], [320, 700]]); cases++;
@@ -26,7 +31,8 @@ const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   contactEmail: true, contactNonce: true, contactActionPath: '/wp-admin/admin-post.php',
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
   contactPreviewNote: true,
-  contactHorizontalOverflow: false,
+  contactHorizontalOverflow: false, draftRestDenied: true,
+  draftDirectHidden: true,
   navTopLevel: ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'],
   navProductChildren: ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
     'Retractable Flyscreens', 'Motorised Blinds'], navServiceAreasTopLevel: false,
@@ -49,6 +55,7 @@ for (const change of [
   { contactMethod: 'get' }, { contactSubmitLabel: false },
   { contactPreviewNote: false },
   { contactHorizontalOverflow: true },
+  { draftRestDenied: false }, { draftDirectHidden: false },
   { navTopLevel: ['Products', 'Blog'] }, { navProductChildren: ['Roller Blinds'] },
   { navServiceAreasTopLevel: true }, { footerServiceAreasCount: 0 },
   { contactServiceAreasCount: 0 }, { serviceAreaFooterValid: false },
@@ -63,5 +70,7 @@ assert.ok(source.includes("=== 'Preview only: this form does not send email.'"))
 assert.ok(source.includes("firstSkipFocus.reachesMain"));
 assert.ok(source.includes("firstSkipFocus.native || firstSkipFocus.theme"));
 assert.ok(source.includes("document.getElementById('main-content')"));
-assert.equal(cases, 46);
+assert.ok(source.includes('rest_route=/wp/v2/pages/')); cases++;
+assert.ok(source.includes('data-elementor-id')); cases++;
+assert.equal(cases, 54);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);

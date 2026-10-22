@@ -15,7 +15,8 @@ export const VIEWPORTS = Object.freeze([
 export function validateScope(env) {
   if (env.EZ2_ISOLATED_BROWSER !== 'YES_DISPOSABLE_ONLY' ||
       !/^[a-f0-9]{40}$/.test(env.EZ2_SOURCE_SHA || '') ||
-      !env.EZ2_BROWSER_OUTPUT || !path.isAbsolute(env.EZ2_BROWSER_OUTPUT)) {
+      !env.EZ2_BROWSER_OUTPUT || !path.isAbsolute(env.EZ2_BROWSER_OUTPUT) ||
+      !/^[1-9][0-9]{0,9}$/.test(env.EZ2_CI_DRAFT_ID || '')) {
     throw Error('DISPOSABLE_BROWSER_GATE');
   }
 }
@@ -40,6 +41,7 @@ export function reviewEvidence(e) {
       e.contactActionHost !== HOST || !e.contactSubmitLabel || !e.contactPreviewNote ||
       e.contactMethod !== 'post') errors.push('contact form render');
   if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
+  if (!e.draftRestDenied || !e.draftDirectHidden) errors.push('synthetic draft public exposure');
   const expectedTop = ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'];
   const expectedProducts = ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
     'Retractable Flyscreens', 'Motorised Blinds'];
@@ -202,6 +204,30 @@ export async function run(env = process.env) {
         };
         const serviceAreaFooterValid = await checkServiceDestination(observed.footerServiceAreasLinks);
         const serviceAreaContactValid = await checkServiceDestination(contact.contactServiceAreasLinks);
+        // Anonymous REST and direct-link probes must not reveal the synthetic draft.
+        // A separate page keeps expected 401/404 out of asset error reporting.
+        const draftProbe = await context.newPage();
+        let draftRestDenied = false, draftDirectHidden = false;
+        try {
+          const api = await draftProbe.goto('http://' + HOST + '/?rest_route=/wp/v2', {
+            waitUntil: 'domcontentloaded', timeout: 45000
+          });
+          const rest = await draftProbe.goto('http://' + HOST +
+            '/?rest_route=/wp/v2/pages/' + env.EZ2_CI_DRAFT_ID, {
+              waitUntil: 'domcontentloaded', timeout: 45000
+            });
+          draftRestDenied = api?.status() === 200 && [401, 403, 404].includes(rest?.status());
+          const direct = await draftProbe.goto('http://' + HOST +
+            '/?page_id=' + env.EZ2_CI_DRAFT_ID, {
+              waitUntil: 'domcontentloaded', timeout: 45000
+            });
+          const draftLeaked = await draftProbe.evaluate(id =>
+            Boolean(document.querySelector('[data-elementor-id="' + id + '"]')) ||
+            (document.body?.textContent || '').includes('OWNER EDIT PROBE') ||
+            (document.body?.textContent || '').includes('NOT FOR PUBLICATION'),
+            env.EZ2_CI_DRAFT_ID);
+          draftDirectHidden = Boolean(direct && direct.status() < 500 && !draftLeaked);
+        } finally { await draftProbe.close(); }
         const result = {
           viewport: viewport.name, status: response?.status() || 0, ...observed,
           footerServiceAreasCount: observed.footerServiceAreasLinks.length,
@@ -212,6 +238,7 @@ export async function run(env = process.env) {
           skipLinkKeyboardFocus, firstSkipFocus, secondSkipFocus,
           mobileMenuRequired, mobileMenuOpen,
           mobileMenuContactVisible, mobileMenuEscapeClose,
+          draftRestDenied, draftDirectHidden,
           pageErrors, failedLocalRequests, failedLocalResponses, blockedExternalRequests,
           elementorDraftVerified: false, realMediaVerified: false,
           localwpVerified: false, animationTimingVerified: false,
