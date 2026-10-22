@@ -31,7 +31,10 @@ const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   contactEmail: true, contactNonce: true, contactActionPath: '/wp-admin/admin-post.php',
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
   contactPreviewNote: true,
-  contactHorizontalOverflow: false, draftRestDenied: true,
+  contactHorizontalOverflow: false,
+  contactEmptyRejected: true, contactPhoneAccepted: true,
+  contactEmailAccepted: true, contactPostPrevented: true,
+  draftRestDenied: true,
   draftDirectHidden: true,
   navTopLevel: ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'],
   navProductChildren: ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
@@ -55,6 +58,8 @@ for (const change of [
   { contactMethod: 'get' }, { contactSubmitLabel: false },
   { contactPreviewNote: false },
   { contactHorizontalOverflow: true },
+  { contactEmptyRejected: false }, { contactPhoneAccepted: false },
+  { contactEmailAccepted: false }, { contactPostPrevented: false },
   { draftRestDenied: false }, { draftDirectHidden: false },
   { navTopLevel: ['Products', 'Blog'] }, { navProductChildren: ['Roller Blinds'] },
   { navServiceAreasTopLevel: true }, { footerServiceAreasCount: 0 },
@@ -72,5 +77,9 @@ assert.ok(source.includes("firstSkipFocus.native || firstSkipFocus.theme"));
 assert.ok(source.includes("document.getElementById('main-content')"));
 assert.ok(source.includes('rest_route=/wp/v2/pages/')); cases++;
 assert.ok(source.includes('data-elementor-id')); cases++;
-assert.equal(cases, 54);
+assert.ok(source.includes("form.addEventListener('submit', preventPost, true)"));
+assert.ok(source.includes("form.removeEventListener('submit', preventPost, true)"));
+assert.ok(source.includes("contactPostPrevented: intercepted === 3"));
+cases++;
+assert.equal(cases, 59);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);
