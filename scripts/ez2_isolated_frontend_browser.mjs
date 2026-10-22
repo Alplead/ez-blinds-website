@@ -41,6 +41,10 @@ export function reviewEvidence(e) {
       e.contactActionHost !== HOST || !e.contactSubmitLabel || !e.contactPreviewNote ||
       e.contactMethod !== 'post') errors.push('contact form render');
   if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
+  if (!e.contactEmptyRejected || !e.contactPhoneAccepted ||
+      !e.contactEmailAccepted || !e.contactPostPrevented) {
+    errors.push('contact client-side validation (no POST)');
+  }
   if (!e.draftRestDenied || !e.draftDirectHidden) errors.push('synthetic draft public exposure');
   const expectedTop = ['Products', 'Projects', 'Advice', 'Blog', 'About', 'Contact'];
   const expectedProducts = ['Roller Blinds', 'Sheer Curtains', 'Plantation Shutters',
@@ -188,6 +192,53 @@ export async function run(env = process.env) {
               document.documentElement.clientWidth + 1
           };
         });
+        // Exercise the real form's client-side contact-method guard without
+        // submitting to admin-post, sending email, or modifying WordPress.
+        // A capturing preventDefault listener and synthetic submit events keep
+        // all three probes entirely inside the disposable browser.
+        const contactValidation = await page.evaluate(() => {
+          const form = document.querySelector('.ezb-quote-form');
+          const phone = form?.querySelector('input[name="phone"]');
+          const email = form?.querySelector('input[name="email"]');
+          if (!form || !phone || !email) return {
+            contactEmptyRejected: false, contactPhoneAccepted: false,
+            contactEmailAccepted: false, contactPostPrevented: false
+          };
+          const originalPhone = phone.value, originalEmail = email.value;
+          let intercepted = 0;
+          const preventPost = event => { event.preventDefault(); intercepted++; };
+          const sendSynthetic = () => form.dispatchEvent(
+            new Event('submit', { bubbles: true, cancelable: true }));
+          form.addEventListener('submit', preventPost, true);
+          try {
+            phone.value = '';
+            email.value = '';
+            sendSynthetic();
+            const contactEmptyRejected = !phone.checkValidity() &&
+              phone.getAttribute('aria-invalid') === 'true' &&
+              document.activeElement === phone;
+            phone.value = '0000000000';
+            phone.dispatchEvent(new Event('input', { bubbles: true }));
+            sendSynthetic();
+            const contactPhoneAccepted = phone.checkValidity() &&
+              !phone.hasAttribute('aria-invalid');
+            phone.value = '';
+            phone.dispatchEvent(new Event('input', { bubbles: true }));
+            email.value = 'synthetic@example.invalid';
+            email.dispatchEvent(new Event('input', { bubbles: true }));
+            sendSynthetic();
+            const contactEmailAccepted = phone.checkValidity() &&
+              !phone.hasAttribute('aria-invalid');
+            return { contactEmptyRejected, contactPhoneAccepted,
+              contactEmailAccepted, contactPostPrevented: intercepted === 3 };
+          } finally {
+            form.removeEventListener('submit', preventPost, true);
+            phone.value = originalPhone;
+            email.value = originalEmail;
+            phone.setCustomValidity('');
+            phone.removeAttribute('aria-invalid');
+          }
+        });
         // Disposable WordPress may use ?page_id= permalinks: test the actual destination.
         // Only read-only GET requests are allowed; no form submission or production access.
         const checkServiceDestination = async links => {
@@ -234,6 +285,7 @@ export async function run(env = process.env) {
           contactServiceAreasCount: contact.contactServiceAreasLinks.length,
           serviceAreaFooterValid, serviceAreaContactValid,
           contactStatus: contactResponse?.status() || 0, ...contact,
+          ...contactValidation,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
           skipLinkKeyboardFocus, firstSkipFocus, secondSkipFocus,
           mobileMenuRequired, mobileMenuOpen,
