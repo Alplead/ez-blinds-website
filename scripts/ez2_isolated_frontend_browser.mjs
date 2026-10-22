@@ -133,8 +133,10 @@ export async function run(env = process.env) {
               Boolean(target && document.querySelector('main')?.contains(target));
           });
         }
+        // WordPress core already provides the first working skip link. A theme
+        // link is optional; do not require a duplicate second keyboard target.
         const skipLinkKeyboardFocus = firstSkipFocus.reachesMain &&
-          (firstSkipFocus.theme || (firstSkipFocus.native && secondSkipFocus === true));
+          (firstSkipFocus.native || firstSkipFocus.theme);
         const mobileMenuRequired = viewport.width <= 390;
         let mobileMenuOpen = false, mobileMenuContactVisible = false, mobileMenuEscapeClose = false;
         if (mobileMenuRequired) {
