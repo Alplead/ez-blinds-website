@@ -243,6 +243,13 @@ jobs:
           php scripts/test_ez2_disposable_import.php | tee /tmp/ez2-disposable-import-guard.log
           grep -q 'EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=24' /tmp/ez2-disposable-import-guard.log
 
+      - name: Test repeat-safe synthetic Elementor CI import fingerprint
+        run: |
+          php -l scripts/ez2_ci_import_reuse.php
+          php -l scripts/ez2_disposable_import_once.php
+          php -l scripts/test_ez2_ci_import_reuse.php
+          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=17'
+
       - name: Test isolated Elementor split Style-tab controls and missing overlay
         run: |
           php -l scripts/test_ez2_elementor_controls_probe.php

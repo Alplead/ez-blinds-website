@@ -1,0 +1,62 @@
+<?php
+/** Idempotency guard for disposable synthetic Elementor CI drafts, not LP deployment. */
+final class Ez2CiImportReuse {
+ const TITLE = 'EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION';
+ public static function capture(int $post): array {
+  $page = get_post($post);
+  if (!$page) throw new RuntimeException('DRAFT_MISSING');
+  $ids = get_posts(['post_type'=>'attachment','post_status'=>'inherit','post_parent'=>$post,
+   'posts_per_page'=>10,'fields'=>'ids','orderby'=>'ID','order'=>'ASC']);
+  $media = [];
+  foreach ($ids as $id) {
+   $item = get_post((int)$id);
+   $path = get_attached_file((int)$id);
+   $media[] = ['id'=>(int)$id,'url'=>wp_get_attachment_url((int)$id),
+    'mime'=>get_post_mime_type((int)$id),'parent'=>(int)$item->post_parent,
+    'exists'=>is_string($path) && is_file($path)];
+  }
+  return ['post_id'=>$post,'status'=>$page->post_status,'title'=>$page->post_title,
+   'body'=>$page->post_content,'mode'=>get_post_meta($post,'_elementor_edit_mode',true),
+   'version'=>get_post_meta($post,'_elementor_version',true),
+   'settings'=>get_post_meta($post,'_elementor_page_settings',true),
+   'data'=>get_post_meta($post,'_elementor_data',true),'media'=>$media,
+   'source_sha256'=>hash_file('sha256','/opt/ezb-design/ez2-home-hero-candidate.json')];
+ }
+ public static function digest(array $snapshot): string {
+  return hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+ }
+ public static function verify(array $s, string $stored, string $expectedVersion): bool {
+  if (!preg_match('/^[a-f0-9]{64}$/D', $stored)) throw new RuntimeException('UNMARKED_DRAFT');
+  if (!is_string($s['source_sha256']??null) || !preg_match('/^[a-f0-9]{64}$/D',$s['source_sha256'])) throw new RuntimeException('SOURCE_CHANGED');
+  if (!is_int($s['post_id']??null) || $s['post_id']<1 || ($s['status']??null)!=='draft'
+   || ($s['title']??null)!==self::TITLE || ($s['body']??null)!==''
+   || ($s['mode']??null)!=='builder' || ($s['version']??null)!==$expectedVersion
+   || ($s['settings']??null)!==['hide_title'=>'yes'] || !is_string($s['data']??null)) {
+   throw new RuntimeException('DRAFT_CHANGED');
+  }
+  try {$nodes=json_decode($s['data'],true,32,JSON_THROW_ON_ERROR);}
+  catch (Throwable $e) {throw new RuntimeException('DRAFT_DATA_CHANGED');}
+  if (!is_array($nodes) || count($nodes)!==1 || !is_array($nodes[0]['settings']['background_slideshow_gallery']??null)) {
+   throw new RuntimeException('DRAFT_GALLERY_CHANGED');
+  }
+  $media=$s['media']??null;
+  if (!is_array($media) || count($media)!==4) throw new RuntimeException('DRAFT_MEDIA_CHANGED');
+  $gallery=[];$seen=[];
+  foreach ($media as $item) {
+   if (!is_array($item) || !is_int($item['id']??null) || $item['id']<1
+    || isset($seen[$item['id']]) || ($item['parent']??null)!==$s['post_id']
+    || ($item['mime']??null)!=='image/png' || ($item['exists']??null)!==true
+    || !is_string($item['url']??null)
+    || !preg_match('~^http://ez2-review\\.local/wp-content/uploads/[a-zA-Z0-9/_-]+\\.png$~D',$item['url'])) {
+    throw new RuntimeException('DRAFT_MEDIA_CHANGED');
+   }
+   $seen[$item['id']]=true;
+   $gallery[]=['id'=>$item['id'],'url'=>$item['url']];
+  }
+  if ($nodes[0]['settings']['background_slideshow_gallery']!==$gallery) {
+   throw new RuntimeException('DRAFT_GALLERY_CHANGED');
+  }
+  if (!hash_equals($stored,self::digest($s))) throw new RuntimeException('DRAFT_OWNER_EDIT_CONFLICT');
+  return true;
+ }
+}

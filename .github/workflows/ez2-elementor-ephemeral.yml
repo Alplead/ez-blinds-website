@@ -7,6 +7,9 @@ on:
       - 'scripts/ez2_wp_runtime_probe.php'
       - 'scripts/ez2_elementor_controls_probe.php'
       - 'scripts/ez2_disposable_import.php'
+      - 'scripts/ez2_ci_import_reuse.php'
+      - 'scripts/ez2_disposable_import_once.php'
+      - 'scripts/test_ez2_ci_import_reuse.php'
       - 'scripts/test_ez2_disposable_import.php'
       - '.devcontainer/docker-compose.yml'
       - 'scripts/ez2_elementor_ephemeral_guard.py'
@@ -81,9 +84,11 @@ jobs:
           grep -Fq '"slideshow_ken_burns_verified": false' /tmp/ez2-runtime.json
           grep -Fq '"deployment_authorized": false' /tmp/ez2-runtime.json
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_elementor_controls_probe.php --allow-root
-          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import.php --allow-root | tee /tmp/ez2-synthetic-import.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-import.log
           grep -Fq "EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version=$EZ2_ELEMENTOR_VERSION" /tmp/ez2-synthetic-import.log
           grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-repeat.log
+          grep -Fq 'reused=true visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-repeat.log
           echo "EZ2_ELEMENTOR_RUNTIME_VERSION_PASS version=$EZ2_ELEMENTOR_VERSION"
       - name: Install pinned Chromium and run isolated browser guards
         run: |
