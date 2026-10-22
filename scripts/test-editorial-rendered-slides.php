@@ -10,6 +10,10 @@ function ezb_find_attachment_by_basename($name) {
     return $ids[$name];
 }
 function get_post_mime_type($id) { return 'image/webp'; }
+$GLOBALS['missing_ids'] = array();
+function get_attached_file($id) {
+    return in_array($id, $GLOBALS['missing_ids'], true) ? '/nonexistent/ez2-stale-media.webp' : __FILE__;
+}
 function wp_get_attachment_image($id, $size, $icon, $attributes) {
     $mode = $GLOBALS['mode'];
     if ($mode === 'all_missing' || ($mode === 'first_missing' && $id === 1) ||
@@ -41,6 +45,15 @@ if (substr_count($html, 'data-ezb-slide') !== 4 ||
     strpos($html, 'alt="Sheer Curtains installation photograph"') === false) {
     throw new Exception('Complete gallery must describe its first sheer curtain photo.');
 }
+// A stale attachment row must not produce a broken image or the wrong first-slide label.
+$GLOBALS['missing_ids'] = array(1);
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 3 ||
+    strpos($html, 'alt="Roller Blinds installation photograph"') === false ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('Missing local media must be excluded from the slideshow.');
+}
+$GLOBALS['missing_ids'] = array();
 $GLOBALS['mode'] = 'single';
 $html = $render();
 if (substr_count($html, 'data-ezb-slide') !== 1 ||
@@ -56,4 +69,4 @@ if (strpos($html, 'ezb-cinema--missing-media') === false ||
     strpos($html, 'data-ezb-toggle') !== false) {
     throw new Exception('No images must display the safe text-only hero.');
 }
-echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=4\n";
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=5\n";

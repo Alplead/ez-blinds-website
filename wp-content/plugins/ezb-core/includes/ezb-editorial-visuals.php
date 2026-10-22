@@ -44,7 +44,12 @@ function ezb_editorial_image_id( $selection ) {
 		return 0;
 	}
 	$id = (int) ezb_find_attachment_by_basename( $choices[ $selection ]['file'] );
-	return $id && 'image' === substr( (string) get_post_mime_type( $id ), 0, 5 ) ? $id : 0;
+	if ( ! $id || 0 !== strpos( (string) get_post_mime_type( $id ), 'image/' ) ) {
+		return 0;
+	}
+	// Reject stale Media Library records whose local image is missing.
+	$file = get_attached_file( $id );
+	return is_string( $file ) && is_file( $file ) && is_readable( $file ) ? $id : 0;
 }
 
 add_shortcode(

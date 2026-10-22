@@ -68,7 +68,7 @@ jobs:
         run: |
           php -l scripts/test-editorial-rendered-slides.php
           php scripts/test-editorial-rendered-slides.php | tee /tmp/editorial-rendered-slides.log
-          grep -q 'EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=4' /tmp/editorial-rendered-slides.log
+          grep -q 'EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=5' /tmp/editorial-rendered-slides.log
 
       - name: Verify background-tab video autoplay safety
         run: |
