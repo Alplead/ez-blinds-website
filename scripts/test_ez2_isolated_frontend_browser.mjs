@@ -59,5 +59,9 @@ assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
 assert.ok(source.includes("=== 'Test form (no email sent)'")); cases++;
 assert.ok(source.includes("=== 'Preview only: this form does not send email.'")); cases++;
+// Browser smoke also checks the real focus order in both pinned Elementor runtimes.
+assert.ok(source.includes("firstSkipFocus.reachesMain"));
+assert.ok(source.includes("secondSkipFocus === true"));
+assert.ok(source.includes("document.getElementById('main-content')"));
 assert.equal(cases, 46);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);

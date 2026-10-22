@@ -112,8 +112,29 @@ export async function run(env = process.env) {
         }));
         // Exercise real keyboard focus and the WordPress mobile overlay, not just static markup.
         await page.keyboard.press('Tab');
-        const skipLinkKeyboardFocus = await page.evaluate(() =>
-          document.activeElement?.matches('a.ezb-skip-link[href="#main-content"]') === true);
+        const firstSkipFocus = await page.evaluate(() => {
+          const el = document.activeElement;
+          const href = el?.getAttribute('href') || '';
+          const target = href.startsWith('#') ? document.getElementById(href.slice(1)) : null;
+          const main = document.querySelector('main');
+          return {
+            native: el?.matches('a.skip-link.screen-reader-text') === true,
+            theme: el?.matches('a.ezb-skip-link[href="#main-content"]') === true,
+            reachesMain: Boolean(target && main && (target === main || main.contains(target)))
+          };
+        });
+        let secondSkipFocus = null;
+        if (firstSkipFocus.native) {
+          await page.keyboard.press('Tab');
+          secondSkipFocus = await page.evaluate(() => {
+            const el = document.activeElement;
+            const target = document.getElementById('main-content');
+            return el?.matches('a.ezb-skip-link[href="#main-content"]') === true &&
+              Boolean(target && document.querySelector('main')?.contains(target));
+          });
+        }
+        const skipLinkKeyboardFocus = firstSkipFocus.reachesMain &&
+          (firstSkipFocus.theme || (firstSkipFocus.native && secondSkipFocus === true));
         const mobileMenuRequired = viewport.width <= 390;
         let mobileMenuOpen = false, mobileMenuContactVisible = false, mobileMenuEscapeClose = false;
         if (mobileMenuRequired) {
@@ -186,7 +207,8 @@ export async function run(env = process.env) {
           serviceAreaFooterValid, serviceAreaContactValid,
           contactStatus: contactResponse?.status() || 0, ...contact,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
-          skipLinkKeyboardFocus, mobileMenuRequired, mobileMenuOpen,
+          skipLinkKeyboardFocus, firstSkipFocus, secondSkipFocus,
+          mobileMenuRequired, mobileMenuOpen,
           mobileMenuContactVisible, mobileMenuEscapeClose,
           pageErrors, failedLocalRequests, failedLocalResponses, blockedExternalRequests,
           elementorDraftVerified: false, realMediaVerified: false,
