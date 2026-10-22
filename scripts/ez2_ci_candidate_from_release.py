@@ -69,7 +69,7 @@ def main(args):
         raise ValueError('Checked-out HEAD differs from expected SHA')
     committed = subprocess.check_output(['git', '-C', str(ROOT), 'show', f'{sha}:{SOURCE}'])
     result = stage(release_dir, sha, committed)
-    print('EZ2_RELEASE_CANDIDATE_RUNTIME_PASS source_sha=' + result['source_sha])
+    print('EZ2_RELEASE_CANDIDATE_RUNTIME_PASS source_sha=' + result['source_sha'])
 
 
 if __name__ == '__main__':
