@@ -60,7 +60,7 @@ services:
       - ../wp-content/themes/ezb-theme:/var/www/html/wp-content/themes/ezb-theme
       - ../wp-content/plugins/ezb-core:/var/www/html/wp-content/plugins/ezb-core
       - ../scripts:/opt/ezb-scripts:ro
-      - ../design/ez2-home-hero-candidate.json:/opt/ezb-design/ez2-home-hero-candidate.json:ro
+      - ${EZ2_CANDIDATE_PATH:-../design/ez2-home-hero-candidate.json}:/opt/ezb-design/ez2-home-hero-candidate.json:ro
     entrypoint: ["/bin/sh", "/opt/ezb-scripts/bootstrap-compose.sh"]
     restart: "no"
 

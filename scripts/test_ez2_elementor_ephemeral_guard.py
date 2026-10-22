@@ -9,7 +9,7 @@ from ez2_elementor_ephemeral_guard import check_contract, ROOT
 workflow = (ROOT / ".github/workflows/ez2-elementor-ephemeral.yml").read_text()
 candidate = json.loads((ROOT / "design/ez2-home-hero-candidate.json").read_text())
 failed, total = check_contract(workflow, candidate)
-assert not failed and total == 25, (failed, total)
+assert not failed and total == 28, (failed, total)
 cases = 1
 
 def reject(bad_workflow=None, bad_candidate=None):
@@ -38,5 +38,8 @@ reject(workflow.replace('for attempt in 1 2 3; do', 'for attempt in 1 2 100; do'
 reject(workflow.replace('if docker pull "$image"; then', 'if true; then'))
 reject(workflow.replace('EZ2_CONTAINER_PULL_UNAVAILABLE image=$image', 'IGNORE_FAILED_PULL'))
 reject(workflow.replace('sleep $((attempt * 10))', 'sleep 0'))
-assert cases == 18, cases
+reject(workflow.replace("EZ2_CANDIDATE_PATH: ../.release/ez2-runtime-candidate.json", "EZ2_CANDIDATE_PATH: ../design/ez2-home-hero-candidate.json"))
+reject(workflow.replace('python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"', 'echo SKIP_CANDIDATE_VERIFY'))
+reject(workflow.replace("EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}", "EZB_EXPECTED_SHA: latest"))
+assert cases == 21, cases
 print(f"EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases={cases}")

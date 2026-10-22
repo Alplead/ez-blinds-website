@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - 'design/ez2-home-hero-candidate.json'
+      - 'scripts/ez2_ci_candidate_from_release.py'
+      - 'scripts/test_ez2_ci_candidate_from_release.py'
+      - 'scripts/ez2_content_candidate_bundle.py'
+      - 'scripts/ez2_release_set.py'
+      - 'scripts/build-release-bundle.sh'
+      - '.github/workflows/release-install-smoke.yml'
       - 'scripts/ez2_wp_runtime_probe.php'
       - 'scripts/ez2_elementor_controls_probe.php'
       - 'scripts/ez2_disposable_import.php'
@@ -33,6 +39,7 @@ jobs:
         elementor_version: ['4.3.4', '4.3.5']
     env:
       EZ2_ELEMENTOR_VERSION: ${{ matrix.elementor_version }}
+      EZ2_CANDIDATE_PATH: ../.release/ez2-runtime-candidate.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +49,17 @@ jobs:
           set -euo pipefail
           python3 scripts/ez2_elementor_ephemeral_guard.py
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Stage verified exact-head release candidate (disposable CI only)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          bash scripts/build-release-bundle.sh
+          python3 scripts/ez2_content_candidate_bundle.py build . "$EZB_EXPECTED_SHA" .release/ez2-content-candidate.zip
+          python3 scripts/ez2_release_set.py build .release "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-candidate-stage.log
+          grep -Fq "EZ2_RELEASE_CANDIDATE_RUNTIME_PASS source_sha=$EZB_EXPECTED_SHA" /tmp/ez2-candidate-stage.log
       - name: Pull official container images
         run: |
           set -euo pipefail

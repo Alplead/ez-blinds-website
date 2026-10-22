@@ -266,10 +266,10 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_elementor_ephemeral_guard.py
           python3 scripts/ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-ephemeral-guard.log
-          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=25' /tmp/ez2-elementor-ephemeral-guard.log
+          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=28' /tmp/ez2-elementor-ephemeral-guard.log
           python3 -m py_compile scripts/test_ez2_elementor_ephemeral_guard.py
           python3 scripts/test_ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-matrix-regression.log
-          grep -q 'EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases=18' /tmp/ez2-elementor-matrix-regression.log
+          grep -q 'EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases=21' /tmp/ez2-elementor-matrix-regression.log
 
       - name: Verify EZ2 managed-content conflict dry-run guard
         run: |
@@ -288,6 +288,12 @@ jobs:
           python3 -m py_compile scripts/ez2_release_set.py scripts/test_ez2_release_set.py
           python3 scripts/test_ez2_release_set.py | tee /tmp/ez2-release-set.log
           grep -q 'EZ2_RELEASE_SET_TEST_PASS cases=22' /tmp/ez2-release-set.log
+
+      - name: Guard exact-head release candidate runtime input (offline only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_candidate_from_release.py scripts/test_ez2_ci_candidate_from_release.py
+          python3 scripts/test_ez2_ci_candidate_from_release.py | tee /tmp/ez2-runtime-candidate-regression.log
+          grep -q 'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases=15' /tmp/ez2-runtime-candidate-regression.log
 
       - name: Preflight controlled Elementor exports without importing them
         run: |

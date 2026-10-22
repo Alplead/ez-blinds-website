@@ -35,6 +35,9 @@ def check_contract(workflow, candidate):
         'if docker pull "$image"; then' in workflow,
         'if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi' in workflow,
         'EZ2_CONTAINER_PULL_UNAVAILABLE image=$image' in workflow,
+        'EZ2_CANDIDATE_PATH: ../.release/ez2-runtime-candidate.json' in workflow,
+        'EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}' in workflow,
+        'python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"' in workflow,
     ]
     return [index + 1 for index, ok in enumerate(checks) if not ok], len(checks)
 
