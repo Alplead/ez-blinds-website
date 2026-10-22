@@ -45,6 +45,11 @@ jobs:
           python3 scripts/verify_release_scope.py .release "${{ github.event.pull_request.head.sha || github.sha }}"
           (cd .release && sha256sum -c SHA256SUMS)
 
+      - name: Build and verify non-installable Elementor candidate
+        run: |
+          python3 scripts/ez2_content_candidate_bundle.py build . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
+          python3 scripts/ez2_content_candidate_bundle.py verify . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
+
       - name: Preload Docker Official Images from public ECR
         run: |
           set -euo pipefail
@@ -165,6 +170,14 @@ jobs:
             .release/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload separate public Elementor candidate (not installable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-public-content-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .release/ez2-content-candidate.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Show release stack logs on failure
         if: failure()
