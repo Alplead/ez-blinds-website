@@ -50,6 +50,11 @@ jobs:
           python3 scripts/ez2_content_candidate_bundle.py build . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
           python3 scripts/ez2_content_candidate_bundle.py verify . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
 
+      - name: Build and verify exact-head cross-artifact catalog (evidence only)
+        run: |
+          python3 scripts/ez2_release_set.py build .release "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 scripts/ez2_release_set.py verify .release "${{ github.event.pull_request.head.sha || github.sha }}"
+
       - name: Preload Docker Official Images from public ECR
         run: |
           set -euo pipefail
@@ -176,6 +181,14 @@ jobs:
         with:
           name: ez2-public-content-candidate-${{ github.event.pull_request.head.sha || github.sha }}
           path: .release/ez2-content-candidate.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload cross-artifact catalog (NOT installable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-release-set-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .release/EZ2_RELEASE_SET.json
           if-no-files-found: error
           retention-days: 7
 
