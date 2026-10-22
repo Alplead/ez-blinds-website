@@ -18,6 +18,8 @@ assert.deepEqual(VIEWPORTS.map(v => v.reducedMotion),
   ['no-preference', 'no-preference', 'reduce']); cases++;
 const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   horizontalOverflow: false, reducedMotion: true, expectedReducedMotion: true,
+  skipLinkKeyboardFocus: true, mobileMenuRequired: true,
+  mobileMenuOpen: true, mobileMenuContactVisible: true, mobileMenuEscapeClose: true,
   pageErrors: [], failedLocalRequests: [], failedLocalResponses: [],
   blockedExternalRequests: [], contactStatus: 200, contactHost: HOST,
   contactFormPresent: true, contactNameRequired: true, contactPhone: true,
@@ -34,6 +36,8 @@ assert.deepEqual(reviewEvidence(good), []); cases++;
 for (const change of [
   { status: 302 }, { host: 'ezbns.com.au' }, { hasMain: false },
   { styleSheets: 0 }, { horizontalOverflow: true },
+  { skipLinkKeyboardFocus: false }, { mobileMenuOpen: false },
+  { mobileMenuContactVisible: false }, { mobileMenuEscapeClose: false },
   { reducedMotion: false }, { pageErrors: ['script failed'] },
   { failedLocalRequests: ['missing.css'] },
   { failedLocalResponses: [{ status: 404, path: '/missing.css' }] },
@@ -55,5 +59,5 @@ assert.ok(source.includes("form.getAttribute('action')"),
   'Form input named action must not shadow the HTMLFormElement action property'); cases++;
 assert.ok(source.includes("=== 'Test form (no email sent)'")); cases++;
 assert.ok(source.includes("=== 'Preview only: this form does not send email.'")); cases++;
-assert.equal(cases, 42);
+assert.equal(cases, 46);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);

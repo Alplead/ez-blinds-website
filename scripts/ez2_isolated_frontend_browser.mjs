@@ -25,6 +25,9 @@ export function reviewEvidence(e) {
   if (e.status !== 200 || e.host !== HOST) errors.push('origin/status');
   if (!e.hasMain || e.styleSheets < 1) errors.push('missing layout/styles');
   if (e.horizontalOverflow) errors.push('horizontal overflow');
+  if (!e.skipLinkKeyboardFocus) errors.push('keyboard skip link');
+  if (e.mobileMenuRequired && (!e.mobileMenuOpen || !e.mobileMenuContactVisible ||
+      !e.mobileMenuEscapeClose)) errors.push('mobile menu interaction');
   if (e.reducedMotion !== e.expectedReducedMotion) errors.push('reduced-motion');
   if (e.pageErrors.length || e.failedLocalRequests.length ||
       e.failedLocalResponses.length || e.blockedExternalRequests.length) {
@@ -107,6 +110,29 @@ export async function run(env = process.env) {
             a.textContent?.trim() === 'Service Areas').map(a => a.href),
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
         }));
+        // Exercise real keyboard focus and the WordPress mobile overlay, not just static markup.
+        await page.keyboard.press('Tab');
+        const skipLinkKeyboardFocus = await page.evaluate(() =>
+          document.activeElement?.matches('a.ezb-skip-link[href="#main-content"]') === true);
+        const mobileMenuRequired = viewport.width <= 390;
+        let mobileMenuOpen = false, mobileMenuContactVisible = false, mobileMenuEscapeClose = false;
+        if (mobileMenuRequired) {
+          const opener = page.locator('header .wp-block-navigation__responsive-container-open').first();
+          if (await opener.isVisible()) {
+            await opener.click();
+            const panel = page.locator('header .wp-block-navigation__responsive-container.is-menu-open').first();
+            mobileMenuOpen = await panel.isVisible();
+            if (mobileMenuOpen) {
+              mobileMenuContactVisible = await panel.getByRole('link', { name: 'Contact', exact: true }).isVisible();
+              await page.keyboard.press('Escape');
+              mobileMenuEscapeClose = !(await panel.isVisible());
+              if (!mobileMenuEscapeClose) {
+                const closer = page.locator('header .wp-block-navigation__responsive-container-close').first();
+                if (await closer.isVisible()) await closer.click();
+              }
+            }
+          }
+        }
         await page.screenshot({
           path: path.join(env.EZ2_BROWSER_OUTPUT, viewport.name + '-home.png'),
           fullPage: true
@@ -160,6 +186,8 @@ export async function run(env = process.env) {
           serviceAreaFooterValid, serviceAreaContactValid,
           contactStatus: contactResponse?.status() || 0, ...contact,
           expectedReducedMotion: viewport.reducedMotion === 'reduce',
+          skipLinkKeyboardFocus, mobileMenuRequired, mobileMenuOpen,
+          mobileMenuContactVisible, mobileMenuEscapeClose,
           pageErrors, failedLocalRequests, failedLocalResponses, blockedExternalRequests,
           elementorDraftVerified: false, realMediaVerified: false,
           localwpVerified: false, animationTimingVerified: false,
