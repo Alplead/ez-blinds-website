@@ -9,6 +9,8 @@ on:
       - 'scripts/ez2_disposable_import.php'
       - 'scripts/ez2_ci_import_reuse.php'
       - 'scripts/ez2_disposable_import_once.php'
+      - 'scripts/ez2_ci_owner_edit_probe.php'
+      - 'scripts/test_ez2_ci_owner_edit_probe.php'
       - 'scripts/test_ez2_ci_import_reuse.php'
       - 'scripts/test_ez2_disposable_import.php'
       - '.devcontainer/docker-compose.yml'
@@ -89,6 +91,17 @@ jobs:
           grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-repeat.log
           grep -Fq 'reused=true visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-repeat.log
+          # Synthetic-only Owner-edit conflict drill: a repeated import MUST fail
+          # without changing the edited draft or adding attachments.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_OWNER_EDIT_PROBE=YES_DISPOSABLE_CONFLICT_ONLY -e EZ2_CI_OWNER_EDIT_PHASE=prepare -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_owner_edit_probe.php --allow-root | tee /tmp/ez2-owner-edit-prepare.log
+          grep -Fq 'EZ2_CI_OWNER_EDIT_PREPARED draft=true synthetic_only=true' /tmp/ez2-owner-edit-prepare.log
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-owner-edit-reimport.log 2>&1; then
+            echo 'Unexpected success: repeated import overwrote an Owner edit' >&2
+            exit 1
+          fi
+          grep -Fq 'DRAFT_CHANGED' /tmp/ez2-owner-edit-reimport.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_OWNER_EDIT_PROBE=YES_DISPOSABLE_CONFLICT_ONLY -e EZ2_CI_OWNER_EDIT_PHASE=verify -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_owner_edit_probe.php --allow-root | tee /tmp/ez2-owner-edit-verify.log
+          grep -Fq 'EZ2_CI_OWNER_EDIT_CONFLICT_PASS draft_preserved=true media_preserved=true synthetic_only=true' /tmp/ez2-owner-edit-verify.log
           echo "EZ2_ELEMENTOR_RUNTIME_VERSION_PASS version=$EZ2_ELEMENTOR_VERSION"
       - name: Install pinned Chromium and run isolated browser guards
         run: |
