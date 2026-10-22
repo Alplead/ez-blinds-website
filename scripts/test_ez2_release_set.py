@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import zipfile
 import tempfile
 import zipfile
 from pathlib import Path
@@ -70,7 +71,7 @@ def reject(change, label, sha=SHA, mode="verify"):
         change(root)
         try:
             run(mode, root, sha)
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
             CASES += 1
             return
         raise AssertionError("Accepted unsafe release-set state: " + label)
