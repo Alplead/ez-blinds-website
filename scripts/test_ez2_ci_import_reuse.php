@@ -29,5 +29,11 @@ $x=$state;$x['data']=json_encode([['settings'=>['background_slideshow_gallery'=>
 $x=$state;$x['media'][0]['mime']='image/webp';reject($x,$stamp);
 $x=$state;$x['media'][0]['url']='http://ez2-review.local.evil.invalid/wp-content/uploads/s.png';reject($x,$stamp);
 $x=$state;$x['source_sha256']=str_repeat('b',64);reject($x,$stamp);
-if($cases!==17)throw new RuntimeException('cases='.$cases);
+if(Ez2CiImportReuse::candidates([10],[10])!==[10])throw new RuntimeException('same draft');$cases++;
+if(Ez2CiImportReuse::candidates([10],[])!==[10])throw new RuntimeException('title only');$cases++;
+if(Ez2CiImportReuse::candidates([],[10])!==[10])throw new RuntimeException('renamed draft');$cases++;
+function rejectCandidates($title,$marked){global $cases;try{Ez2CiImportReuse::candidates($title,$marked);}catch(RuntimeException $e){$cases++;return;}throw new RuntimeException('unsafe candidate selection');}
+rejectCandidates([10],[11]);
+rejectCandidates([0],[]);
+if($cases!==22)throw new RuntimeException('cases='.$cases);
 echo 'EZ2_CI_IMPORT_REUSE_PASS cases='.$cases."\n";

@@ -19,9 +19,15 @@ try {
  $design=json_decode(file_get_contents($source),true,32,JSON_THROW_ON_ERROR);
  $fake=[];foreach(Ez2DisposableImport::SLOTS as $i=>$slot){$fake[$slot]=['id'=>$i+1,'url'=>'http://ez2-review.local/wp-content/uploads/synthetic-'.($i+1).'.png'];}
  Ez2DisposableImport::compile($design,$fake);
- $find=function():array{return get_posts(['post_type'=>'page',
-  'post_status'=>['publish','future','draft','pending','private','trash'],
-  'title'=>Ez2CiImportReuse::TITLE,'posts_per_page'=>2,'fields'=>'ids']);};
+ $find=function():array{
+  $statuses=['publish','future','draft','pending','private','trash'];
+  $title=get_posts(['post_type'=>'page','post_status'=>$statuses,
+   'title'=>Ez2CiImportReuse::TITLE,'posts_per_page'=>3,'fields'=>'ids']);
+  // A renamed draft must still be found by its fingerprint marker and rejected, not duplicated.
+  $marked=get_posts(['post_type'=>'page','post_status'=>$statuses,
+   'meta_key'=>'_ez2_ci_import_fingerprint','posts_per_page'=>3,'fields'=>'ids']);
+  return Ez2CiImportReuse::candidates($title,$marked);
+ };
  $existing=$find();
  if (count($existing)>1) throw new RuntimeException('DUPLICATE_DRAFT_CONFLICT');
  if (count($existing)===1) {

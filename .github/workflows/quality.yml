@@ -248,7 +248,7 @@ jobs:
           php -l scripts/ez2_ci_import_reuse.php
           php -l scripts/ez2_disposable_import_once.php
           php -l scripts/test_ez2_ci_import_reuse.php
-          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=17'
+          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=22'
 
       - name: Test isolated Elementor split Style-tab controls and missing overlay
         run: |

@@ -2,6 +2,15 @@
 /** Idempotency guard for disposable synthetic Elementor CI drafts, not LP deployment. */
 final class Ez2CiImportReuse {
  const TITLE = 'EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION';
+ public static function candidates(array $byTitle, array $byFingerprint): array {
+  $found=[];
+  foreach (array_merge($byTitle,$byFingerprint) as $id) {
+   if (!is_int($id) || $id<1) throw new RuntimeException('INVALID_DRAFT_ID');
+   $found[$id]=$id;
+  }
+  if (count($found)>1) throw new RuntimeException('DUPLICATE_DRAFT_CONFLICT');
+  return array_values($found);
+ }
  public static function capture(int $post): array {
   $page = get_post($post);
   if (!$page) throw new RuntimeException('DRAFT_MISSING');
