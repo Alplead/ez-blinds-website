@@ -1060,13 +1060,13 @@ jobs:
             echo "COUNTS|verified=" . $verified . "|gone=" . $gone . PHP_EOL;
           ' --allow-root)"
 
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/retractable-fly-screen/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/|verified_redirect|/projects/|/projects/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/portfolio/page/2/|verified_redirect|/projects/|/projects/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/category/roller-blinds/|verified_redirect|/roller-blinds/|/roller-blinds/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/02/04/roller-blinds-showcase/|verified_redirect|/roller-blinds/|/roller-blinds/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/02/04/plantation-shutters-showcase/|verified_redirect|/plantation-shutters/|/plantation-shutters/|'
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq '/2018/10/06/retractable-fly-screen-showcase/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|'
+          grep -Fxq '/retractable-fly-screen/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/portfolio/|verified_redirect|/projects/|/projects/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/portfolio/page/2/|verified_redirect|/projects/|/projects/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/category/roller-blinds/|verified_redirect|/roller-blinds/|/roller-blinds/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/2018/02/04/roller-blinds-showcase/|verified_redirect|/roller-blinds/|/roller-blinds/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/2018/02/04/plantation-shutters-showcase/|verified_redirect|/plantation-shutters/|/plantation-shutters/|' <<< "$REDIRECT_MAP"
+          grep -Fxq '/2018/10/06/retractable-fly-screen-showcase/|verified_redirect|/retractable-flyscreens/|/retractable-flyscreens/|' <<< "$REDIRECT_MAP"
 
           for source in \
             /roman-blinds/ \
@@ -1076,10 +1076,10 @@ jobs:
             /2018/02/04/roman-blinds-showcase/ \
             /2018/02/04/panel-guide-blinds-showcase/ \
             /2018/02/04/venetian-blinds-showcase/; do
-            printf '%s\n' "$REDIRECT_MAP" | grep -Fxq "$source|gone|||gone"
+            grep -Fxq "$source|gone|||gone" <<< "$REDIRECT_MAP"
           done
 
-          printf '%s\n' "$REDIRECT_MAP" | grep -Fxq 'COUNTS|verified=7|gone=7'
+          grep -Fxq 'COUNTS|verified=7|gone=7' <<< "$REDIRECT_MAP"
 
           # Development preview must not issue launch redirects or 410s.
           code="$(curl -sS -o /tmp/dev-legacy-route.html -w '%{http_code}' 'http://127.0.0.1:8080/portfolio/')"

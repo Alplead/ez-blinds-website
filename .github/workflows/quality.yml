@@ -116,6 +116,11 @@ jobs:
           node scripts/test-link-check-budget.mjs | tee /tmp/link-budget.log
           grep -q 'EZB_LINK_CHECK_BUDGET_TEST_PASS cases=7' /tmp/link-budget.log
 
+      - name: Guard redirect-registry checks against pipefail SIGPIPE
+        run: |
+          python3 scripts/test_ez2_redirect_pipefail.py | tee /tmp/ez2-redirect-pipefail.log
+          grep -Fq 'EZ2_REDIRECT_PIPEFAIL_REGRESSION_PASS cases=11' /tmp/ez2-redirect-pipefail.log
+
       - name: Test internal-link fail-closed guard
         run: |
           node --check scripts/test-link-check-guard.mjs
