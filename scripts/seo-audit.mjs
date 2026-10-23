@@ -61,6 +61,17 @@ function extractTitle(html) {
 
 // Only print the origin and path of an untrusted canonical URL. Never log
 // embedded credentials, query tokens or fragments from page markup.
+function safeRedirectSummary(raw, baseUrl) {
+  if (!raw) return 'missing Location';
+  try {
+    const url = new URL(raw, baseUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) return 'INVALID_REDIRECT';
+    return url.origin === baseUrl.origin ? url.pathname : url.origin + url.pathname;
+  } catch {
+    return 'INVALID_REDIRECT';
+  }
+}
+
 function safeCanonicalSummary(raw, baseUrl) {
   try {
     const url = new URL(raw, baseUrl);
@@ -104,7 +115,7 @@ for (const path of paths) {
 
   // Never follow an unexpected redirect: an off-site Location must not be fetched.
   if (response.status >= 300 && response.status < 400) {
-    failures.push(`${path} -> unexpected redirect: ${response.headers.get('location') || 'missing Location'}`);
+    failures.push(`${path} -> unexpected redirect: ${safeRedirectSummary(response.headers.get('location'), base)}`);
     continue;
   }
   if (response.status !== 200) {
@@ -119,11 +130,11 @@ for (const path of paths) {
 
   const finalUrl = new URL(response.url);
   if (finalUrl.origin !== base.origin) {
-    failures.push(`${path} -> unexpected off-origin redirect: ${finalUrl.href}`);
+    failures.push(`${path} -> unexpected off-origin redirect: ${safeRedirectSummary(finalUrl.href, base)}`);
     continue;
   }
   if (finalUrl.pathname !== requested.pathname || finalUrl.search || finalUrl.hash) {
-    failures.push(`${path} -> unexpected route: ${finalUrl.pathname}${finalUrl.search}${finalUrl.hash}`);
+    failures.push(`${path} -> unexpected route: ${finalUrl.pathname}`);
     continue;
   }
   const html = await response.text();
@@ -175,7 +186,7 @@ for (const path of paths) {
 
       if (canonicalPath !== expectedPath || canonical.search || canonical.hash) {
         failures.push(
-          `${path} -> canonical mismatch: expected ${expectedPath}, got ${canonical.pathname}${canonical.search}${canonical.hash}`
+          `${path} -> canonical mismatch: expected ${expectedPath}, got ${safeCanonicalSummary(canonicals[0], finalUrl)}`
         );
       }
     }
