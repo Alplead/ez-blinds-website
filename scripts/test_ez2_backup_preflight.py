@@ -34,7 +34,8 @@ def save(root, doc):
 def reject(mutator):
     global cases
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
+        root = Path(tmp) / "backup"
+        root.mkdir()
         manifest = fixture(root)
         mutator(root, manifest)
         try:
@@ -76,6 +77,16 @@ reject(lambda root, m: (m["files"]["theme"].update(size_bytes=True), save(root, 
 reject(lambda root, m: (m["files"]["uploads"].update(size_bytes=12345), save(root, m)))
 reject(lambda root, m: (root / ROLES["theme"]).write_bytes(b"changed"))
 reject(lambda root, m: (root / ROLES["database"]).unlink())
+reject(lambda root, m: (root / "undeclared.txt").write_text("synthetic"))
+reject(lambda root, m: (root / "undeclared-directory").mkdir())
+
+def external_hardlink_component(root, m):
+    os.link(root / ROLES["uploads"], root.parent / "outside-component")
+reject(external_hardlink_component)
+
+def external_hardlink_manifest(root, m):
+    os.link(root / "backup-manifest.json", root.parent / "outside-manifest")
+reject(external_hardlink_manifest)
 
 def symlink_component(root, m):
     (root / ROLES["database"]).unlink()
@@ -103,5 +114,5 @@ def nonfinite(root, m):
     (root / "backup-manifest.json").write_text('{"schema_version":NaN}')
 reject(nonfinite)
 
-assert cases == 22, cases
+assert cases == 26, cases
 print(f"EZ2_BACKUP_PREFLIGHT_PASS cases={cases}")

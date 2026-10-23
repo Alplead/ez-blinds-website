@@ -360,7 +360,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_preflight.py scripts/test_ez2_backup_preflight.py
           python3 scripts/test_ez2_backup_preflight.py | tee /tmp/ez2-backup-preflight.log
-          grep -q 'EZ2_BACKUP_PREFLIGHT_PASS cases=22' /tmp/ez2-backup-preflight.log
+          grep -q 'EZ2_BACKUP_PREFLIGHT_PASS cases=26' /tmp/ez2-backup-preflight.log
 
       - name: Inspect isolated EZ2 rollback archives for unsafe paths and links (synthetic only)
         run: |

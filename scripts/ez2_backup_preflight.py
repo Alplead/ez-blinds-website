@@ -37,10 +37,10 @@ def reject_constant(value):
 
 
 def regular_file(path):
-    mode = path.lstat().st_mode
-    if not stat.S_ISREG(mode):
-        raise ValueError("Backup input is not a regular file")
-    return path.stat()
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("Backup input must be a single-link regular file")
+    return info
 
 
 def verify(root, expected_sha):
@@ -49,6 +49,11 @@ def verify(root, expected_sha):
         raise ValueError("Invalid exact source SHA")
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Invalid backup directory")
+    # A rollback set is a closed inventory. Undeclared files, directories and
+    # symlinks must not ride along with the four verified backup components.
+    expected_entries = {"backup-manifest.json", *ROLES.values()}
+    if {entry.name for entry in root.iterdir()} != expected_entries:
+        raise ValueError("Unexpected or missing rollback backup entries")
     manifest_path = root / "backup-manifest.json"
     manifest_stat = regular_file(manifest_path)
     if not 0 < manifest_stat.st_size <= MAX_MANIFEST_BYTES:
