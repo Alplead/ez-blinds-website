@@ -201,6 +201,50 @@ jobs:
           ' --allow-root | tee /tmp/release-video-privacy.log
           grep -q 'EZB_RELEASE_VIDEO_PRIVACY_PASS' /tmp/release-video-privacy.log
 
+      - name: Prove release ZIPs and pinned Elementor coexist in disposable WordPress
+        run: |
+          set -euo pipefail
+          # This is the release ZIP-installed WordPress, not the source-mounted Elementor CI stack.
+          # Match the committed candidate version; never install into LocalWP or production.
+          test "$(python3 -c 'import json; print(json.load(open("design/ez2-home-hero-candidate.json"))["version"])')" = '4.3.4'
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap plugin install elementor --version=4.3.4 --activate --allow-root
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap plugin is-active elementor --allow-root
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (wp_get_environment_type() !== "staging" ||
+                get_option("home") !== "http://localhost:8081" ||
+                get_option("siteurl") !== "http://localhost:8081" ||
+                is_multisite() ||
+                get_option("stylesheet") !== "ezb-theme" ||
+                !is_plugin_active("ezb-core/ezb-core.php") ||
+                !is_plugin_active("elementor/elementor.php") ||
+                !defined("ELEMENTOR_VERSION") ||
+                ELEMENTOR_VERSION !== "4.3.4" ||
+                did_action("elementor/loaded") < 1) {
+              throw new Exception("EZ2_RELEASE_ELEMENTOR_COEXISTENCE_GATE");
+            }
+            $front = get_post((int)get_option("page_on_front"));
+            if (!$front || $front->post_status !== "publish" ||
+                $front->post_title !== "Home" ||
+                (string)get_option("blog_public") !== "0") {
+              throw new Exception("EZ2_RELEASE_FRONT_PAGE_CHANGED");
+            }
+            $candidate = get_posts([
+              "post_type" => "page", "post_status" => "any",
+              "title" => "EZ2 Home Hero - Unpublished Owner Review Candidate",
+              "posts_per_page" => 2, "fields" => "ids"
+            ]);
+            $marked = get_posts([
+              "post_type" => "page", "post_status" => "any",
+              "meta_key" => "_ez2_ci_import_fingerprint",
+              "posts_per_page" => 2, "fields" => "ids"
+            ]);
+            if ($candidate || $marked) {
+              throw new Exception("EZ2_RELEASE_CANDIDATE_LEAK");
+            }
+            echo "EZ2_RELEASE_ELEMENTOR_COEXISTENCE_PASS version=4.3.4 packaged_theme_core=true staging_only=true candidate_published=false localwp_installed=false one_click_complete=false";
+          ' --allow-root | tee /tmp/ez2-release-elementor-coexistence.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_COEXISTENCE_PASS version=4.3.4' /tmp/ez2-release-elementor-coexistence.log
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:
