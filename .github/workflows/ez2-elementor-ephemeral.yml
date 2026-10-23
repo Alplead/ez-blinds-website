@@ -239,6 +239,9 @@ jobs:
             echo "EZ2_CI_ELEMENTOR_CSS_PASS";
           ' --allow-root | tee /tmp/ez2-ci-elementor-css.log
           grep -Fq 'EZ2_CI_ELEMENTOR_CSS_PASS' /tmp/ez2-ci-elementor-css.log
+          docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml exec -T wordpress sh -c 'ls -l /var/www/html/wp-content/uploads/elementor/css/post-*.css || true'
+          css_http="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: ez2-review.local' "http://127.0.0.1:8080/wp-content/uploads/elementor/css/post-${EZ2_CI_DRAFT_ID}.css")"
+          echo "EZ2_CI_ELEMENTOR_CSS_HTTP_STATUS=$css_http"
           # Mint a short-lived CI-only auth cookie without logging its value.
           export EZ2_CI_AUTH_COOKIE_JSON="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval 'echo wp_json_encode(["name"=>LOGGED_IN_COOKIE,"value"=>wp_generate_auth_cookie(1,time()+600,"logged_in")]);' --allow-root)"
           node scripts/ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview.log
