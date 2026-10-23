@@ -176,6 +176,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (!function_exists("is_plugin_active")) require_once ABSPATH . "wp-admin/includes/plugin.php";
             if (wp_get_environment_type() !== "staging") {
               throw new Exception("Synthetic privacy check must run in release staging mode");
             }
