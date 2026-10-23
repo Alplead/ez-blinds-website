@@ -12,6 +12,8 @@ final class Ez2RuntimeProbe {
         $version = $facts['expected_elementor_version'] ?? null;
         if (!is_string($host) || !preg_match('/^ez2(?:-[a-z0-9]+)*\\.local$/D', $host)) $issues[] = 'INVALID_ISOLATED_EXPECTED_HOST';
         if (!is_string($version) || !preg_match('/^[1-9][0-9]{0,2}\\.[0-9]{1,3}\\.[0-9]{1,3}$/D', $version)) $issues[] = 'INVALID_EXACT_ELEMENTOR_VERSION';
+        if (($facts['wp_cli'] ?? null) !== true) $issues[] = 'WP_CLI_REQUIRED';
+        if (($facts['environment'] ?? null) !== 'development') $issues[] = 'NON_DEVELOPMENT_ENVIRONMENT';
         foreach (['home', 'siteurl'] as $key) {
             if (!is_string($facts[$key] ?? null) || !self::safeUrl($facts[$key], $host)) $issues[] = 'UNSAFE_' . strtoupper($key);
         }
@@ -40,13 +42,16 @@ final class Ez2RuntimeProbe {
     }
     public static function collect(): array {
         if (!function_exists('get_option') || !function_exists('is_multisite')
-            || !function_exists('did_action') || !defined('ABSPATH')) throw new RuntimeException('WORDPRESS_NOT_LOADED');
+            || !function_exists('did_action') || !function_exists('wp_get_environment_type')
+            || !defined('ABSPATH')) throw new RuntimeException('WORDPRESS_NOT_LOADED');
         if (!function_exists('is_plugin_active')) {
             $api = ABSPATH . 'wp-admin/includes/plugin.php';
             if (!is_file($api)) throw new RuntimeException('WORDPRESS_PLUGIN_API_MISSING');
             require_once $api;
         }
         return [
+            'wp_cli' => defined('WP_CLI') && WP_CLI,
+            'environment' => wp_get_environment_type(),
             'expected_host' => getenv('EZ2_EXPECTED_HOST') ?: null,
             'expected_elementor_version' => getenv('EZ2_EXPECTED_ELEMENTOR_VERSION') ?: null,
             'home' => get_option('home'), 'siteurl' => get_option('siteurl'),

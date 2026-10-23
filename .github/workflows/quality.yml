@@ -348,7 +348,7 @@ jobs:
           php -l scripts/ez2_wp_runtime_probe.php
           php -l scripts/test_ez2_wp_runtime_probe.php
           php scripts/test_ez2_wp_runtime_probe.php | tee /tmp/ez2-wp-runtime-gate.log
-          grep -q 'EZ2_WP_RUNTIME_GATE_PASS cases=21' /tmp/ez2-wp-runtime-gate.log
+          grep -q 'EZ2_WP_RUNTIME_GATE_PASS cases=26' /tmp/ez2-wp-runtime-gate.log
 
       - name: Test isolated EZ2 Elementor media compiler with synthetic fixtures
         run: |

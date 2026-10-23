@@ -11,6 +11,7 @@ function check_gate(array $facts, string $status, ?string $issue = null): void {
         if ($r[$key] !== false) throw new RuntimeException('False success claim: ' . $key);
 }
 $base = [
+    'wp_cli' => true, 'environment' => 'development',
     'expected_host' => 'ez2-review.local', 'expected_elementor_version' => '3.31.1',
     'home' => 'http://ez2-review.local', 'siteurl' => 'http://ez2-review.local',
     'identity' => 'ez2-isolated-only', 'multisite' => false,
@@ -21,6 +22,11 @@ check_gate($base, 'READY_FOR_MANUAL_ELEMENTOR_FEATURE_TEST'); $cases++;
 $good = $base; $good['home'] = 'https://ez2-review.local/';
 check_gate($good, 'READY_FOR_MANUAL_ELEMENTOR_FEATURE_TEST'); $cases++;
 $bad = [
+    ['wp_cli', false, 'WP_CLI_REQUIRED'],
+    ['wp_cli', 'true', 'WP_CLI_REQUIRED'],
+    ['environment', 'production', 'NON_DEVELOPMENT_ENVIRONMENT'],
+    ['environment', 'staging', 'NON_DEVELOPMENT_ENVIRONMENT'],
+    ['environment', null, 'NON_DEVELOPMENT_ENVIRONMENT'],
     ['expected_host', 'ez-bns-new-dev.local', 'INVALID_ISOLATED_EXPECTED_HOST'],
     ['expected_host', 't2-ez-blinds-shutters.local', 'INVALID_ISOLATED_EXPECTED_HOST'],
     ['home', 'https://ezbns.com.au', 'UNSAFE_HOME'],
@@ -45,5 +51,5 @@ foreach ($bad as [$field, $value, $issue]) {
     check_gate($facts, 'BLOCKED_RUNTIME_GATE', $issue); $cases++;
 }
 check_gate([], 'BLOCKED_RUNTIME_GATE', 'INVALID_ISOLATED_EXPECTED_HOST'); $cases++;
-if ($cases !== 21) throw new RuntimeException('Wrong test count: ' . $cases);
+if ($cases !== 26) throw new RuntimeException('Wrong test count: ' . $cases);
 echo "EZ2_WP_RUNTIME_GATE_PASS cases=$cases\n";
