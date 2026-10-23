@@ -104,6 +104,21 @@ jobs:
           grep -Fq '"slideshow_ken_burns_verified": false' /tmp/ez2-runtime.json
           grep -Fq '"deployment_authorized": false' /tmp/ez2-runtime.json
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_elementor_controls_probe.php --allow-root
+          # Prove a deliberately interrupted synthetic import leaves no draft,
+          # attachment rows or uploaded image bytes before the normal import.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_IMPORT_FAULT=AFTER_FIRST_ATTACHMENT -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-synthetic-rollback.log 2>&1; then
+            echo 'Synthetic fault injection unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_IMPORT_FAULT' /tmp/ez2-synthetic-rollback.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $pages=get_posts(["post_type"=>"page","post_status"=>["publish","future","draft","pending","private","trash"],"title"=>"EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION","posts_per_page"=>10,"fields"=>"ids"]);
+            $media=get_posts(["post_type"=>"attachment","post_status"=>"inherit","posts_per_page"=>20,"fields"=>"ids","s"=>"Synthetic CI image"]);
+            $files=glob(wp_upload_dir()["basedir"]."/*/*/ez2-ci-synthetic-hero-*.png");
+            if($pages||$media||$files)throw new Exception("SYNTHETIC_ROLLBACK_INCOMPLETE");
+            echo "EZ2_CI_IMPORT_ROLLBACK_PASS";
+          ' --allow-root | tee /tmp/ez2-synthetic-rollback-verified.log
+          grep -Fq 'EZ2_CI_IMPORT_ROLLBACK_PASS' /tmp/ez2-synthetic-rollback-verified.log
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-import.log
           grep -Fq "EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version=$EZ2_ELEMENTOR_VERSION" /tmp/ez2-synthetic-import.log
           grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
