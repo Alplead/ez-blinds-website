@@ -220,6 +220,25 @@ jobs:
         run: |
           set -euo pipefail
           export EZ2_CI_DRAFT_ID="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --post_status=draft --meta_key=_ez2_ci_import_fingerprint --format=ids --allow-root)"
+          # Elementor may emit a stylesheet URL before writing the actual
+          # post CSS file. Generate it in the disposable runtime, then assert
+          # the browser can retrieve real CSS instead of silently showing
+          # an unstyled synthetic draft.
+          docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_DRAFT_ID="$EZ2_CI_DRAFT_ID" --entrypoint wp bootstrap eval '
+            $id=(int)getenv("EZ2_CI_DRAFT_ID");
+            if($id<1 || get_post_status($id)!=="draft" ||
+               !get_post_meta($id,"_ez2_ci_import_fingerprint",true)) {
+              throw new Exception("SYNTHETIC_CSS_DRAFT_GATE");
+            }
+            $css=new \\Elementor\\Core\\Files\\CSS\\Post($id);
+            $css->update();
+            $file=wp_upload_dir()["basedir"]."/elementor/css/post-".$id.".css";
+            if(!is_file($file) || filesize($file)<100) {
+              throw new Exception("SYNTHETIC_ELEMENTOR_CSS_NOT_GENERATED");
+            }
+            echo "EZ2_CI_ELEMENTOR_CSS_PASS";
+          ' --allow-root | tee /tmp/ez2-ci-elementor-css.log
+          grep -Fq 'EZ2_CI_ELEMENTOR_CSS_PASS' /tmp/ez2-ci-elementor-css.log
           # Mint a short-lived CI-only auth cookie without logging its value.
           export EZ2_CI_AUTH_COOKIE_JSON="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval 'echo wp_json_encode(["name"=>LOGGED_IN_COOKIE,"value"=>wp_generate_auth_cookie(1,time()+600,"logged_in")]);' --allow-root)"
           node scripts/ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview.log
