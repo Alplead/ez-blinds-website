@@ -45,6 +45,16 @@ def reject(mutator, label):
 
 
 with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    a, b = fixtures(root)
+    archive(root, a.name, [
+        ("ezb-theme/", b"", stat.S_IFDIR | 0o755),
+        ("ezb-theme/style.css", b"Theme Name: EZB Theme", stat.S_IFREG | 0o644),
+        ("ezb-theme/theme.json", b"{}", stat.S_IFREG | 0o644)])
+    assert exercise((a, b))["original_files_restored"]
+    CASES += 1
+
+with tempfile.TemporaryDirectory() as tmp:
     a, b = fixtures(Path(tmp))
     result = exercise((a, b))
     assert result["original_files_restored"] and result["uploads_preserved"]
@@ -72,5 +82,5 @@ def symlink_archive(root, a, b):
     a.unlink()
     a.symlink_to(b)
 reject(symlink_archive, "linked ZIP")
-assert CASES == 12, CASES
-print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=12")
+assert CASES == 13, CASES
+print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=13")

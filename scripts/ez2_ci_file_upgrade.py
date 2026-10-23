@@ -45,7 +45,8 @@ def unpack(archive, dest, folder):
             if (not name or "\\" in name or name.startswith("/")
                     or parts[0] != folder or any(p in ("", ".", "..") for p in parts)
                     or any(not re.fullmatch(r"[A-Za-z0-9._-]+", p) for p in parts)
-                    or len(parts) < 2 or len(name) > 240):
+                    or (len(parts) < 2 and not (entry.is_dir() and name == folder + "/"))
+                    or len(name) > 240):
                 raise ValueError("Unsafe release ZIP member")
             folded = name.rstrip("/").casefold()
             if folded in seen:
