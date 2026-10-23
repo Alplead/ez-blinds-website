@@ -17,5 +17,5 @@ $b=$m;$b['home-hero-one']['id']='1';rejectDoc($d,$b);
 $b=$d;$b['content'][0]['elements'][]=$d['content'][0]['elements'][0];rejectDoc($b,$m);
 $source=file_get_contents(__DIR__.'/ez2_disposable_import.php');
 if(str_contains($source,'wp_get_post_status(')||!str_contains($source,'get_post_status($post)'))throw new RuntimeException('post status API regression');$cases++;
-if(!str_contains($source,"'AFTER_ELEMENTOR_META'")||!str_contains($source,"if($fault==='AFTER_ELEMENTOR_META')"))throw new RuntimeException('late fault injection guard');$cases++;
+if(!str_contains($source,"'AFTER_ELEMENTOR_META'")||!str_contains($source,"if(\$fault==='AFTER_ELEMENTOR_META')"))throw new RuntimeException('late fault injection guard');$cases++;
 if($cases!==25)throw new RuntimeException('case count '.$cases);echo "EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=$cases\n";
