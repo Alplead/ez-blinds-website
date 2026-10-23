@@ -230,7 +230,7 @@ jobs:
                !get_post_meta($id,"_ez2_ci_import_fingerprint",true)) {
               throw new Exception("SYNTHETIC_CSS_DRAFT_GATE");
             }
-            $css=new \\Elementor\\Core\\Files\\CSS\\Post($id);
+            $css=new \Elementor\Core\Files\CSS\Post($id);
             $css->update();
             $file=wp_upload_dir()["basedir"]."/elementor/css/post-".$id.".css";
             if(!is_file($file) || filesize($file)<100) {
