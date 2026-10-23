@@ -86,6 +86,16 @@ jobs:
               print('EZ2_EXACT_HEAD_DELIVERY_BRIDGE_PASS blocked_missing_checksum=true installed=false')
           PY
 
+      - name: Rehearse exact-head theme/core file upgrade and injected rollback in private scratch
+        env:
+          EZ2_CI_FILE_SWAP: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_file_upgrade.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-file-upgrade.log
+          grep -Fq 'EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true' /tmp/ez2-file-upgrade.log
+
       - name: Preload Docker Official Images from public ECR
         run: |
           set -euo pipefail

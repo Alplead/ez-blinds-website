@@ -396,6 +396,12 @@ jobs:
           python3 scripts/test_ez2_backup_scratch_replay.py | tee /tmp/ez2-backup-scratch-replay.log
           grep -q 'EZ2_BACKUP_SCRATCH_REPLAY_PASS cases=13' /tmp/ez2-backup-scratch-replay.log
 
+      - name: Rehearse synthetic theme/core file swap and rollback (offline only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_file_upgrade.py scripts/test_ez2_ci_file_upgrade.py
+          python3 scripts/test_ez2_ci_file_upgrade.py | tee /tmp/ez2-file-upgrade-regression.log
+          grep -Fq 'EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=12' /tmp/ez2-file-upgrade-regression.log
+
       - name: Guard disposable WordPress database restore rehearsal (offline only)
         run: |
           bash -n scripts/ez2_ci_wordpress_db_restore.sh

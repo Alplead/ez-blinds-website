@@ -31,3 +31,7 @@ The delivery preflight also rejects a validated Elementor template if its exact
 `version` differs from the approved `plugins.json` Elementor Free version. This
 prevents a stand-alone preflight from declaring a cross-version candidate ready;
 it does not assert runtime compatibility or authorize installation.
+
+## Disposable theme/core file replacement and fault rollback
+
+`scripts/ez2_ci_file_upgrade.py` verifies the exact-head release catalog, extracts only the two first-party ZIPs into a private auto-deleted scratch directory, then **actually swaps** synthetic installed theme/core directories. It injects a failure after replacing the first component and restores the original synthetic files byte-for-byte; a successful two-component swap is also rolled back in scratch. An unrelated synthetic uploads directory must remain unchanged. Quality exercises malformed ZIP, traversal, Windows case collision, symlink, missing entrypoint and oversized-entry regressions; Release Install Smoke runs the actual release ZIP rehearsal. This is a file-only CI rehearsal, **not** an Owner LocalWP update, Elementor/content installation, database restoration or full-site rollback. It does not accept a destination path and cannot touch any existing site.
