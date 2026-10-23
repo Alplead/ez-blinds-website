@@ -21,5 +21,6 @@ grep -Fq '[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]]' ez2_ci
 grep -Fq "EZ2_CI_SQL_RESTORE_FAIL: fault injection did not alter clone" ez2_ci_wordpress_db_restore.sh
 grep -Fq "EZ2_CI_SQL_RESTORE_FAIL: faulted clone not fully recovered" ez2_ci_wordpress_db_restore.sh
 [[ "$(grep -Fc 'gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db"' ez2_ci_wordpress_db_restore.sh)" == 2 ]]
+grep -Fq 'UPDATE \`${restore_db}\`.wp_options' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'fault_recovered=true synthetic_ci_only=true localwp_touched=false' ez2_ci_wordpress_db_restore.sh
 printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=13'
