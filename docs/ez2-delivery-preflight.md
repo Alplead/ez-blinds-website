@@ -19,3 +19,6 @@ No dry-run PASS proves plugin provenance, archive hash verification, Elementor F
 ## Synthetic WordPress database restore rehearsal in CI
 
 Release Install Smoke now clones its **synthetic CI WordPress database** through a compressed SQL dump into a separately named, disposable MariaDB database, compares WordPress table and row counts plus the home URL, verifies the source database remained intact, and deletes the clone and temporary dump. It is opt-in and guarded to the fixed GitHub Actions release fixture. The source database is never dropped. This is a genuine SQL import check **only in disposable CI**; it is not a restore of an Owner backup, does not touch LocalWP, and cannot establish full-site rollback or one-click readiness. The actual isolated EZ2 LocalWP restore remains Owner-gated and unverified.
+
+
+The synthetic SQL restore rehearsal now additionally compares SHA-256 fingerprints of ordered, data-only SQL dumps before backup, after restoration, and again on the original database. Matching table counts alone can miss modified row values; mismatched fingerprints fail closed without printing SQL or credentials. This is still **synthetic CI-only** evidence, not an Owner LocalWP rollback test or installation authority.

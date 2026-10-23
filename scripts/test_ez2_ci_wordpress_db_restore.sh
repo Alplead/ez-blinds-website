@@ -13,4 +13,8 @@ done
 grep -Fq "restore_db='ez2_ci_restore_disposable'" ez2_ci_wordpress_db_restore.sh
 grep -Fq "source_db='wordpress'" ez2_ci_wordpress_db_restore.sh
 ! grep -Eq 'DROP DATABASE.*source_db|DROP DATABASE.*wordpress' ez2_ci_wordpress_db_restore.sh
-printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=6'
+# Guard against silently reverting to count-only SQL restore comparisons.
+grep -Fq 'dump --no-create-info --skip-triggers --order-by-primary --skip-dump-date' ez2_ci_wordpress_db_restore.sh
+grep -Fq '[[ "$restored_data_sha" == "$source_data_sha" ]]' ez2_ci_wordpress_db_restore.sh
+grep -Fq '[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]]' ez2_ci_wordpress_db_restore.sh
+printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=9'

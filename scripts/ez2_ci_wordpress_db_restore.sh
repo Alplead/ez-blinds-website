@@ -56,6 +56,15 @@ source_home="$(db -e "SELECT option_value FROM \`${source_db}\`.wp_options WHERE
   || { echo 'EZ2_CI_SQL_RESTORE_BLOCKED: not the installed synthetic WordPress fixture' >&2; exit 2; }
 
 # Keep the dump only in an auto-deleted local scratch directory, never an artifact.
+# Fingerprint actual row values, not just table/row counts. A count-preserving
+# mutation must fail the restore rehearsal. Ordered, data-only SQL is never logged.
+# The source is fingerprinted before backup and again after restore.
+data_fingerprint() {
+  dump --no-create-info --skip-triggers --order-by-primary --skip-dump-date "$1" \
+    | sha256sum | cut -d ' ' -f1
+}
+source_data_sha="$(data_fingerprint "$source_db")"
+
 dump "$source_db" | gzip -n > "$scratch/wordpress.sql.gz"
 test -s "$scratch/wordpress.sql.gz"
 gzip -t "$scratch/wordpress.sql.gz"
@@ -73,6 +82,12 @@ restored_home="$(db -e "SELECT option_value FROM \`${restore_db}\`.wp_options WH
    && "$restored_pages" == "$source_pages" && "$restored_options" == "$source_options" \
    && "$restored_home" == "$source_home" ]] \
   || { echo 'EZ2_CI_SQL_RESTORE_FAIL: restored WordPress data differs' >&2; exit 1; }
+
+restored_data_sha="$(data_fingerprint "$restore_db")"
+[[ "$restored_data_sha" == "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: restored WordPress row values differ' >&2; exit 1; }
+[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: source WordPress row values changed' >&2; exit 1; }
 
 [[ "$(db -e "SELECT COUNT(*) FROM \`${source_db}\`.wp_posts")" == "$source_posts" \
    && "$(db -e "SELECT COUNT(*) FROM \`${source_db}\`.wp_options")" == "$source_options" ]] \
