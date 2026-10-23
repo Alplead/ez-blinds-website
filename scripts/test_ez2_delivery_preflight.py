@@ -124,14 +124,14 @@ with tempfile.TemporaryDirectory() as tmp:
     assert subprocess.run(cmd, capture_output=True).returncode == 1
     cases += 1
     (root/"nested").rmdir()
-    os.link(root/"home.json", root.parent/"outside-template.json")
-    assert subprocess.run(cmd, capture_output=True).returncode == 1
-    cases += 1
-    (root.parent/"outside-template.json").unlink()
-    os.link(root/"delivery.json", root.parent/"outside-contract.json")
-    assert subprocess.run(cmd, capture_output=True).returncode == 1
-    cases += 1
-    (root.parent/"outside-contract.json").unlink()
+    with tempfile.TemporaryDirectory() as external:
+        os.link(root/"home.json", Path(external)/"outside-template.json")
+        assert subprocess.run(cmd, capture_output=True).returncode == 1
+        cases += 1
+    with tempfile.TemporaryDirectory() as external:
+        os.link(root/"delivery.json", Path(external)/"outside-contract.json")
+        assert subprocess.run(cmd, capture_output=True).returncode == 1
+        cases += 1
     (root/"home.json").write_bytes(b"")
     assert subprocess.run(cmd, capture_output=True).returncode == 1
     cases += 1
