@@ -12,7 +12,7 @@ from ez2_delivery_preflight import check, run
 SHA = "a" * 40
 
 def fixture():
-    page = {"title": "Synthetic home", "type": "page", "version": "3.31.1",
+    page = {"title": "Synthetic home", "type": "page", "version": "4.3.4",
             "page_settings": {}, "content": [{"id": "deadbeef", "elType": "container",
                 "settings": {"background_slideshow_gallery": [{"url": "ez2-media://hero-one"}]},
                 "elements": [{"id": "ab12cd34", "elType": "widget", "widgetType": "heading",
