@@ -24,7 +24,7 @@ static function execute():void {
  $f=['wp_cli'=>defined('WP_CLI')&&WP_CLI,'opt_in'=>getenv('EZ2_DISPOSABLE_IMPORT'),'expected_host'=>getenv('EZ2_EXPECTED_HOST'),'home'=>get_option('home'),'siteurl'=>get_option('siteurl'),'identity'=>get_option('ez2_site_identity'),'environment'=>wp_get_environment_type(),'multisite'=>is_multisite(),'elementor_active'=>is_plugin_active('elementor/elementor.php'),'elementor_loaded'=>did_action('elementor/loaded')>0,'expected_version'=>getenv('EZ2_EXPECTED_ELEMENTOR_VERSION'),'elementor_version'=>defined('ELEMENTOR_VERSION')?ELEMENTOR_VERSION:null];
  if($bad=self::gate($f))throw new RuntimeException('DISPOSABLE_GATE:'.implode(',',$bad));
  $fault=getenv('EZ2_CI_IMPORT_FAULT')?:'';
- if($fault!==''&&$fault!=='AFTER_FIRST_ATTACHMENT')throw new RuntimeException('UNAPPROVED_FAULT_MODE');
+ if(!in_array($fault,['','AFTER_FIRST_ATTACHMENT','AFTER_ELEMENTOR_META'],true))throw new RuntimeException('UNAPPROVED_FAULT_MODE');
  $path='/opt/ezb-design/ez2-home-hero-candidate.json';
  if(is_link($path)||!is_file($path)||filesize($path)>256000)throw new RuntimeException('CANDIDATE_SOURCE');
  $d=json_decode(file_get_contents($path),true,32,JSON_THROW_ON_ERROR);
@@ -52,6 +52,7 @@ static function execute():void {
   update_post_meta($post,'_elementor_version',ELEMENTOR_VERSION);
   update_post_meta($post,'_elementor_data',wp_slash(wp_json_encode($compiled['content'],JSON_THROW_ON_ERROR)));
   update_post_meta($post,'_elementor_page_settings',$compiled['page_settings']);
+  if($fault==='AFTER_ELEMENTOR_META')throw new RuntimeException('INJECTED_CI_IMPORT_FAULT');
   $plugin=\Elementor\Plugin::instance();$document=$plugin->documents->get($post);
   if(!$document||!method_exists($document,'get_elements_data'))throw new RuntimeException('DOCUMENT');
   $loaded=$document->get_elements_data();
