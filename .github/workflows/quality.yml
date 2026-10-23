@@ -253,6 +253,13 @@ jobs:
           php -l scripts/test_ez2_ci_owner_edit_probe.php
           php scripts/test_ez2_ci_owner_edit_probe.php | grep -Fq 'EZ2_CI_OWNER_EDIT_PROBE_GUARD_PASS cases=22'
 
+      - name: Verify synthetic WordPress attachment-to-Elementor media mapping
+        run: |
+          php -l scripts/ez2_ci_media_inventory.php
+          php -l scripts/test_ez2_ci_media_inventory.php
+          php scripts/test_ez2_ci_media_inventory.php | tee /tmp/ez2-media-inventory.log
+          grep -Fq 'EZ2_CI_MEDIA_INVENTORY_PASS cases=13' /tmp/ez2-media-inventory.log
+
       - name: Test isolated Elementor split Style-tab controls and missing overlay
         run: |
           php -l scripts/test_ez2_elementor_controls_probe.php
@@ -266,10 +273,10 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_elementor_ephemeral_guard.py
           python3 scripts/ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-ephemeral-guard.log
-          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=28' /tmp/ez2-elementor-ephemeral-guard.log
+          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=30' /tmp/ez2-elementor-ephemeral-guard.log
           python3 -m py_compile scripts/test_ez2_elementor_ephemeral_guard.py
           python3 scripts/test_ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-matrix-regression.log
-          grep -q 'EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases=21' /tmp/ez2-elementor-matrix-regression.log
+          grep -q 'EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases=23' /tmp/ez2-elementor-matrix-regression.log
 
       - name: Verify EZ2 managed-content conflict dry-run guard
         run: |

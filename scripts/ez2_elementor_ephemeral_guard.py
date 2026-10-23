@@ -38,6 +38,8 @@ def check_contract(workflow, candidate):
         'EZ2_CANDIDATE_PATH: ../.release/ez2-runtime-candidate.json' in workflow,
         'EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}' in workflow,
         'python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"' in workflow,
+        'ez2_ci_media_inventory.php --allow-root' in workflow,
+        'python3 scripts/ez2_elementor_media_compile.py .release/ez2-runtime-candidate.json' in workflow,
     ]
     return [index + 1 for index, ok in enumerate(checks) if not ok], len(checks)
 

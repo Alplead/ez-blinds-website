@@ -154,6 +154,26 @@ jobs:
           grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-repeat.log
           grep -Fq 'reused=true visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-repeat.log
+          # Connect actual disposable WordPress attachments to the exact-head
+          # Elementor candidate without exposing private media or writing to a site.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_media_inventory.php --allow-root > /tmp/ez2-ci-synthetic-media-map.json
+          python3 scripts/ez2_elementor_media_compile.py .release/ez2-runtime-candidate.json /tmp/ez2-ci-synthetic-media-map.json ez2-review.local /tmp/ez2-ci-compiled-private.json > /tmp/ez2-ci-media-compile-report.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/ez2-ci-media-compile-report.json').read_text())
+          compiled = json.loads(Path('/tmp/ez2-ci-compiled-private.json').read_text())
+          gallery = compiled['content'][0]['settings']['background_slideshow_gallery']
+          assert report['status'] == 'COMPILED_OFFLINE_ONLY'
+          assert report['media_slots_resolved'] == 4 and not report['site_modified']
+          assert len(gallery) == 4 and len({m['id'] for m in gallery}) == 4
+          assert all(type(m['id']) is int and m['id'] > 0 and
+                     m['url'].startswith('http://ez2-review.local/wp-content/uploads/')
+                     for m in gallery)
+          assert 'ez2-media://' not in json.dumps(compiled)
+          print('EZ2_CI_MEDIA_MAP_COMPILE_PASS slots=4 synthetic_only=true localwp_installed=false')
+          PY
+          rm -f /tmp/ez2-ci-synthetic-media-map.json /tmp/ez2-ci-compiled-private.json /tmp/ez2-ci-media-compile-report.json
           # Synthetic-only Owner-edit conflict drill: a repeated import MUST fail
           # without changing the edited draft or adding attachments.
           docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_OWNER_EDIT_PROBE=YES_DISPOSABLE_CONFLICT_ONLY -e EZ2_CI_OWNER_EDIT_PHASE=prepare -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_owner_edit_probe.php --allow-root | tee /tmp/ez2-owner-edit-prepare.log
