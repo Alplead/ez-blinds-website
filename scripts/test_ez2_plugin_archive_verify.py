@@ -78,6 +78,14 @@ with tempfile.TemporaryDirectory() as temp:
                     ('elementor/clash/nested.php', 'nested', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/dir/', '', stat.S_IFDIR | 0o755),
                     ('elementor/dir', 'file', stat.S_IFREG | 0o644)])
+    # Empty directory entries must not appear below a regular file, regardless of order or case.
+    attempt(GOOD + [('elementor/cache', 'file', stat.S_IFREG | 0o644),
+                    ('elementor/cache/empty/', '', stat.S_IFDIR | 0o755)])
+    attempt(GOOD + [('elementor/cache/empty/', '', stat.S_IFDIR | 0o755),
+                    ('elementor/cache', 'file', stat.S_IFREG | 0o644)])
+    attempt(GOOD + [('elementor/Cache', 'file', stat.S_IFREG | 0o644),
+                    ('elementor/cache/nested/', '', stat.S_IFDIR | 0o755)])
+    attempt(GOOD + [('elementor/assets/empty/', '', stat.S_IFDIR | 0o755)], expected_ok=True)
     attempt(GOOD + [('elementor/link', 'elementor.php', stat.S_IFLNK | 0o777)])
     attempt(GOOD + [('elementor/./bad.php', 'bad', stat.S_IFREG | 0o644)])
     attempt(GOOD + [('elementor/sub//bad.php', 'bad', stat.S_IFREG | 0o644)])
@@ -149,5 +157,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 38, cases
+assert cases == 42, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')
