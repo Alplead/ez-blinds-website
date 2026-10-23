@@ -55,6 +55,37 @@ jobs:
           python3 scripts/ez2_release_set.py build .release "${{ github.event.pull_request.head.sha || github.sha }}"
           python3 scripts/ez2_release_set.py verify .release "${{ github.event.pull_request.head.sha || github.sha }}"
 
+      - name: Link exact-head release candidate to safe delivery plan (no install)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from ez2_release_delivery_bridge import plan
+          version = json.loads(Path('design/ez2-home-hero-candidate.json').read_text())['version']
+          with tempfile.TemporaryDirectory(prefix='ez2-release-plan-') as tmp:
+              root = Path(tmp)
+              lock = root / 'plugins.json'
+              lock.write_text(json.dumps({
+                  'schema_version': 1, 'target_site': 'ez2-isolated-only',
+                  'plugins': [{
+                      'slug': 'elementor', 'version': version,
+                      'entrypoint': 'elementor/elementor.php', 'source': 'wordpress.org',
+                      'archive_sha256': None, 'activate': True,
+                  }],
+              }))
+              installed = root / 'installed.json'
+              installed.write_text(json.dumps({'schema_version': 1, 'items': []}))
+              result = plan(Path('.release'), os.environ['EZB_EXPECTED_SHA'], lock, installed)
+              assert result['status'] == 'BLOCKED_PREFLIGHT'
+              assert result['missing_plugin_checksums'] == ['elementor']
+              assert result['release_catalog_verified'] and result['candidate_archive_verified']
+              assert not result['applied'] and not result['one_click_complete']
+              print('EZ2_EXACT_HEAD_DELIVERY_BRIDGE_PASS blocked_missing_checksum=true installed=false')
+          PY
+
       - name: Preload Docker Official Images from public ECR
         run: |
           set -euo pipefail

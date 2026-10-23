@@ -343,6 +343,12 @@ jobs:
           python3 scripts/test_ez2_delivery_preflight.py | tee /tmp/ez2-delivery-preflight.log
           grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=22' /tmp/ez2-delivery-preflight.log
 
+      - name: Verify exact-head release-to-delivery bridge (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_release_delivery_bridge.py scripts/test_ez2_release_delivery_bridge.py
+          python3 scripts/test_ez2_release_delivery_bridge.py | tee /tmp/ez2-release-bridge.log
+          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=12' /tmp/ez2-release-bridge.log
+
       - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
         run: |
           php -l scripts/ez2_wp_runtime_probe.php
