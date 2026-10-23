@@ -43,6 +43,12 @@ def check(contract, installed, plugin_doc, exports, expected_sha):
     if not isinstance(contract["plugin_lock"], str) or not FILE.fullmatch(contract["plugin_lock"]):
         raise ValueError("Unsafe plugin lock path")
     plugins = check_plugins(plugin_doc)
+    # A syntactically valid Elementor export is not necessarily compatible with
+    # the pinned runtime plugin. Fail closed before proposing any content write.
+    pinned_versions = {item["slug"]: item["version"] for item in plugin_doc["plugins"]}
+    elementor_version = pinned_versions.get("elementor")
+    if elementor_version is None:
+        raise ValueError("Elementor Free dependency is required")
     templates = contract["templates"]
     if not isinstance(templates, list) or not 1 <= len(templates) <= 20:
         raise ValueError("Invalid template count")
@@ -68,6 +74,8 @@ def check(contract, installed, plugin_doc, exports, expected_sha):
             raise ValueError("Missing validated Elementor export")
         exported = exports[filename]
         summary = check_elementor(exported)
+        if exported["version"] != elementor_version:
+            raise ValueError("Elementor template version differs from pinned plugin")
         used_slots.update(summary["media_slots"])
         summaries.append({"key": key, "nodes": summary["nodes"],
                           "media_slots": summary["media_slots"]})

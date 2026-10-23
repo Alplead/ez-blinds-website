@@ -26,3 +26,8 @@ The synthetic SQL restore rehearsal now additionally compares SHA-256 fingerprin
 ## Verified release-to-delivery bridge (no installation)
 
 `python3 scripts/ez2_release_delivery_bridge.py RELEASE_DIR EXACT_SHA PLUGIN_LOCK_JSON INSTALLED_DIGESTS_JSON [PREVIOUS_SHA256|-]` now verifies the exact-head cross-artifact catalog and Elementor candidate archive, checks the pinned Elementor Free version, and derives a managed-content create/update/unchanged/conflict plan from a digest-only installed snapshot. Exit 0 is **runtime-test planning only**, exit 2 is blocked (including missing official plugin archive checksum), and exit 1 is invalid input. The optional previous digest is a trusted, previously recorded managed-content baseline; without it, an existing changed page is blocked rather than overwritten. No private media mapping, WordPress state, LocalWP installation, official plugin provenance, full-site restore, or Owner approval is inferred. Quality runs synthetic end-to-end regressions; Release Install Smoke checks the real exact-head release bundle with an intentionally unpinned synthetic plugin lock and requires a truthful blocked result.
+
+The delivery preflight also rejects a validated Elementor template if its exact
+`version` differs from the approved `plugins.json` Elementor Free version. This
+prevents a stand-alone preflight from declaring a cross-version candidate ready;
+it does not assert runtime compatibility or authorize installation.

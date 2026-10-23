@@ -56,6 +56,8 @@ reject(lambda c,i,p,e: c["templates"].append(copy.deepcopy(c["templates"][0])))
 reject(lambda c,i,p,e: c["media_slots"].append("hero-one"))
 reject(lambda c,i,p,e: c["media_slots"].append("../../secrets"))
 reject(lambda c,i,p,e: p["plugins"][0].update(slug="elementor-pro"))
+reject(lambda c,i,p,e: p["plugins"][0].update(version="4.3.5"))
+reject(lambda c,i,p,e: e["home.json"].update(version="4.3.5"))
 reject(lambda c,i,p,e: e["home.json"]["content"][0]["settings"].update(url="https://example.invalid/photo.jpg"))
 reject(lambda c,i,p,e: c["templates"][0].update(previous_sha256="invalid"))
 
@@ -111,5 +113,5 @@ with tempfile.TemporaryDirectory() as tmp:
     assert output.returncode == 2 and json.loads(output.stdout)["status"] == "BLOCKED_PREFLIGHT"
     cases += 1
 
-assert cases == 22, cases
+assert cases == 24, cases
 print(f"EZ2_DELIVERY_PREFLIGHT_PASS cases={cases}")
