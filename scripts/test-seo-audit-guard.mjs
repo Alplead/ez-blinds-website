@@ -8,8 +8,14 @@ const script = fileURLToPath(new URL('./seo-audit.mjs', import.meta.url));
 async function check(name, mode, expectedFailure = '') {
   const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
-    if (path === '/contact/' && (mode === 'redirect' || mode === 'off-origin-redirect')) {
-      res.writeHead(302, { location: mode === 'redirect' ? '/' : 'https://example.com/not-our-site/' });
+    if (path === '/contact/' && ['redirect', 'off-origin-redirect', 'credential-redirect', 'query-redirect'].includes(mode)) {
+      const destinations = {
+        redirect: '/',
+        'off-origin-redirect': 'https://example.com/not-our-site/',
+        'credential-redirect': 'https://viewer:synthetic@example.com/contact/?token=synthetic-private',
+        'query-redirect': '/?token=synthetic-private'
+      };
+      res.writeHead(302, { location: destinations[mode] });
       res.end();
       return;
     }
@@ -24,7 +30,9 @@ async function check(name, mode, expectedFailure = '') {
       return;
     }
     const port = server.address().port;
-    const canonical = mode === 'off-origin-canonical' && path === '/contact/'
+    const canonical = mode === 'query-canonical' && path === '/contact/'
+      ? 'http://127.0.0.1:' + port + path + '?token=synthetic-private'
+      : mode === 'off-origin-canonical' && path === '/contact/'
       ? 'https://example.com/contact/'
       : mode === 'off-origin-userinfo-canonical' && path === '/contact/'
         ? 'https://viewer:synthetic@example.com/contact/'
@@ -52,7 +60,8 @@ async function check(name, mode, expectedFailure = '') {
     await new Promise(resolve => server.close(resolve));
   }
   // CI logs must never echo credentials found in untrusted page markup.
-  assert.ok(!result.output.includes('viewer:synthetic@'), name + ': canonical credentials leaked into output');
+  assert.ok(!result.output.includes('viewer:synthetic@'), name + ': URL credentials leaked into output');
+  assert.ok(!result.output.includes('synthetic-private'), name + ': URL query token leaked into output');
   if (expectedFailure) {
     assert.notEqual(result.code, 0, name + ': expected failure');
     assert.ok(result.output.includes(expectedFailure), name + ': wrong failure: ' + result.output);
@@ -67,9 +76,15 @@ await check('valid routes and canonicals', 'clean');
 await check('same-origin redirect rejected', 'redirect', 'unexpected redirect: /');
 await check('off-origin redirect rejected without fetching destination',
   'off-origin-redirect', 'unexpected redirect: https://example.com/not-our-site/');
+await check('credential-bearing redirect redacted without following destination',
+  'credential-redirect', 'unexpected redirect: https://example.com/contact/');
+await check('query-bearing redirect redacted without following destination',
+  'query-redirect', 'unexpected redirect: /');
 await check('JSON response rejected', 'non-html', 'expected text/html');
 await check('missing HTML content-type rejected', 'missing-content-type', 'expected text/html');
 await check('off-origin canonical rejected', 'off-origin-canonical', 'canonical left test origin');
 await check('credential-bearing canonical rejected', 'userinfo-canonical', 'canonical contains URL credentials');
+await check('query-bearing canonical rejected without logging query token',
+  'query-canonical', 'canonical mismatch');
 await check('off-origin credential-bearing canonical rejected without logging credentials', 'off-origin-userinfo-canonical', 'canonical left test origin');
-console.log('EZB_SEO_AUDIT_GUARD_PASS cases=8');
+console.log('EZB_SEO_AUDIT_GUARD_PASS cases=11');
