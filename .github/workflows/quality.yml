@@ -255,6 +255,10 @@ jobs:
 
       - name: Verify synthetic WordPress attachment-to-Elementor media mapping
         run: |
+          php -l scripts/ez2_ci_compiled_roundtrip.php
+          php -l scripts/test_ez2_ci_compiled_roundtrip.php
+          php scripts/test_ez2_ci_compiled_roundtrip.php | tee /tmp/ez2-ci-compiled-roundtrip.log
+          grep -Fq 'EZ2_CI_COMPILED_ROUNDTRIP_GUARD_PASS cases=15' /tmp/ez2-ci-compiled-roundtrip.log
           php -l scripts/ez2_ci_media_inventory.php
           php -l scripts/test_ez2_ci_media_inventory.php
           php scripts/test_ez2_ci_media_inventory.php | tee /tmp/ez2-media-inventory.log

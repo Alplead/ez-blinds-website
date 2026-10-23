@@ -15,6 +15,8 @@ on:
       - 'scripts/ez2_disposable_import.php'
       - 'scripts/ez2_ci_import_reuse.php'
       - 'scripts/ez2_disposable_import_once.php'
+      - 'scripts/ez2_ci_compiled_roundtrip.php'
+      - 'scripts/test_ez2_ci_compiled_roundtrip.php'
       - 'scripts/ez2_ci_owner_edit_probe.php'
       - 'scripts/test_ez2_ci_owner_edit_probe.php'
       - 'scripts/test_ez2_ci_import_reuse.php'
@@ -173,6 +175,17 @@ jobs:
           assert 'ez2-media://' not in json.dumps(compiled)
           print('EZ2_CI_MEDIA_MAP_COMPILE_PASS slots=4 synthetic_only=true localwp_installed=false')
           PY
+          # Compare privately compiled exact-head media mapping with the real
+          # disposable WordPress Elementor draft and attachment rows, read-only.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -v /tmp/ez2-ci-compiled-private.json:/tmp/ez2-ci-compiled-private.json:ro \
+            -e EZ2_CI_COMPILED_ROUNDTRIP=YES_DISPOSABLE_COMPARE_ONLY \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_compiled_roundtrip.php --allow-root | tee /tmp/ez2-ci-compiled-roundtrip.json
+          grep -Fq '"status":"DISPOSABLE_COMPILED_WORDPRESS_ROUNDTRIP_PASS"' /tmp/ez2-ci-compiled-roundtrip.json
+          grep -Fq '"deployment_authorized":false' /tmp/ez2-ci-compiled-roundtrip.json
           rm -f /tmp/ez2-ci-synthetic-media-map.json /tmp/ez2-ci-compiled-private.json /tmp/ez2-ci-media-compile-report.json
           # Synthetic-only Owner-edit conflict drill: a repeated import MUST fail
           # without changing the edited draft or adding attachments.
