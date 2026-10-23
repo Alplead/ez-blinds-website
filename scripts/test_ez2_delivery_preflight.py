@@ -1,6 +1,7 @@
 """Synthetic no-network integration tests for isolated EZ2 delivery planning."""
 import copy
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -113,5 +114,27 @@ with tempfile.TemporaryDirectory() as tmp:
     assert output.returncode == 2 and json.loads(output.stdout)["status"] == "BLOCKED_PREFLIGHT"
     cases += 1
 
-assert cases == 24, cases
+    # Only declared, independent regular files belong in an EZ2 delivery contract.
+    (root/"delivery.json").write_text(json.dumps(c))
+    (root/"unexpected-private.txt").write_text("synthetic unrelated content")
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+    (root/"unexpected-private.txt").unlink()
+    (root/"nested").mkdir()
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+    (root/"nested").rmdir()
+    os.link(root/"home.json", root.parent/"outside-template.json")
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+    (root.parent/"outside-template.json").unlink()
+    os.link(root/"delivery.json", root.parent/"outside-contract.json")
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+    (root.parent/"outside-contract.json").unlink()
+    (root/"home.json").write_bytes(b"")
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+
+assert cases == 29, cases
 print(f"EZ2_DELIVERY_PREFLIGHT_PASS cases={cases}")
