@@ -241,7 +241,7 @@ jobs:
           php -l scripts/ez2_disposable_import.php
           php -l scripts/test_ez2_disposable_import.php
           php scripts/test_ez2_disposable_import.php | tee /tmp/ez2-disposable-import-guard.log
-          grep -q 'EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=24' /tmp/ez2-disposable-import-guard.log
+          grep -q 'EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=25' /tmp/ez2-disposable-import-guard.log
 
       - name: Test repeat-safe synthetic Elementor CI import fingerprint
         run: |
