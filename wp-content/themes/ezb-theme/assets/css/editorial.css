@@ -364,4 +364,6 @@
   .ezb-cinema__slide { transition: none !important; }
   .ezb-cinema__slide.is-active .ezb-cinema__image { animation: none !important; transform: none !important; }
   .ezb-editorial-band__image { transform: none !important; will-change: auto; }
+  .ezb-product-gallery-block .ezb-project-gallery__item:hover img { transform: none !important; }
+  .ezb-product-gallery-block .ezb-project-gallery__item img { transition: none !important; }
 }
