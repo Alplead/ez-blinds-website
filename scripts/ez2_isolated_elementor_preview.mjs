@@ -24,7 +24,7 @@ export function parseAuth(e){
  if(!auth||Object.keys(auth).sort().join(',')!=='name,value'||
  !/^wordpress_logged_in_[a-z0-9]{8,64}$/.test(auth.name||'')||
  typeof auth.value!=='string'||auth.value.length<20||auth.value.length>2048||
- /[^\\x21-\\x7e]/.test(auth.value))throw Error('INVALID_SYNTHETIC_AUTH_COOKIE');
+ /[^\x21-\x7e]/.test(auth.value))throw Error('INVALID_SYNTHETIC_AUTH_COOKIE');
  return auth;
 }
 export function reviewEvidence(e){
