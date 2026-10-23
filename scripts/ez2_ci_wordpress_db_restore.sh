@@ -93,4 +93,27 @@ restored_data_sha="$(data_fingerprint "$restore_db")"
    && "$(db -e "SELECT COUNT(*) FROM \`${source_db}\`.wp_options")" == "$source_options" ]] \
   || { echo 'EZ2_CI_SQL_RESTORE_FAIL: source database changed' >&2; exit 1; }
 
-echo "EZ2_CI_WORDPRESS_DB_RESTORE_PASS tables=${restored_tables} posts=${restored_posts} pages=${restored_pages} synthetic_ci_only=true localwp_touched=false"
+# Inject a count-preserving fault ONLY into the disposable restore database.
+# Destroy and rebuild that clone from the SAME verified backup, then compare.
+# This is an actual recovery rehearsal, not merely a first-time import.
+db -e "UPDATE `${restore_db}`.wp_options SET option_value='http://ez2-ci-fault.invalid' WHERE option_name='home'" >/dev/null
+[[ "$(db -e "SELECT option_value FROM `${restore_db}`.wp_options WHERE option_name='home'")" == 'http://ez2-ci-fault.invalid' \
+   && "$(data_fingerprint "$restore_db")" != "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: fault injection did not alter clone' >&2; exit 1; }
+[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: fault injection changed source' >&2; exit 1; }
+
+db -e "DROP DATABASE `${restore_db}`" >/dev/null
+db -e "CREATE DATABASE `${restore_db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null
+gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db" >/dev/null
+[[ "$(db -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${restore_db}' AND TABLE_TYPE='BASE TABLE'")" == "$source_tables" \
+   && "$(db -e "SELECT COUNT(*) FROM `${restore_db}`.wp_posts")" == "$source_posts" \
+   && "$(db -e "SELECT COUNT(*) FROM `${restore_db}`.wp_posts WHERE post_type='page'")" == "$source_pages" \
+   && "$(db -e "SELECT COUNT(*) FROM `${restore_db}`.wp_options")" == "$source_options" \
+   && "$(db -e "SELECT option_value FROM `${restore_db}`.wp_options WHERE option_name='home'")" == "$source_home" \
+   && "$(data_fingerprint "$restore_db")" == "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: faulted clone not fully recovered' >&2; exit 1; }
+[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: recovery changed source' >&2; exit 1; }
+
+echo "EZ2_CI_WORDPRESS_DB_RESTORE_PASS tables=${restored_tables} posts=${restored_posts} pages=${restored_pages} fault_recovered=true synthetic_ci_only=true localwp_touched=false"
