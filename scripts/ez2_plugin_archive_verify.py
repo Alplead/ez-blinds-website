@@ -90,6 +90,12 @@ def verify(lock, archive_dir, repo_root=None):
                             raise ValueError('Unsafe plugin entrypoint')
                         with z.open(member) as stream:
                             header = stream.read(128 * 1024).decode('utf-8-sig', errors='replace')
+                # Reject empty directory entries nested beneath a file path.
+                # A file-only walk cannot detect this collision without child files.
+                for directory in dirs:
+                    parts = directory.split('/')
+                    if any('/'.join(parts[:i]) in files for i in range(1, len(parts) + 1)):
+                        raise ValueError('ZIP file and directory collision')
                 for filename in files:
                     parts = filename.split('/')
                     if filename in dirs or any('/'.join(parts[:i]) in files for i in range(1, len(parts))):
