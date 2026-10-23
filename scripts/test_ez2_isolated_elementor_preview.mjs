@@ -2,12 +2,11 @@ import assert from 'node:assert/strict';
 import {HOST,VIEWPORTS,validateScope,reviewEvidence} from './ez2_isolated_elementor_preview.mjs';
 let cases=0;
 const env={EZ2_ISOLATED_ELEMENTOR_PREVIEW:'YES_DISPOSABLE_AUTHENTICATED_ONLY',
- EZ2_SOURCE_SHA:'a'.repeat(40),EZ2_CI_DRAFT_ID:'42',EZ2_CI_ADMIN_USER:'ezbdev',
- EZ2_CI_ADMIN_PASSWORD:'dev-only-change-me',EZ2_PREVIEW_OUTPUT:'/tmp/ez2-ci-draft'};
+ EZ2_SOURCE_SHA:'a'.repeat(40),EZ2_CI_DRAFT_ID:'42',EZ2_CI_AUTH_COOKIE_JSON:JSON.stringify({name:'wordpress_logged_in_abcdef123456',value:'x'.repeat(64)}),EZ2_PREVIEW_OUTPUT:'/tmp/ez2-ci-draft'};
 assert.doesNotThrow(()=>validateScope(env));cases++;
 for(const change of [{EZ2_ISOLATED_ELEMENTOR_PREVIEW:'YES'},{EZ2_SOURCE_SHA:'main'},
- {EZ2_CI_DRAFT_ID:'0'},{EZ2_CI_DRAFT_ID:'42;rm'},{EZ2_CI_ADMIN_USER:'admin'},
- {EZ2_CI_ADMIN_PASSWORD:'real-secret'},{EZ2_PREVIEW_OUTPUT:'/'},
+ {EZ2_CI_DRAFT_ID:'0'},{EZ2_CI_DRAFT_ID:'42;rm'},{EZ2_CI_AUTH_COOKIE_JSON:''},
+ {EZ2_CI_AUTH_COOKIE_JSON:'not-json'},{EZ2_PREVIEW_OUTPUT:'/'},
  {EZ2_PREVIEW_OUTPUT:'../public'},{EZ2_PREVIEW_OUTPUT:'/tmp/../public'}]){
  assert.throws(()=>validateScope({...env,...change}));cases++;
 }

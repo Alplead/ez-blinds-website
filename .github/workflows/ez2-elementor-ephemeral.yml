@@ -217,11 +217,11 @@ jobs:
           EZ2_ISOLATED_ELEMENTOR_PREVIEW: YES_DISPOSABLE_AUTHENTICATED_ONLY
           EZ2_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
           EZ2_PREVIEW_OUTPUT: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}
-          EZ2_CI_ADMIN_USER: ezbdev
-          EZ2_CI_ADMIN_PASSWORD: dev-only-change-me
         run: |
           set -euo pipefail
           export EZ2_CI_DRAFT_ID="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --post_status=draft --meta_key=_ez2_ci_import_fingerprint --format=ids --allow-root)"
+          # Mint a short-lived CI-only auth cookie without logging its value.
+          export EZ2_CI_AUTH_COOKIE_JSON="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval 'echo wp_json_encode(["name"=>LOGGED_IN_COOKIE,"value"=>wp_generate_auth_cookie(1,time()+600,"logged_in")]);' --allow-root)"
           node scripts/ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview.log
           grep -Fq 'EZ2_ELEMENTOR_DRAFT_PREVIEW_PASS viewports=3' /tmp/ez2-elementor-preview.log
           test -s "$EZ2_PREVIEW_OUTPUT/elementor-preview-evidence.json"

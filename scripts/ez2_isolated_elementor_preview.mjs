@@ -12,10 +12,20 @@ export function validateScope(e){
  if(e.EZ2_ISOLATED_ELEMENTOR_PREVIEW!=='YES_DISPOSABLE_AUTHENTICATED_ONLY' ||
  !/^[a-f0-9]{40}$/.test(e.EZ2_SOURCE_SHA||'') ||
  !/^[1-9][0-9]{0,9}$/.test(e.EZ2_CI_DRAFT_ID||'') ||
- e.EZ2_CI_ADMIN_USER!=='ezbdev' || e.EZ2_CI_ADMIN_PASSWORD!=='dev-only-change-me' ||
+ !e.EZ2_CI_AUTH_COOKIE_JSON ||
  !e.EZ2_PREVIEW_OUTPUT || !path.isAbsolute(e.EZ2_PREVIEW_OUTPUT) ||
  path.resolve(e.EZ2_PREVIEW_OUTPUT)==='/' || e.EZ2_PREVIEW_OUTPUT.includes('..'))
  throw Error('DISPOSABLE_AUTHENTICATED_PREVIEW_GATE');
+ parseAuth(e);
+}
+export function parseAuth(e){
+ let auth;
+ try{auth=JSON.parse(e.EZ2_CI_AUTH_COOKIE_JSON);}catch{throw Error('INVALID_SYNTHETIC_AUTH_COOKIE');}
+ if(!auth||Object.keys(auth).sort().join(',')!=='name,value'||
+ !/^wordpress_logged_in_[a-z0-9]{8,64}$/.test(auth.name||'')||
+ typeof auth.value!=='string'||auth.value.length<20||auth.value.length>2048||
+ /[^\\x21-\\x7e]/.test(auth.value))throw Error('INVALID_SYNTHETIC_AUTH_COOKIE');
+ return auth;
 }
 export function reviewEvidence(e){
  const errors=[];
@@ -32,6 +42,7 @@ export function reviewEvidence(e){
 }
 export async function run(e=process.env){
  validateScope(e);
+ const auth=parseAuth(e);
  const browser=await chromium.launch({headless:true}),evidence=[];
  try{
   await fs.mkdir(e.EZ2_PREVIEW_OUTPUT,{recursive:true});
@@ -39,6 +50,7 @@ export async function run(e=process.env){
    const context=await browser.newContext({viewport:{width:vp.width,height:vp.height},
     reducedMotion:vp.motion,serviceWorkers:'block'});
    try{
+    await context.addCookies([{name:auth.name,value:auth.value,url:'http://'+HOST+'/',httpOnly:true,sameSite:'Lax'}]);
     const blockedExternalRequests=[];
     await context.route('**/*',async route=>{
      const req=route.request(),u=new URL(req.url());
@@ -55,16 +67,9 @@ export async function run(e=process.env){
     page.on('pageerror',err=>pageErrors.push(err.message));
     page.on('requestfailed',req=>{const u=new URL(req.url());if(u.hostname===HOST)failedLocalRequests.push(u.pathname);});
     page.on('response',res=>{const u=new URL(res.url());if(u.hostname===HOST&&res.status()>=400)failedLocalResponses.push({path:u.pathname,status:res.status()});});
-    await page.goto('http://'+HOST+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:45000});
-    await page.locator('#user_login').fill(e.EZ2_CI_ADMIN_USER);
-    await page.locator('#user_pass').fill(e.EZ2_CI_ADMIN_PASSWORD);
-    await Promise.all([
-     page.waitForURL(u=>u.hostname===HOST&&u.pathname.startsWith('/wp-admin/'),{timeout:45000}),
-     page.locator('#wp-submit').click()
-    ]);
-    const loggedIn=(await page.url()).includes('/wp-admin/');
     const response=await page.goto('http://'+HOST+'/?page_id='+e.EZ2_CI_DRAFT_ID+'&preview=true',
      {waitUntil:'networkidle',timeout:45000});
+    const loggedIn=await page.locator('#wpadminbar').count()>0;
     const observed=await page.evaluate(id=>{
      const hero=document.querySelector('.elementor-element-e2a10001');
      let settings={};try{settings=JSON.parse(hero?.getAttribute('data-settings')||'{}');}catch{}
