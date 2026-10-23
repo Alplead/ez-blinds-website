@@ -248,7 +248,7 @@ jobs:
           php -l scripts/ez2_ci_import_reuse.php
           php -l scripts/ez2_disposable_import_once.php
           php -l scripts/test_ez2_ci_import_reuse.php
-          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=22'
+          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=26'
           php -l scripts/ez2_ci_owner_edit_probe.php
           php -l scripts/test_ez2_ci_owner_edit_probe.php
           php scripts/test_ez2_ci_owner_edit_probe.php | grep -Fq 'EZ2_CI_OWNER_EDIT_PROBE_GUARD_PASS cases=22'

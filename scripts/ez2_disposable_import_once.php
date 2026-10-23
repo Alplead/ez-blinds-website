@@ -28,7 +28,10 @@ try {
    'meta_key'=>'_ez2_ci_import_fingerprint','posts_per_page'=>3,'fields'=>'ids']);
   return Ez2CiImportReuse::candidates($title,$marked);
  };
+ $postImportFault=getenv('EZ2_CI_POST_IMPORT_FAULT')?:'';
+ if(!in_array($postImportFault,['','BEFORE_FINGERPRINT'],true))throw new RuntimeException('UNAPPROVED_POST_IMPORT_FAULT');
  $existing=$find();
+ if($postImportFault!==''&&count($existing)!==0)throw new RuntimeException('POST_IMPORT_FAULT_REQUIRES_NEW_DRAFT');
  if (count($existing)>1) throw new RuntimeException('DUPLICATE_DRAFT_CONFLICT');
  if (count($existing)===1) {
   $post=(int)$existing[0];
@@ -37,16 +40,29 @@ try {
   echo 'EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version='.ELEMENTOR_VERSION.
    ' draft=true attachments=4 gallery=4 frontend_text=true reused=true visual_qa_verified=false localwp_installed=false deployment_authorized=false'."\n";
  } else {
-  ob_start();
-  try {Ez2DisposableImport::execute();$log=ob_get_clean();}
-  catch(Throwable $e){ob_end_clean();throw $e;}
-  $created=$find();
-  if(count($created)!==1)throw new RuntimeException('DRAFT_LOOKUP_CONFLICT');
-  $post=(int)$created[0];$state=Ez2CiImportReuse::capture($post);
-  Ez2CiImportReuse::verify($state,Ez2CiImportReuse::digest($state),ELEMENTOR_VERSION);
-  if(!update_post_meta($post,'_ez2_ci_import_fingerprint',Ez2CiImportReuse::digest($state)))
-   throw new RuntimeException('DRAFT_FINGERPRINT_WRITE');
-  echo str_replace(' visual_qa_verified=false',' reused=false visual_qa_verified=false',$log);
+  // The importer handles faults during the Elementor write. This second
+  // transaction boundary covers failures after import but before fingerprint.
+  $newPost=0;
+  try {
+   ob_start();
+   try {Ez2DisposableImport::execute();$log=ob_get_clean();}
+   catch(Throwable $e){ob_end_clean();throw $e;}
+   $created=$find();
+   if(count($created)!==1)throw new RuntimeException('DRAFT_LOOKUP_CONFLICT');
+   $post=(int)$created[0];$newPost=$post;
+   $state=Ez2CiImportReuse::capture($post);
+   Ez2CiImportReuse::verifyFreshRollback($state,'',ELEMENTOR_VERSION);
+   if($postImportFault==='BEFORE_FINGERPRINT')throw new RuntimeException('INJECTED_CI_POST_IMPORT_FAULT');
+   if(!update_post_meta($post,'_ez2_ci_import_fingerprint',Ez2CiImportReuse::digest($state)))
+    throw new RuntimeException('DRAFT_FINGERPRINT_WRITE');
+   echo str_replace(' visual_qa_verified=false',' reused=false visual_qa_verified=false',$log);
+  } catch(Throwable $e) {
+   if($newPost>0) {
+    try {Ez2CiImportReuse::rollbackFresh($newPost);}
+    catch(Throwable $cleanup) {throw new RuntimeException('SYNTHETIC_POST_IMPORT_ROLLBACK_FAILED',0,$cleanup);}
+   }
+   throw $e;
+  }
  }
 } catch(Throwable $e) {
  fwrite(STDERR,'EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_FAIL: '.$e->getMessage()."\n");

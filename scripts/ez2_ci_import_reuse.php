@@ -11,6 +11,41 @@ final class Ez2CiImportReuse {
   if (count($found)>1) throw new RuntimeException('DUPLICATE_DRAFT_CONFLICT');
   return array_values($found);
  }
+ public static function verifyFreshRollback(array $snapshot, string $fingerprint, string $version): bool {
+  // Only the draft created by this invocation, before its marker was committed,
+  // may be deleted. An existing marked/edited Owner draft is never rollback scope.
+  if ($fingerprint !== '') throw new RuntimeException('MARKED_DRAFT_NOT_ROLLBACK_SCOPE');
+  return self::verify($snapshot, self::digest($snapshot), $version);
+ }
+ public static function rollbackFresh(int $post): void {
+  $snapshot=self::capture($post);
+  self::verifyFreshRollback($snapshot,(string)get_post_meta($post,'_ez2_ci_import_fingerprint',true),ELEMENTOR_VERSION);
+  $uploads=wp_upload_dir();
+  $root=realpath($uploads['basedir']??'');
+  if ($root===false) throw new RuntimeException('ROLLBACK_UPLOAD_ROOT');
+  $paths=[];
+  foreach ($snapshot['media'] as $media) {
+   $path=get_attached_file($media['id']);
+   $real=is_string($path)?realpath($path):false;
+   if ($real===false || !str_starts_with($real,$root.DIRECTORY_SEPARATOR)
+    || is_link($path) || !preg_match('/^ez2-ci-synthetic-hero-[1-4]\\.png$/D',basename($real))) {
+    throw new RuntimeException('ROLLBACK_UNSAFE_ATTACHMENT');
+   }
+   $paths[]=$real;
+  }
+  $failed=false;
+  foreach (array_reverse($snapshot['media']) as $media) {
+   if (wp_delete_attachment($media['id'],true)===false) $failed=true;
+  }
+  foreach ($paths as $path) {
+   if (is_file($path) && !@unlink($path)) $failed=true;
+  }
+  if (wp_delete_post($post,true)===false) $failed=true;
+  if (get_post($post)) $failed=true;
+  foreach ($snapshot['media'] as $media) if (get_post($media['id'])) $failed=true;
+  foreach ($paths as $path) if (file_exists($path)) $failed=true;
+  if ($failed) throw new RuntimeException('SYNTHETIC_POST_IMPORT_ROLLBACK_INCOMPLETE');
+ }
  public static function capture(int $post): array {
   $page = get_post($post);
   if (!$page) throw new RuntimeException('DRAFT_MISSING');

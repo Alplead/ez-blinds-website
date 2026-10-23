@@ -35,5 +35,10 @@ if(Ez2CiImportReuse::candidates([],[10])!==[10])throw new RuntimeException('rena
 function rejectCandidates($title,$marked){global $cases;try{Ez2CiImportReuse::candidates($title,$marked);}catch(RuntimeException $e){$cases++;return;}throw new RuntimeException('unsafe candidate selection');}
 rejectCandidates([10],[11]);
 rejectCandidates([0],[]);
-if($cases!==22)throw new RuntimeException('cases='.$cases);
+if(!Ez2CiImportReuse::verifyFreshRollback($state,'','4.3.4'))throw new RuntimeException('fresh rollback');$cases++;
+function rejectFresh($state,$fingerprint){global $cases;try{Ez2CiImportReuse::verifyFreshRollback($state,$fingerprint,'4.3.4');}catch(RuntimeException $e){$cases++;return;}throw new RuntimeException('unsafe fresh rollback');}
+rejectFresh($state,$stamp);
+$x=$state;$x['status']='publish';rejectFresh($x,'');
+$x=$state;$x['media'][0]['exists']=false;rejectFresh($x,'');
+if($cases!==26)throw new RuntimeException('cases='.$cases);
 echo 'EZ2_CI_IMPORT_REUSE_PASS cases='.$cases."\n";
