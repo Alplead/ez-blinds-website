@@ -7,6 +7,7 @@ this public-repository contract.
 """
 import json
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -24,8 +25,9 @@ def load(root, filename, limit):
     if not isinstance(filename, str) or not FILE.fullmatch(filename):
         raise ValueError("Unsafe JSON filename")
     path = root / filename
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
-        raise ValueError("Unsafe or oversized JSON file")
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= limit:
+        raise ValueError("Unsafe, linked, empty or oversized JSON file")
     return json.loads(path.read_text(encoding="utf-8"),
                       object_pairs_hook=unique, parse_constant=reject_nonfinite)
 
@@ -115,11 +117,17 @@ def run(root, expected_sha):
     if not isinstance(templates, list) or len(templates) > 20:
         raise ValueError("Invalid templates")
     exports = {}
+    declared = {"delivery.json", "installed.json", lock}
     for entry in templates:
         if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
             raise ValueError("Invalid template file")
         name = entry["file"]
+        declared.add(name)
         exports[name] = load(root, name, 256000)
+    # The delivery contract is a closed inventory. Never silently accept
+    # undeclared private files, nested folders, or extra deployment inputs.
+    if {entry.name for entry in root.iterdir()} != declared:
+        raise ValueError("Unexpected or missing delivery contract entries")
     return check(contract, installed, plugin_doc, exports, expected_sha)
 
 
