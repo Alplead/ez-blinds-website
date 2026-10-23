@@ -75,5 +75,4 @@ static function execute():void {
  }
 }
 }
-}
 if(!defined('EZ2_DISPOSABLE_IMPORT_LIBRARY_ONLY')){try{Ez2DisposableImport::execute();}catch(Throwable $e){fwrite(STDERR,'EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_FAIL: '.$e->getMessage()."\n");exit(1);}}
