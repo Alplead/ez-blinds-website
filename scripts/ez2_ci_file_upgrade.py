@@ -77,8 +77,18 @@ def unpack(archive, dest, folder):
         raise ValueError("Empty release archive")
 
 
-def exercise(archives, inject_failure=False):
-    """Run real file moves, then restore original bytes even on success."""
+def exercise(archives, inject_failure=False, failure_phase=None):
+    """Rehearse each file-swap interruption, then restore exact original bytes.
+
+    Faults are synthetic and accepted only in an auto-deleted scratch site.
+    The legacy inject_failure=True alias means after_first_install.
+    """
+    phases = ("after_first_backup", "after_first_install",
+              "after_second_backup", "after_second_install")
+    if failure_phase is None:
+        failure_phase = "after_first_install" if inject_failure else None
+    elif inject_failure or failure_phase not in phases:
+        raise ValueError("Invalid or ambiguous scratch fault phase")
     with tempfile.TemporaryDirectory(prefix="ez2-ci-file-upgrade-") as temp:
         root = Path(temp)
         live, stage, backup = (root / name for name in ("live", "stage", "backup"))
@@ -107,16 +117,19 @@ def exercise(archives, inject_failure=False):
                 saved.parent.mkdir(exist_ok=True)
                 os.replace(current, saved)
                 moved.append((current, saved))
+                ordinal = ("first", "second")[index]
+                if failure_phase == "after_" + ordinal + "_backup":
+                    raise RuntimeError("INJECTED_SCRATCH_UPGRADE_FAILURE")
                 os.replace(stage / category / folder, current)
-                if inject_failure and index == 0:
-                    raise RuntimeError("INJECTED_SCRATCH_SECOND_COMPONENT_FAILURE")
+                if failure_phase == "after_" + ordinal + "_install":
+                    raise RuntimeError("INJECTED_SCRATCH_UPGRADE_FAILURE")
             for (_, category, folder, required), archive in zip(COMPONENTS, archives):
                 if not (live / category / folder / required).is_file():
                     raise ValueError("Staged release not installed in scratch")
             if (live / "uploads" / "2026" / "synthetic-private-placeholder.txt").read_bytes() != b"preserve unrelated files":
                 raise ValueError("Unrelated scratch upload changed")
         except RuntimeError as exc:
-            if str(exc) != "INJECTED_SCRATCH_SECOND_COMPONENT_FAILURE":
+            if str(exc) != "INJECTED_SCRATCH_UPGRADE_FAILURE":
                 raise
             fault_seen = True
         finally:
@@ -126,10 +139,11 @@ def exercise(archives, inject_failure=False):
                 os.replace(saved, current)
         if snapshot(live) != original:
             raise ValueError("Scratch rollback did not restore exact original file bytes")
-        if fault_seen != inject_failure:
+        if fault_seen != (failure_phase is not None):
             raise ValueError("Fault rehearsal did not behave as requested")
         return {"status": "DISPOSABLE_FILE_ROLLBACK_VERIFIED",
-                "fault_injected": fault_seen, "components": 2,
+                "fault_injected": fault_seen, "fault_phase": failure_phase or "none",
+                "components": 2,
                 "original_files_restored": True, "uploads_preserved": True,
                 "localwp_touched": False, "database_restored": False,
                 "deployment_authorized": False}
@@ -148,10 +162,17 @@ def main():
     verify_release("verify", release, sha)
     archives = [release / entry[0] for entry in COMPONENTS]
     success = exercise(archives)
-    failed = exercise(archives, inject_failure=True)
-    if not success["original_files_restored"] or not failed["fault_injected"]:
-        raise ValueError("Incomplete scratch upgrade rehearsal")
-    print("EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true localwp_touched=false one_click_complete=false")
+    phases = ("after_first_backup", "after_first_install",
+              "after_second_backup", "after_second_install")
+    failures = [exercise(archives, failure_phase=phase) for phase in phases]
+    if (not success["original_files_restored"]
+            or any(not result["fault_injected"]
+                   or not result["original_files_restored"]
+                   or not result["uploads_preserved"]
+                   or result["fault_phase"] != phase
+                   for phase, result in zip(phases, failures))):
+        raise ValueError("Incomplete scratch upgrade rollback rehearsal")
+    print("EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true fault_scenarios=4 localwp_touched=false one_click_complete=false")
 
 
 if __name__ == "__main__":

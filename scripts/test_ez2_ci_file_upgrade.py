@@ -60,9 +60,20 @@ with tempfile.TemporaryDirectory() as tmp:
     assert result["original_files_restored"] and result["uploads_preserved"]
     assert result["localwp_touched"] is False and result["database_restored"] is False
     CASES += 1
-    failed = exercise((a, b), inject_failure=True)
-    assert failed["fault_injected"] and failed["original_files_restored"]
+    for phase in ("after_first_backup", "after_first_install",
+                  "after_second_backup", "after_second_install"):
+        failed = exercise((a, b), failure_phase=phase)
+        assert failed["fault_injected"] and failed["original_files_restored"]
+        assert failed["uploads_preserved"] and failed["fault_phase"] == phase
+        CASES += 1
+    assert exercise((a, b), inject_failure=True)["fault_phase"] == "after_first_install"
     CASES += 1
+    try:
+        exercise((a, b), inject_failure=True, failure_phase="after_second_install")
+    except ValueError:
+        CASES += 1
+    else:
+        raise AssertionError("Ambiguous fault injection accepted")
 
 reject(lambda r, a, b: a.write_bytes(b"invalid"), "corrupt ZIP")
 reject(lambda r, a, b: a.unlink(), "missing ZIP")
@@ -82,5 +93,5 @@ def symlink_archive(root, a, b):
     a.unlink()
     a.symlink_to(b)
 reject(symlink_archive, "linked ZIP")
-assert CASES == 13, CASES
-print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=13")
+assert CASES == 18, CASES
+print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=18")
