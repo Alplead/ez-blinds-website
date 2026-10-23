@@ -84,6 +84,13 @@ jobs:
           docker compose -f .github/release-install/docker-compose.yml run --rm release-bootstrap | tee /tmp/release-install.log
           grep -q 'EZB_RELEASE_INSTALL_PASS' /tmp/release-install.log
 
+      - name: Rehearse isolated SQL restore of synthetic installed WordPress database
+        env:
+          EZ2_CI_SQL_RESTORE: YES_SYNTHETIC_RELEASE_STACK
+        run: |
+          bash scripts/ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-wordpress-db-restore.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_PASS' /tmp/ez2-ci-wordpress-db-restore.log
+
       - name: Verify installed site responds
         run: |
           set -euo pipefail

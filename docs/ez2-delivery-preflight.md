@@ -15,3 +15,7 @@ No dry-run PASS proves plugin provenance, archive hash verification, Elementor F
 ## Upgrade linkage and disposable scratch replay
 
 `python3 scripts/ez2_upgrade_gate.py CONTRACT_DIR BACKUP_DIR INSTALLED_SHA CANDIDATE_SHA` now requires the installed-SHA backup to pass byte/structure checks **and** an auto-deleted, private scratch replay of its uploads, plugins and theme files before classifying the candidate delivery preflight. SQL is checked as a compressed backup but **never executed**. This is not a WordPress restore, database recovery test, LocalWP installation, or deployment permission; those remain separately gated. CI uses synthetic fixtures only. The gate returns explicit `scratch_file_replay_verified` and `scratch_deleted` flags; a missing or unsafe replay fails closed.
+
+## Synthetic WordPress database restore rehearsal in CI
+
+Release Install Smoke now clones its **synthetic CI WordPress database** through a compressed SQL dump into a separately named, disposable MariaDB database, compares WordPress table and row counts plus the home URL, verifies the source database remained intact, and deletes the clone and temporary dump. It is opt-in and guarded to the fixed GitHub Actions release fixture. The source database is never dropped. This is a genuine SQL import check **only in disposable CI**; it is not a restore of an Owner backup, does not touch LocalWP, and cannot establish full-site rollback or one-click readiness. The actual isolated EZ2 LocalWP restore remains Owner-gated and unverified.

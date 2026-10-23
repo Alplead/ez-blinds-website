@@ -374,6 +374,12 @@ jobs:
           python3 scripts/test_ez2_backup_scratch_replay.py | tee /tmp/ez2-backup-scratch-replay.log
           grep -q 'EZ2_BACKUP_SCRATCH_REPLAY_PASS cases=13' /tmp/ez2-backup-scratch-replay.log
 
+      - name: Guard disposable WordPress database restore rehearsal (offline only)
+        run: |
+          bash -n scripts/ez2_ci_wordpress_db_restore.sh
+          bash scripts/test_ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-sql-restore-guard.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=6' /tmp/ez2-ci-sql-restore-guard.log
+
       - name: Link installed backup and candidate delivery without applying (synthetic only)
         run: |
           python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
