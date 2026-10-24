@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/theme.json",
+  "version": 3,
+  "settings": {
+    "appearanceTools": true,
+    "layout": {
+      "contentSize": "780px",
+      "wideSize": "1220px"
+    },
+    "spacing": {
+      "units": ["px", "rem", "vw", "%"]
+    },
+    "typography": {
+      "fluid": true,
+      "fontSizes": [
+        { "slug": "small", "size": "0.9rem", "name": "Small" },
+        { "slug": "medium", "size": "1.05rem", "name": "Medium" },
+        { "slug": "large", "size": "1.5rem", "name": "Large" },
+        { "slug": "x-large", "size": "2.5rem", "name": "Extra Large" }
+      ]
+    },
+    "color": {
+      "palette": [
+        { "slug": "ink", "color": "#2a2521", "name": "Ink" },
+        { "slug": "muted", "color": "#6d6259", "name": "Muted" },
+        { "slug": "surface", "color": "#f7f2ea", "name": "Surface" },
+        { "slug": "accent", "color": "#7a5a2b", "name": "Bronze" },
+        { "slug": "gold", "color": "#b38a49", "name": "Soft Gold" },
+        { "slug": "white", "color": "#ffffff", "name": "White" }
+      ]
+    }
+  },
+  "styles": {
+    "spacing": {
+      "blockGap": "1.5rem"
+    },
+    "typography": {
+      "lineHeight": "1.55"
+    },
+    "elements": {
+      "heading": {
+        "typography": {
+          "fontWeight": "700",
+          "lineHeight": "1.1"
+        }
+      },
+      "link": {
+        "color": {
+          "text": "var:preset|color|accent"
+        }
+      }
+    }
+  }
+}

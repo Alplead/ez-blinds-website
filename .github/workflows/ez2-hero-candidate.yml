@@ -1,0 +1,46 @@
+name: EZ2 Hero Candidate (No Deployment)
+
+on:
+  pull_request:
+    paths:
+      - 'design/ez2-home-hero-candidate.json'
+      - 'scripts/ez2_home_candidate_check.py'
+      - 'scripts/test_ez2_home_candidate_check.py'
+      - 'scripts/ez2_hero_review_artifact.py'
+      - 'scripts/test_ez2_hero_review_artifact.py'
+      - 'scripts/ez2_elementor_export_check.py'
+      - 'scripts/ez2_elementor_media_compile.py'
+      - '.github/workflows/ez2-hero-candidate.yml'
+
+jobs:
+  offline-candidate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Validate unpublished Elementor candidate without WordPress writes
+        run: python3 scripts/test_ez2_home_candidate_check.py
+      - name: Test exact-head review artifact integrity and tamper rejection
+        run: |
+          python3 -m py_compile scripts/ez2_hero_review_artifact.py scripts/test_ez2_hero_review_artifact.py
+          python3 scripts/test_ez2_hero_review_artifact.py
+      - name: Package review-only JSON with exact-head provenance
+        env:
+          EZ2_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ez2-hero-review"
+          python3 scripts/ez2_hero_review_artifact.py \
+            design/ez2-home-hero-candidate.json \
+            "$EZ2_HEAD_SHA" \
+            "$RUNNER_TEMP/ez2-hero-review/ez2-home-hero-review.zip"
+          sha256sum "$RUNNER_TEMP/ez2-hero-review/ez2-home-hero-review.zip"
+      - name: Retain non-deployable review artifact (14 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-hero-review-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/ez2-hero-review/ez2-home-hero-review.zip
+          if-no-files-found: error
+          retention-days: 14

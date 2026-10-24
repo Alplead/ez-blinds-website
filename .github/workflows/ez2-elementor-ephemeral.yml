@@ -1,0 +1,392 @@
+name: EZ2 Elementor Ephemeral Runtime (No Deployment)
+
+on:
+  pull_request:
+    paths:
+      - 'design/ez2-home-hero-candidate.json'
+      - 'scripts/ez2_ci_candidate_from_release.py'
+      - 'scripts/test_ez2_ci_candidate_from_release.py'
+      - 'scripts/ez2_content_candidate_bundle.py'
+      - 'scripts/ez2_release_set.py'
+      - 'scripts/build-release-bundle.sh'
+      - '.github/workflows/release-install-smoke.yml'
+      - 'scripts/ez2_wp_runtime_probe.php'
+      - 'scripts/ez2_elementor_controls_probe.php'
+      - 'scripts/ez2_disposable_import.php'
+      - 'scripts/ez2_ci_import_reuse.php'
+      - 'scripts/ez2_disposable_import_once.php'
+      - 'scripts/ez2_isolated_elementor_preview.mjs'
+      - 'scripts/test_ez2_isolated_elementor_preview.mjs'
+      - 'scripts/ez2_ci_media_inventory.php'
+      - 'scripts/test_ez2_ci_media_inventory.php'
+      - 'scripts/ez2_ci_compiled_roundtrip.php'
+      - 'scripts/test_ez2_ci_compiled_roundtrip.php'
+      - 'scripts/ez2_ci_owner_edit_probe.php'
+      - 'scripts/ez2_ci_disposable_content_upgrade.php'
+      - 'scripts/test_ez2_ci_disposable_content_upgrade.php'
+      - 'scripts/test_ez2_ci_owner_edit_probe.php'
+      - 'scripts/test_ez2_ci_import_reuse.php'
+      - 'scripts/test_ez2_disposable_import.php'
+      - '.devcontainer/docker-compose.yml'
+      - 'scripts/ez2_elementor_ephemeral_guard.py'
+      - 'scripts/test_ez2_elementor_ephemeral_guard.py'
+      - 'scripts/ez2_isolated_frontend_browser.mjs'
+      - 'scripts/test_ez2_isolated_frontend_browser.mjs'
+      - '.github/workflows/ez2-elementor-ephemeral.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-elementor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        elementor_version: ['4.3.4', '4.3.5']
+    env:
+      EZ2_ELEMENTOR_VERSION: ${{ matrix.elementor_version }}
+      EZ2_CANDIDATE_PATH: ../.release/ez2-runtime-candidate.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Validate exact candidate and ephemeral-only workflow
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_elementor_ephemeral_guard.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Stage verified exact-head release candidate (disposable CI only)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          bash scripts/build-release-bundle.sh
+          python3 scripts/ez2_content_candidate_bundle.py build . "$EZB_EXPECTED_SHA" .release/ez2-content-candidate.zip
+          python3 scripts/ez2_release_set.py build .release "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-candidate-stage.log
+          grep -Fq "EZ2_RELEASE_CANDIDATE_RUNTIME_PASS source_sha=$EZB_EXPECTED_SHA" /tmp/ez2-candidate-stage.log
+      - name: Pull official container images
+        run: |
+          set -euo pipefail
+          for image in mariadb:11 wordpress:7.1-php8.3-apache wordpress:cli; do
+            pulled=0
+            # Public ECR occasionally returns "Rate exceeded" before any WP test starts.
+            for attempt in 1 2 3; do
+              if docker pull "public.ecr.aws/docker/library/$image"; then
+                docker tag "public.ecr.aws/docker/library/$image" "$image"
+                pulled=1
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
+            done
+            # Only official public Docker Hub image names; never pull from arbitrary registries.
+            if [ "$pulled" -ne 1 ]; then
+              for attempt in 1 2; do
+                if docker pull "$image"; then
+                  pulled=1
+                  break
+                fi
+                if [ "$attempt" -lt 2 ]; then sleep 10; fi
+              done
+            fi
+            if [ "$pulled" -ne 1 ]; then echo "EZ2_CONTAINER_PULL_UNAVAILABLE image=$image" >&2; exit 1; fi
+          done
+      - name: Install pinned Elementor Free in disposable WordPress only
+        env:
+          EZ2_PROJECT: ez2ci${{ github.run_id }}v${{ strategy.job-index }}
+        run: |
+          set -euo pipefail
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml up -d --wait db wordpress
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm bootstrap
+          for key in home siteurl; do
+            docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update "$key" http://ez2-review.local --allow-root
+          done
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option update ez2_site_identity ez2-isolated-only --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap plugin install elementor --version="$EZ2_ELEMENTOR_VERSION" --activate --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap plugin is-active elementor --allow-root
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_wp_runtime_probe.php --allow-root | tee /tmp/ez2-runtime.json
+          grep -Fq '"status": "READY_FOR_MANUAL_ELEMENTOR_FEATURE_TEST"' /tmp/ez2-runtime.json
+          grep -Fq '"slideshow_ken_burns_verified": false' /tmp/ez2-runtime.json
+          grep -Fq '"deployment_authorized": false' /tmp/ez2-runtime.json
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_elementor_controls_probe.php --allow-root
+          # Prove a deliberately interrupted synthetic import leaves no draft,
+          # attachment rows or uploaded image bytes before the normal import.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_IMPORT_FAULT=AFTER_FIRST_ATTACHMENT -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-synthetic-rollback.log 2>&1; then
+            echo 'Synthetic fault injection unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_IMPORT_FAULT' /tmp/ez2-synthetic-rollback.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $pages=get_posts(["post_type"=>"page","post_status"=>["publish","future","draft","pending","private","trash"],"title"=>"EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION","posts_per_page"=>10,"fields"=>"ids"]);
+            $media=get_posts(["post_type"=>"attachment","post_status"=>"inherit","posts_per_page"=>20,"fields"=>"ids","s"=>"Synthetic CI image"]);
+            $files=glob(wp_upload_dir()["basedir"]."/*/*/ez2-ci-synthetic-hero-*.png");
+            if($pages||$media||$files)throw new Exception("SYNTHETIC_ROLLBACK_INCOMPLETE");
+            echo "EZ2_CI_IMPORT_ROLLBACK_PASS";
+          ' --allow-root | tee /tmp/ez2-synthetic-rollback-verified.log
+          grep -Fq 'EZ2_CI_IMPORT_ROLLBACK_PASS' /tmp/ez2-synthetic-rollback-verified.log
+          # Repeat the rollback drill after Elementor metadata has been written,
+          # catching late failures that the first-attachment drill cannot reach.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_IMPORT_FAULT=AFTER_ELEMENTOR_META -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-synthetic-late-rollback.log 2>&1; then
+            echo 'Late synthetic fault injection unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_IMPORT_FAULT' /tmp/ez2-synthetic-late-rollback.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $pages=get_posts(["post_type"=>"page","post_status"=>["publish","future","draft","pending","private","trash"],"title"=>"EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION","posts_per_page"=>10,"fields"=>"ids"]);
+            $media=get_posts(["post_type"=>"attachment","post_status"=>"inherit","posts_per_page"=>20,"fields"=>"ids","s"=>"Synthetic CI image"]);
+            $files=glob(wp_upload_dir()["basedir"]."/*/*/ez2-ci-synthetic-hero-*.png");
+            if($pages||$media||$files)throw new Exception("SYNTHETIC_LATE_ROLLBACK_INCOMPLETE");
+            echo "EZ2_CI_LATE_IMPORT_ROLLBACK_PASS";
+          ' --allow-root | tee /tmp/ez2-synthetic-late-rollback-verified.log
+          grep -Fq 'EZ2_CI_LATE_IMPORT_ROLLBACK_PASS' /tmp/ez2-synthetic-late-rollback-verified.log
+          # Inject a fault after the importer has created all four images and
+          # Elementor metadata, but before the repeat-safe fingerprint is saved.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_POST_IMPORT_FAULT=BEFORE_FINGERPRINT -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-post-import-rollback.log 2>&1; then
+            echo 'Post-import synthetic fault injection unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_POST_IMPORT_FAULT' /tmp/ez2-post-import-rollback.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $pages=get_posts(["post_type"=>"page","post_status"=>["publish","future","draft","pending","private","trash"],"title"=>"EZ2 synthetic CI Elementor hero - NOT FOR PUBLICATION","posts_per_page"=>10,"fields"=>"ids"]);
+            $media=get_posts(["post_type"=>"attachment","post_status"=>"inherit","posts_per_page"=>20,"fields"=>"ids","s"=>"Synthetic CI image"]);
+            $files=glob(wp_upload_dir()["basedir"]."/*/*/ez2-ci-synthetic-hero-*.png");
+            if($pages||$media||$files)throw new Exception("SYNTHETIC_POST_IMPORT_ROLLBACK_INCOMPLETE");
+            echo "EZ2_CI_POST_IMPORT_ROLLBACK_PASS";
+          ' --allow-root | tee /tmp/ez2-post-import-rollback-verified.log
+          grep -Fq 'EZ2_CI_POST_IMPORT_ROLLBACK_PASS' /tmp/ez2-post-import-rollback-verified.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-import.log
+          grep -Fq "EZ2_ELEMENTOR_SYNTHETIC_DRAFT_IMPORT_PASS version=$EZ2_ELEMENTOR_VERSION" /tmp/ez2-synthetic-import.log
+          grep -Fq 'visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-import.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root | tee /tmp/ez2-synthetic-repeat.log
+          grep -Fq 'reused=true visual_qa_verified=false localwp_installed=false deployment_authorized=false' /tmp/ez2-synthetic-repeat.log
+          # Connect actual disposable WordPress attachments to the exact-head
+          # Elementor candidate without exposing private media or writing to a site.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_media_inventory.php --allow-root > /tmp/ez2-ci-synthetic-media-map.json
+          python3 scripts/ez2_elementor_media_compile.py .release/ez2-runtime-candidate.json /tmp/ez2-ci-synthetic-media-map.json ez2-review.local /tmp/ez2-ci-compiled-private.json > /tmp/ez2-ci-media-compile-report.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/ez2-ci-media-compile-report.json').read_text())
+          compiled = json.loads(Path('/tmp/ez2-ci-compiled-private.json').read_text())
+          gallery = compiled['content'][0]['settings']['background_slideshow_gallery']
+          assert report['status'] == 'COMPILED_OFFLINE_ONLY'
+          assert report['media_slots_resolved'] == 4 and not report['site_modified']
+          assert len(gallery) == 4 and len({m['id'] for m in gallery}) == 4
+          assert all(type(m['id']) is int and m['id'] > 0 and
+                     m['url'].startswith('http://ez2-review.local/wp-content/uploads/')
+                     for m in gallery)
+          assert 'ez2-media://' not in json.dumps(compiled)
+          print('EZ2_CI_MEDIA_MAP_COMPILE_PASS slots=4 synthetic_only=true localwp_installed=false')
+          PY
+          # Compare privately compiled exact-head media mapping with the real
+          # disposable WordPress Elementor draft and attachment rows, read-only.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -v /tmp/ez2-ci-compiled-private.json:/tmp/ez2-ci-compiled-private.json:ro \
+            -e EZ2_CI_COMPILED_ROUNDTRIP=YES_DISPOSABLE_COMPARE_ONLY \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_compiled_roundtrip.php --allow-root | tee /tmp/ez2-ci-compiled-roundtrip.json
+          grep -Fq '"status":"DISPOSABLE_COMPILED_WORDPRESS_ROUNDTRIP_PASS"' /tmp/ez2-ci-compiled-roundtrip.json
+          grep -Fq '"deployment_authorized":false' /tmp/ez2-ci-compiled-roundtrip.json
+          rm -f /tmp/ez2-ci-synthetic-media-map.json /tmp/ez2-ci-compiled-private.json /tmp/ez2-ci-media-compile-report.json
+          # Exercise a real isolated WordPress metadata update, injected failure
+          # rollback, successful retry and idempotent second update. Never LocalWP.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            -e EZ2_CI_CONTENT_UPGRADE_FAULT=AFTER_FINGERPRINT_WRITE \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            > /tmp/ez2-ci-content-upgrade-fault.log 2>&1; then
+            echo 'Synthetic content fault unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_CONTENT_UPGRADE_FAULT' /tmp/ez2-ci-content-upgrade-fault.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            | tee /tmp/ez2-ci-content-upgrade-pass.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_PASS changed=true' /tmp/ez2-ci-content-upgrade-pass.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            | tee /tmp/ez2-ci-content-upgrade-repeat.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_PASS changed=false' /tmp/ez2-ci-content-upgrade-repeat.log
+          # Attach a disposable-only managed marker to the existing CI draft,
+          # then snapshot actual WordPress postmeta BEFORE the simulated edit.
+          # This marker is never added to a real Owner site or published release.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $ids=get_posts(["post_type"=>"page","post_status"=>"draft",
+              "meta_key"=>"_ez2_ci_import_fingerprint","posts_per_page"=>3,"fields"=>"ids"]);
+            if(count($ids)!==1)throw new Exception("MANAGED_SNAPSHOT_DRAFT_COUNT");
+            $id=(int)$ids[0];
+            if(get_post_meta($id,"_ez2_managed_key",false) ||
+               !update_post_meta($id,"_ez2_managed_key","ez2-home-hero")) {
+              throw new Exception("MANAGED_SNAPSHOT_MARKER");
+            }
+            echo "EZ2_CI_MANAGED_MARKER_PASS";
+          ' --allow-root | grep -Fq 'EZ2_CI_MANAGED_MARKER_PASS'
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_wp_managed_snapshot.php --allow-root \
+            > /tmp/ez2-managed-before.json
+          # Synthetic-only Owner-edit conflict drill: a repeated import MUST fail
+          # without changing the edited draft or adding attachments.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_OWNER_EDIT_PROBE=YES_DISPOSABLE_CONFLICT_ONLY -e EZ2_CI_OWNER_EDIT_PHASE=prepare -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_owner_edit_probe.php --allow-root | tee /tmp/ez2-owner-edit-prepare.log
+          grep -Fq 'EZ2_CI_OWNER_EDIT_PREPARED draft=true synthetic_only=true' /tmp/ez2-owner-edit-prepare.log
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_disposable_import_once.php --allow-root > /tmp/ez2-owner-edit-reimport.log 2>&1; then
+            echo 'Unexpected success: repeated import overwrote an Owner edit' >&2
+            exit 1
+          fi
+          grep -Fq 'DRAFT_CHANGED' /tmp/ez2-owner-edit-reimport.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_OWNER_EDIT_PROBE=YES_DISPOSABLE_CONFLICT_ONLY -e EZ2_CI_OWNER_EDIT_PHASE=verify -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY -e EZ2_EXPECTED_HOST=ez2-review.local -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_owner_edit_probe.php --allow-root | tee /tmp/ez2-owner-edit-verify.log
+          grep -Fq 'EZ2_CI_OWNER_EDIT_CONFLICT_PASS draft_preserved=true media_preserved=true synthetic_only=true' /tmp/ez2-owner-edit-verify.log
+          # A real database read must observe the Owner's title edit without
+          # changing the Elementor payload digest; report digests only.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_wp_managed_snapshot.php --allow-root \
+            > /tmp/ez2-managed-after.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          before = json.loads(Path('/tmp/ez2-managed-before.json').read_text())
+          after = json.loads(Path('/tmp/ez2-managed-after.json').read_text())
+          for report in (before, after):
+              assert report['status'] == 'MANAGED_CONTENT_DIGESTS_COLLECTED'
+              assert report['mode'] == 'read-only' and report['target_site'] == 'ez2-isolated-only'
+              assert report['managed_count'] == 1 and len(report['entries']) == 1
+              assert report['entries'][0]['key'] == 'ez2-home-hero'
+              assert report['entries'][0]['post_status'] == 'draft'
+              assert report['private_content_emitted'] is False
+              assert report['installed_release_attested'] is False
+              assert report['localwp_verified'] is False
+              assert report['owner_edit_baseline_trusted'] is False
+              assert report['deployment_authorized'] is False and report['applied'] is False
+              assert set(report['entries'][0]) == {
+                  'key', 'post_id', 'post_status', 'content_sha256', 'elementor_data_sha256'
+              }
+          assert before['entries'][0]['post_id'] == after['entries'][0]['post_id']
+          assert before['entries'][0]['content_sha256'] != after['entries'][0]['content_sha256']
+          assert before['entries'][0]['elementor_data_sha256'] == after['entries'][0]['elementor_data_sha256']
+          print('EZ2_CI_MANAGED_SNAPSHOT_WORDPRESS_PASS before_after_edit=true private_content=false')
+          PY
+          # Leave no managed marker behind, even in this disposable environment.
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval '
+            $ids=get_posts(["post_type"=>"page","post_status"=>"draft",
+              "meta_key"=>"_ez2_managed_key","posts_per_page"=>3,"fields"=>"ids"]);
+            if(count($ids)!==1 || !delete_post_meta((int)$ids[0],"_ez2_managed_key")) {
+              throw new Exception("MANAGED_SNAPSHOT_CLEANUP");
+            }
+            echo "EZ2_CI_MANAGED_MARKER_REMOVED";
+          ' --allow-root | grep -Fq 'EZ2_CI_MANAGED_MARKER_REMOVED'
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_wp_managed_snapshot.php --allow-root \
+            > /tmp/ez2-managed-clean.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/ez2-managed-clean.json').read_text())
+          assert report['status'] == 'NO_MANAGED_PAGES'
+          assert report['managed_count'] == 0 and report['entries'] == []
+          print('EZ2_CI_MANAGED_SNAPSHOT_CLEANUP_PASS')
+          PY
+          rm -f /tmp/ez2-managed-before.json /tmp/ez2-managed-after.json /tmp/ez2-managed-clean.json
+          echo "EZ2_ELEMENTOR_RUNTIME_VERSION_PASS version=$EZ2_ELEMENTOR_VERSION"
+      - name: Install pinned Chromium and run isolated browser guards
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock playwright@1.56.1
+          node --check scripts/ez2_isolated_frontend_browser.mjs
+          node scripts/test_ez2_isolated_frontend_browser.mjs | tee /tmp/ez2-browser-guard.log
+          node --check scripts/ez2_isolated_elementor_preview.mjs
+          node scripts/test_ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview-guard.log
+          grep -Fq 'EZ2_ELEMENTOR_DRAFT_PREVIEW_GUARD_PASS cases=33' /tmp/ez2-elementor-preview-guard.log
+          grep -Fq 'EZ2_ISOLATED_BROWSER_GUARD_PASS cases=59' /tmp/ez2-browser-guard.log
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser-preview authenticated synthetic Elementor draft
+        env:
+          EZ2_ISOLATED_ELEMENTOR_PREVIEW: YES_DISPOSABLE_AUTHENTICATED_ONLY
+          EZ2_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          EZ2_PREVIEW_OUTPUT: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}
+        run: |
+          set -euo pipefail
+          export EZ2_CI_DRAFT_ID="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --post_status=draft --meta_key=_ez2_ci_import_fingerprint --format=ids --allow-root)"
+          # Elementor may emit a stylesheet URL before writing the actual
+          # post CSS file. Generate it in the disposable runtime, then assert
+          # the browser can retrieve real CSS instead of silently showing
+          # an unstyled synthetic draft.
+          docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm -e EZ2_CI_DRAFT_ID="$EZ2_CI_DRAFT_ID" --entrypoint wp bootstrap eval '
+            $id=(int)getenv("EZ2_CI_DRAFT_ID");
+            if($id<1 || get_post_status($id)!=="draft" ||
+               !get_post_meta($id,"_ez2_ci_import_fingerprint",true)) {
+              throw new Exception("SYNTHETIC_CSS_DRAFT_GATE");
+            }
+            $kit=(int)get_option("elementor_active_kit");
+            if($kit<1 || get_post_type($kit)!=="elementor_library") {
+              throw new Exception("SYNTHETIC_ELEMENTOR_KIT_MISSING");
+            }
+            foreach([$id,$kit] as $css_id) {
+              $css=new \Elementor\Core\Files\CSS\Post($css_id);
+              $css->update();
+              $file=wp_upload_dir()["basedir"]."/elementor/css/post-".$css_id.".css";
+              if(!is_file($file) || filesize($file)<100) {
+                throw new Exception("SYNTHETIC_ELEMENTOR_CSS_NOT_GENERATED");
+              }
+            }
+            echo "EZ2_CI_ELEMENTOR_CSS_PASS";
+          ' --allow-root | tee /tmp/ez2-ci-elementor-css.log
+          grep -Fq 'EZ2_CI_ELEMENTOR_CSS_PASS' /tmp/ez2-ci-elementor-css.log
+          docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml exec -T wordpress sh -c 'ls -l /var/www/html/wp-content/uploads/elementor/css/post-*.css || true'
+          EZ2_CI_KIT_ID="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap option get elementor_active_kit --allow-root)"
+          for css_id in "$EZ2_CI_DRAFT_ID" "$EZ2_CI_KIT_ID"; do
+            css_http="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: ez2-review.local' "http://127.0.0.1:8080/wp-content/uploads/elementor/css/post-${css_id}.css")"
+            echo "EZ2_CI_ELEMENTOR_CSS_HTTP_STATUS=$css_http"
+            test "$css_http" = 200
+          done
+          # Mint a short-lived CI-only auth cookie without logging its value.
+          export EZ2_CI_AUTH_COOKIE_JSON="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap eval 'echo wp_json_encode(["name"=>LOGGED_IN_COOKIE,"value"=>wp_generate_auth_cookie(1,time()+600,"logged_in")]);' --allow-root)"
+          node scripts/ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview.log
+          grep -Fq 'EZ2_ELEMENTOR_DRAFT_PREVIEW_PASS viewports=3' /tmp/ez2-elementor-preview.log
+          test -s "$EZ2_PREVIEW_OUTPUT/elementor-preview-evidence.json"
+          grep -Fq '"localwpVerified": false' "$EZ2_PREVIEW_OUTPUT/elementor-preview-evidence.json"
+      - name: Browser-check isolated WordPress public homepage (not Elementor draft)
+        env:
+          EZ2_ISOLATED_BROWSER: YES_DISPOSABLE_ONLY
+          EZ2_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          EZ2_BROWSER_OUTPUT: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}
+        run: |
+          set -euo pipefail
+          export EZ2_CI_DRAFT_ID="$(docker compose -p ez2ci${{ github.run_id }}v${{ strategy.job-index }} -f .devcontainer/docker-compose.yml run --rm --entrypoint wp bootstrap post list --post_type=page --post_status=draft --meta_key=_ez2_ci_import_fingerprint --format=ids --allow-root)"
+          node scripts/ez2_isolated_frontend_browser.mjs
+          test -s "$EZ2_BROWSER_OUTPUT/evidence.json"
+          grep -Fq '"elementorDraftVerified": false' "$EZ2_BROWSER_OUTPUT/evidence.json"
+          grep -Fq '"localwpVerified": false' "$EZ2_BROWSER_OUTPUT/evidence.json"
+      - name: Preserve synthetic browser QA evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-synthetic-browser-${{ matrix.elementor_version }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/ez2-browser-${{ matrix.elementor_version }}/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Destroy disposable test database and files
+        if: always()
+        env:
+          EZ2_PROJECT: ez2ci${{ github.run_id }}v${{ strategy.job-index }}
+        run: docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml down -v --remove-orphans
