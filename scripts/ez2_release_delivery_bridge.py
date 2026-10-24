@@ -32,6 +32,69 @@ def regular_input(path, max_bytes):
     return path
 
 
+
+def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, previous_digest):
+    """Bind a reproducible, non-executable transaction preview to verified inputs.
+
+    A future isolated-site agent must re-read the live site and verify every
+    prerequisite; this evidence is deliberately NOT an installation permit.
+    """
+    import hashlib
+
+    phases = [
+        {"id": "verify_isolated_site_and_exact_head", "mode": "read-only"},
+        {"id": "verify_official_plugin_archive", "mode": "required-before-write"},
+        {"id": "backup_database_uploads_theme_and_plugins", "mode": "required-before-write"},
+        {"id": "stage_verified_theme_core_and_elementor", "mode": "required-before-write"},
+        {"id": "resolve_private_media_on_isolated_site", "mode": "required-before-write"},
+        {"id": "apply_only_unmodified_managed_content", "mode": "requires-owner-confirmation"},
+        {"id": "verify_wordpress_and_frontend", "mode": "required-after-write"},
+        {"id": "commit_or_restore_full_backup", "mode": "rollback-on-any-failure"},
+    ]
+    blockers = [
+        "isolated_localwp_site_identity_unverified",
+        "official_elementor_archive_not_verified_for_localwp",
+        "full_site_backup_and_restore_not_verified_on_localwp",
+        "private_media_mapping_not_verified_on_localwp",
+        "owner_delivery_and_publication_authorization_absent",
+        "owner_content_baseline_not_independently_attested",
+    ]
+    if result["content"]["conflict_count"]:
+        blockers.append("owner_modified_content_conflict")
+    if result["missing_plugin_checksums"]:
+        blockers.append("missing_official_plugin_checksum")
+    if result["unresolved_media_slots"]:
+        blockers.append("unregistered_symbolic_media_slot")
+    binding = {
+        "source_sha": exact_sha,
+        "target_site": "ez2-isolated-only",
+        "release_catalog": catalog,
+        "plugin_lock": lock,
+        "installed_snapshot": installed,
+        "candidate": candidate,
+        "previous_digest_untrusted": previous_digest,
+        "content_actions": result["content"]["actions"],
+        "phases": phases,
+    }
+    raw = json.dumps(binding, sort_keys=True, ensure_ascii=False,
+                     separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return {
+        "schema_version": 1,
+        "kind": "exact-head-read-only-transaction-preview",
+        "source_sha": exact_sha,
+        "target_site": "ez2-isolated-only",
+        "input_binding_sha256": hashlib.sha256(raw).hexdigest(),
+        "phases": phases,
+        "blocking_gates": blockers,
+        "preflight_status": result["status"],
+        "previous_baseline_trusted": False,
+        "can_apply": False,
+        "applied": False,
+        "localwp_touched": False,
+        "one_click_complete": False,
+    }
+
+
 def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_digest=None):
     if previous_digest is not None and (
             not isinstance(previous_digest, str) or not SHA256.fullmatch(previous_digest)):
@@ -98,6 +161,8 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "localwp_installed": False,
         "deployment_authorized": False,
         "applied": False,
+        "transaction_preview": transaction_preview(catalog, lock, installed, candidate,
+                                                    result, exact_sha, previous_digest),
     }
 
 

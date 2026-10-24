@@ -98,6 +98,16 @@ with tempfile.TemporaryDirectory() as temp:
     assert len(good["symbolic_media_slots"]) == 4
     assert not good["applied"] and not good["one_click_complete"]
     assert not good["plugin_archive_verified"] and not good["localwp_installed"]
+    preview = good["transaction_preview"]
+    assert preview["source_sha"] == SHA and preview["target_site"] == "ez2-isolated-only"
+    assert len(preview["phases"]) == 8 and preview["phases"][2]["id"] == "backup_database_uploads_theme_and_plugins"
+    assert preview["phases"][-1]["id"] == "commit_or_restore_full_backup"
+    assert preview["can_apply"] is False and preview["one_click_complete"] is False
+    assert preview["previous_baseline_trusted"] is False and not preview["localwp_touched"]
+    assert len(preview["input_binding_sha256"]) == 64
+    CASES += 1
+    assert good["transaction_preview"] == plan(release, SHA, lock, installed)["transaction_preview"]
+    CASES += 1
     CASES += 1
     assert baseline == {p.name: p.read_bytes() for p in release.iterdir()}
     CASES += 1
@@ -107,16 +117,24 @@ with tempfile.TemporaryDirectory() as temp:
         {"key": "ez2-home-hero", "current_sha256": previous}]}))
     unchanged = plan(release, SHA, lock, installed)
     assert unchanged["content"]["actions"][0]["action"] == "unchanged"
+    assert unchanged["transaction_preview"]["input_binding_sha256"] != preview["input_binding_sha256"]
+    CASES += 1
     CASES += 1
     installed.write_text(json.dumps({"schema_version": 1, "items": [
         {"key": "ez2-home-hero", "current_sha256": "c" * 64}]}))
     blocked = plan(release, SHA, lock, installed)
     assert blocked["status"] == "BLOCKED_PREFLIGHT"
     assert blocked["content"]["actions"][0]["action"] == "conflict_owner_edit"
+    assert "owner_modified_content_conflict" in blocked["transaction_preview"]["blocking_gates"]
+    assert blocked["transaction_preview"]["can_apply"] is False
+    CASES += 1
     CASES += 1
     updated = plan(release, SHA, lock, installed, "c" * 64)
     assert updated["status"] == "READY_FOR_RUNTIME_TEST_ONLY"
     assert updated["content"]["actions"][0]["action"] == "update"
+    assert updated["transaction_preview"]["input_binding_sha256"] != blocked["transaction_preview"]["input_binding_sha256"]
+    assert updated["transaction_preview"]["previous_baseline_trusted"] is False
+    CASES += 1
     CASES += 1
     reject(lambda: plan(release, SHA, lock, installed, "invalid"))
     reject(lambda: plan(release, "f" * 40, lock, installed))
@@ -127,6 +145,8 @@ with tempfile.TemporaryDirectory() as temp:
     blocked = plan(release, SHA, lock, installed)
     assert blocked["status"] == "BLOCKED_PREFLIGHT"
     assert blocked["missing_plugin_checksums"] == ["elementor"]
+    assert "missing_official_plugin_checksum" in blocked["transaction_preview"]["blocking_gates"]
+    CASES += 1
     CASES += 1
     lock.write_text(original_lock)
     installed.write_text('{"schema_version":1,"items":[],"items":[]}')
@@ -138,5 +158,5 @@ with tempfile.TemporaryDirectory() as temp:
     installed.write_text(json.dumps({"schema_version": 1, "items": []}))
     (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
     reject(lambda: plan(release, SHA, lock, installed))
-    assert CASES == 12, CASES
+    assert CASES == 17, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")
