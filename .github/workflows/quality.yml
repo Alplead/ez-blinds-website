@@ -262,7 +262,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
           python3 scripts/test_ez2_ci_combined_recovery.py | tee /tmp/ez2-ci-combined-rollback-guard.log
-          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=10' /tmp/ez2-ci-combined-rollback-guard.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=12' /tmp/ez2-ci-combined-rollback-guard.log
 
       - name: Verify synthetic WordPress attachment-to-Elementor media mapping
         run: |
