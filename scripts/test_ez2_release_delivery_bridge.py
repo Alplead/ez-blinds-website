@@ -129,8 +129,13 @@ with tempfile.TemporaryDirectory() as temp:
     CASES += 1
     CASES += 1
     updated = plan(release, SHA, lock, installed, "c" * 64)
-    assert updated["status"] == "READY_FOR_RUNTIME_TEST_ONLY"
+    assert updated["status"] == "BLOCKED_PREFLIGHT"
     assert updated["content"]["actions"][0]["action"] == "update"
+    assert "unattested_previous_content_baseline" in updated["transaction_preview"]["blocking_gates"]
+    CASES += 1
+    assert updated["transaction_preview"]["preflight_status"] == "BLOCKED_PREFLIGHT"
+    assert updated["transaction_preview"]["can_apply"] is False
+    CASES += 1
     assert updated["transaction_preview"]["input_binding_sha256"] != blocked["transaction_preview"]["input_binding_sha256"]
     assert updated["transaction_preview"]["previous_baseline_trusted"] is False
     CASES += 1
@@ -157,5 +162,5 @@ with tempfile.TemporaryDirectory() as temp:
     installed.write_text(json.dumps({"schema_version": 1, "items": []}))
     (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
     reject(lambda: plan(release, SHA, lock, installed))
-    assert CASES == 17, CASES
+    assert CASES == 19, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")

@@ -376,7 +376,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_release_delivery_bridge.py scripts/test_ez2_release_delivery_bridge.py
           python3 scripts/test_ez2_release_delivery_bridge.py | tee /tmp/ez2-release-bridge.log
-          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=17' /tmp/ez2-release-bridge.log
+          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=19' /tmp/ez2-release-bridge.log
 
       - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
         run: |

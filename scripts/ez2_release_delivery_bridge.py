@@ -61,6 +61,8 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
     ]
     if result["content"]["conflict_count"]:
         blockers.append("owner_modified_content_conflict")
+    if any(action["action"] == "update" for action in result["content"]["actions"]):
+        blockers.append("unattested_previous_content_baseline")
     if result["missing_plugin_checksums"]:
         blockers.append("missing_official_plugin_checksum")
     if result["unresolved_media_slots"]:
@@ -141,6 +143,11 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "media_slots": summary["media_slots"],
     }
     result = check_delivery(contract, installed, lock, {"home-hero.json": candidate}, exact_sha)
+    # A caller-provided previous digest is not proof of the prior trusted release.
+    # Preserve the proposed update action for review, but do not call it ready
+    # until a future isolated-site agent independently attests that baseline.
+    if any(action["action"] == "update" for action in result["content"]["actions"]):
+        result = {**result, "status": "BLOCKED_PREFLIGHT"}
     return {
         "status": result["status"],
         "source_sha": exact_sha,
