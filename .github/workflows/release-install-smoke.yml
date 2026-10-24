@@ -96,6 +96,28 @@ jobs:
           python3 scripts/ez2_ci_file_upgrade.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-file-upgrade.log
           grep -Fq 'EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true fault_scenarios=4' /tmp/ez2-file-upgrade.log
 
+      - name: Observe official Elementor Free ZIP checksum (unattested; no install)
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from ez2_plugin_checksum_probe import capture
+          version = json.loads(Path('design/ez2-home-hero-candidate.json').read_text())['version']
+          assert version == '4.3.4', 'Unexpected Elementor candidate version'
+          lock = {'schema_version': 1, 'target_site': 'ez2-isolated-only',
+                  'plugins': [{'slug': 'elementor', 'version': version,
+                               'entrypoint': 'elementor/elementor.php',
+                               'source': 'wordpress.org', 'archive_sha256': None,
+                               'activate': True}]}
+          observed = capture(lock)
+          assert observed['status'] == 'UNATTESTED_CHECKSUM_OBSERVATION'
+          assert not observed['installed'] and not observed['release_approved']
+          print('EZ2_ELEMENTOR_OFFICIAL_ARCHIVE_OBSERVED_SHA256=' +
+                observed['plugins'][0]['observed_sha256'])
+          print('EZ2_ELEMENTOR_CHECKSUM_OBSERVATION_PASS no_install=true untrusted_until_pinned=true')
+          PY
+
       - name: Preload Docker Official Images from public ECR
         run: |
           set -euo pipefail
