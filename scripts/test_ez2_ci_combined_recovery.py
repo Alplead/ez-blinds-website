@@ -7,7 +7,9 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ez2_ci_combined_recovery import CLONE, candidate_payload, gate, inject_content_fault, restore_files, scratch_upgrade, snapshot
+from ez2_ci_combined_recovery import (CLONE, SCRATCH_FAULT_PHASES, candidate_payload,
+                                      exercise_swap_faults, gate, inject_content_fault,
+                                      restore_files, scratch_upgrade, snapshot)
 from ez2_content_candidate_bundle import package
 
 CASES = 0
@@ -45,6 +47,18 @@ with tempfile.TemporaryDirectory() as temp:
     make_zip(release / 'ezb-theme.zip', [('ezb-theme/style.css', b'Theme Name: EZB'),
                                          ('ezb-theme/theme.json', b'{}')])
     make_zip(release / 'ezb-core.zip', [('ezb-core/ezb-core.php', b'<?php // synthetic')])
+    fault_root = root / 'fault-matrix'
+    assert exercise_swap_faults(release, fault_root) == 4
+    CASES += 1
+    for phase in SCRATCH_FAULT_PHASES:
+        recovered = fault_root / phase / 'live'
+        assert (recovered / 'themes/ezb-theme/owner-original.txt').read_bytes() == b'synthetic owner fixture'
+        assert (recovered / 'plugins/ezb-core/owner-original.txt').read_bytes() == b'synthetic owner fixture'
+        assert (recovered / 'uploads/2026/owner-media.txt').read_bytes() == b'synthetic upload preserved'
+        assert not (recovered / 'themes/ezb-theme/style.css').exists()
+        CASES += 1
+    expect_blocked(lambda: scratch_upgrade(release, root / 'invalid-fault',
+                                           fault_phase='after_database_delete'))
     work = root / 'work'
     work.mkdir()
     live, before, moved = scratch_upgrade(release, work)
@@ -124,5 +138,5 @@ with patch('ez2_ci_combined_recovery.sql', side_effect=[b'0', b'1', b'Home', b'1
 
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 18, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=18')
+assert CASES == 24, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=24 file_fault_scenarios=4')
