@@ -108,7 +108,6 @@ with tempfile.TemporaryDirectory() as temp:
     CASES += 1
     assert good["transaction_preview"] == plan(release, SHA, lock, installed)["transaction_preview"]
     CASES += 1
-    CASES += 1
     assert baseline == {p.name: p.read_bytes() for p in release.iterdir()}
     CASES += 1
 
