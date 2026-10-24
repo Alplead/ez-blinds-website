@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only linkage of an installed EZ2 backup and a candidate delivery plan.
 
-A backup belongs to the *installed* source SHA, not the incoming candidate SHA.
+A backup and optional first-party byte-parity proof belong to the *installed*\nsource SHA, not the incoming candidate SHA.
 Passing this gate is NOT permission to install: isolated WordPress/Elementor
 runtime checks, real site identity, Owner approval and a real database restore
 rehearsal remain separate mandatory gates. File replay occurs only inside an
@@ -15,7 +15,8 @@ from pathlib import Path
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 
 
-def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
+def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha,
+             installed_release_dir=None, wp_content_dir=None):
     if (not isinstance(installed_sha, str) or not COMMIT.fullmatch(installed_sha)
             or not isinstance(candidate_sha, str) or not COMMIT.fullmatch(candidate_sha)):
         raise ValueError("Both installed and candidate SHAs must be exact lowercase commits")
@@ -25,6 +26,35 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
     backup_dir = Path(backup_dir)
     if contract_dir.resolve() == backup_dir.resolve():
         raise ValueError("Backup and delivery contract directories must be separate")
+
+    # Optional strict baseline path: compare actual first-party bytes against the
+    # *installed* release, not the incoming candidate. This is still read-only;
+    # byte parity cannot attest site identity or prove a prior installation.
+    if (installed_release_dir is None) != (wp_content_dir is None):
+        raise ValueError("Installed release and wp-content must be supplied together")
+    parity_verified = False
+    parity_files = 0
+    if installed_release_dir is not None:
+        from ez2_installed_code_parity import check as check_parity
+        parity = check_parity(installed_release_dir, installed_sha, wp_content_dir)
+        if (not isinstance(parity, dict)
+                or parity.get("status") != "CODE_BYTES_MATCH_RELEASE_ONLY"
+                or parity.get("source_sha") != installed_sha
+                or parity.get("theme_core_byte_parity") is not True
+                or type(parity.get("mismatch_count")) is not int
+                or parity["mismatch_count"] != 0
+                or type(parity.get("checked_release_files")) is not int
+                or parity["checked_release_files"] < 1):
+            raise ValueError("Installed code does not match the claimed baseline")
+        for flag in ("site_identity_verified", "installed_source_attested",
+                     "wordpress_runtime_verified", "third_party_plugins_verified",
+                     "elementor_content_verified", "private_media_verified",
+                     "localwp_installed", "deployment_authorized", "applied",
+                     "one_click_complete"):
+            if parity.get(flag) is not False:
+                raise ValueError("Unsafe installed parity claim: " + flag)
+        parity_verified = True
+        parity_files = parity["checked_release_files"]
 
     # The scratch helper verifies archive bytes/paths, replays only file components
     # into a disposable private directory, and deletes it before returning.
@@ -118,6 +148,9 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
         "status": ("BLOCKED_DELIVERY_PREFLIGHT" if delivery["status"] == "BLOCKED_PREFLIGHT"
                    else "PREFLIGHT_PASS_RUNTIME_GATED"),
         "installed_source_sha": installed_sha,
+        "installed_code_byte_parity_verified": parity_verified,
+        "installed_code_checked_files": parity_files,
+        "installed_site_baseline_attested": False,
         "candidate_source_sha": candidate_sha,
         "target_site": "ez2-isolated-only",
         "backup_bytes_verified": True,
@@ -144,8 +177,8 @@ def evaluate(contract_dir, backup_dir, installed_sha, candidate_sha):
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 5:
-            raise ValueError("Usage: ez2_upgrade_gate.py CONTRACT_DIR BACKUP_DIR INSTALLED_SHA CANDIDATE_SHA")
+        if len(sys.argv) not in (5, 7):
+            raise ValueError("Usage: ez2_upgrade_gate.py CONTRACT_DIR BACKUP_DIR INSTALLED_SHA CANDIDATE_SHA [INSTALLED_RELEASE_DIR WP_CONTENT_DIR]")
         result = evaluate(*sys.argv[1:])
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["status"] == "BLOCKED_DELIVERY_PREFLIGHT" else 0)

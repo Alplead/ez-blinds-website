@@ -59,6 +59,9 @@ assert r["scratch_file_replay_verified"] and r["scratch_deleted"]
 assert r["scratch_replayed_files"] == 3 and r["scratch_replayed_bytes"] == 30
 assert r["database_sql_executed"] is False and r["wordpress_restored"] is False
 assert r["unmanaged_existing_keys"] == []
+assert r["installed_code_byte_parity_verified"] is False
+assert r["installed_code_checked_files"] == 0
+assert r["installed_site_baseline_attested"] is False
 assert all(r[k] is False for k in ("site_identity_verified", "wordpress_runtime_verified",
         "elementor_free_visual_verified", "restore_rehearsed", "deployment_authorized", "applied"))
 cases += 1
@@ -197,5 +200,69 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Tampered archive was not rejected")
 
-assert cases == 65, cases
-print(f"EZ2_UPGRADE_GATE_PASS cases=57 additional=8 total={cases}")
+
+# Strict read-only integration: installed release ZIP bytes must match the
+# isolated fixture's wp-content before a candidate can reach the runtime gate.
+def good_parity():
+    return {"status": "CODE_BYTES_MATCH_RELEASE_ONLY", "source_sha": OLD,
+            "theme_core_byte_parity": True, "mismatch_count": 0,
+            "checked_release_files": 3,
+            **{key: False for key in (
+                "site_identity_verified", "installed_source_attested",
+                "wordpress_runtime_verified", "third_party_plugins_verified",
+                "elementor_content_verified", "private_media_verified",
+                "localwp_installed", "deployment_authorized", "applied",
+                "one_click_complete")}}
+
+
+def strict(parity, should_reject=False):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        a, b = root / "contract", root / "backup"
+        release, content = root / "installed-release", root / "site" / "wp-content"
+        for folder in (a, b, release, content):
+            folder.mkdir(parents=True)
+        with patch("ez2_installed_code_parity.check", return_value=parity) as parity_check, \
+             patch("ez2_backup_scratch_replay.replay", return_value=good_backup()), \
+             patch("ez2_delivery_preflight.run", return_value=good_delivery()):
+            if should_reject:
+                try:
+                    evaluate(a, b, OLD, NEW, release, content)
+                except (ValueError, TypeError):
+                    cases += 1
+                    return
+                raise AssertionError("Unsafe installed baseline was accepted")
+            result = evaluate(a, b, OLD, NEW, release, content)
+            parity_check.assert_called_once_with(release, OLD, content)
+            assert result["installed_code_byte_parity_verified"] is True
+            assert result["installed_code_checked_files"] == 3
+            assert result["installed_site_baseline_attested"] is False
+            assert result["site_identity_verified"] is False
+            assert result["deployment_authorized"] is False
+            cases += 1
+
+
+strict(good_parity())
+strict({**good_parity(), "status": "BLOCKED_CODE_PARITY"}, True)
+strict({**good_parity(), "source_sha": NEW}, True)
+strict({**good_parity(), "mismatch_count": 1}, True)
+strict({**good_parity(), "checked_release_files": 0}, True)
+strict({**good_parity(), "theme_core_byte_parity": False}, True)
+strict({**good_parity(), "localwp_installed": True}, True)
+strict({**good_parity(), "deployment_authorized": True}, True)
+strict({**good_parity(), "applied": True}, True)
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    a, b = root / "contract", root / "backup"
+    a.mkdir()
+    b.mkdir()
+    try:
+        evaluate(a, b, OLD, NEW, root / "release")
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Partial parity input was accepted")
+
+assert cases == 75, cases
+print(f"EZ2_UPGRADE_GATE_PASS cases=57 additional=18 total={cases}")
