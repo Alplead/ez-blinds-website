@@ -1,39 +1,53 @@
-"""Offline checks for exact-head CI and artifact gating."""
+"""Regression: six exact-head artifacts, five successful workflows, zero deployment."""
 import copy
 import datetime as dt
 from ez2_release_evidence import audit, evaluate, get_head
 
 SHA = "a" * 40
 NOW = dt.datetime(2026, 10, 16, tzinfo=dt.timezone.utc)
+WORKFLOWS = ("Quality", "Runtime Smoke", "Release Install Smoke",
+             "EZ2 Elementor Ephemeral Runtime (No Deployment)",
+             "EZ2 Hero Candidate (No Deployment)")
+PREFIXES = (
+    ("ezb-release-", 103), ("ez2-release-set-evidence-", 103),
+    ("ez2-public-content-candidate-", 103),
+    ("ez2-synthetic-browser-4.3.4-", 104),
+    ("ez2-synthetic-browser-4.3.5-", 104),
+    ("ez2-hero-review-", 105),
+)
 
 
 def fixture():
     pr = {"number": 1, "state": "open", "draft": True,
           "base": {"ref": "main"}, "head": {"ref": "feature/vertical-slice-v1",
           "sha": SHA, "repo": {"full_name": "Alplead/ez-blinds-website"}}}
-    runs = [{"id": i, "name": n, "head_sha": SHA, "event": "pull_request",
-             "status": "completed", "conclusion": "success", "created_at": "2026-10-16T00:00:00Z",
-             "run_attempt": 1} for i, n in enumerate(
-                 ("Quality", "Runtime Smoke", "Release Install Smoke"), 101)]
-    artifacts = [{"id": 900, "name": "ezb-release-" + SHA, "expired": False,
+    runs = [{"id": i, "name": name, "head_sha": SHA, "event": "pull_request",
+             "status": "completed", "conclusion": "success",
+             "created_at": "2026-10-16T00:00:00Z", "run_attempt": 1}
+            for i, name in enumerate(WORKFLOWS, 101)]
+    artifacts = [{"id": 900 + i, "name": prefix + SHA, "expired": False,
                   "size_in_bytes": 1234, "expires_at": "2026-10-30T00:00:00Z",
-                  "workflow_run": {"id": 103, "head_sha": SHA}}]
+                  "workflow_run": {"id": workflow_id, "head_sha": SHA}}
+                 for i, (prefix, workflow_id) in enumerate(PREFIXES)]
     return pr, runs, artifacts
 
 
 pr, runs, arts = fixture()
 assert get_head(pr) == SHA
-assert evaluate(SHA, runs, arts, NOW)["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
+good = evaluate(SHA, runs, arts, NOW)
+assert good["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
+assert good["matrix_complete"] and len(good["artifact_matrix"]) == 6
+assert all(good["artifact_matrix"].values())
+assert not good["localwp_verified"] and not good["one_click_complete"]
 cases = 1
 
-pr_changes = (
+for change in (
     lambda p: p.update(draft=False),
     lambda p: p["head"].update(sha="bad"),
     lambda p: p["base"].update(ref="feature"),
     lambda p: p["head"]["repo"].update(full_name="other/repo"),
-)
-for change in pr_changes:
-    p, r, a = copy.deepcopy(fixture())
+):
+    p, _, _ = copy.deepcopy(fixture())
     change(p)
     try:
         get_head(p)
@@ -42,12 +56,14 @@ for change in pr_changes:
     else:
         raise AssertionError("Unexpected PR accepted")
 
-bad_changes = (
+for change in (
     lambda r, a: r.pop(),
     lambda r, a: r[0].update(head_sha="b" * 40),
     lambda r, a: r[0].update(conclusion="failure"),
     lambda r, a: r[0].update(status="in_progress"),
     lambda r, a: r[1].update(event="push"),
+    lambda r, a: r[3].update(conclusion="failure"),
+    lambda r, a: r[4].update(conclusion="failure"),
     lambda r, a: a[0].update(expired=True),
     lambda r, a: a[0].update(name="other"),
     lambda r, a: a[0]["workflow_run"].update(id=999),
@@ -58,18 +74,27 @@ bad_changes = (
     lambda r, a: a[0]["workflow_run"].pop("head_sha"),
     lambda r, a: r[2].update(id=0),
     lambda r, a: a[0].update(expires_at="2026-10-15T00:00:00Z"),
-)
-for change in bad_changes:
-    p, r, a = copy.deepcopy(fixture())
+    lambda r, a: a[3].update(expired=True),
+    lambda r, a: a[5].update(expired=True),
+):
+    _, r, a = copy.deepcopy(fixture())
     change(r, a)
     assert evaluate(SHA, r, a, NOW)["status"] == "BLOCKED_EVIDENCE"
     cases += 1
 
-p, r, a = fixture()
+for index in range(6):
+    _, r, a = copy.deepcopy(fixture())
+    a.pop(index)
+    result = evaluate(SHA, r, a, NOW)
+    assert result["status"] == "BLOCKED_EVIDENCE"
+    assert not result["matrix_complete"]
+    cases += 1
+
+_, r, a = fixture()
 r.append({**r[0], "id": 201, "created_at": "2026-10-16T01:00:00Z", "conclusion": "failure"})
 assert evaluate(SHA, r, a, NOW)["status"] == "BLOCKED_EVIDENCE"
 cases += 1
-p, r, a = fixture()
+_, r, a = fixture()
 r.append({**r[0], "id": 201, "created_at": "2026-10-16T01:00:00Z"})
 assert evaluate(SHA, r, a, NOW)["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
 cases += 1
@@ -81,7 +106,9 @@ def fetch(url):
     if "/actions/runs?" in url:
         return {"total_count": len(r), "workflow_runs": r}
     if "/artifacts?" in url:
-        return {"total_count": len(a), "artifacts": a}
+        run_id = int(url.split("/actions/runs/")[1].split("/")[0])
+        selected = [item for item in a if item["workflow_run"]["id"] == run_id]
+        return {"total_count": len(selected), "artifacts": selected}
     raise ValueError("Unexpected URL")
 assert audit(fetch)["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
 cases += 1
@@ -94,7 +121,11 @@ def changed_fetch(url):
         return p if counter[0] == 1 else {**p, "head": {**p["head"], "sha": "b" * 40}}
     if "/actions/runs?" in url:
         return {"total_count": len(r), "workflow_runs": r}
-    return {"total_count": len(a), "artifacts": a}
+    if "/artifacts?" in url:
+        run_id = int(url.split("/actions/runs/")[1].split("/")[0])
+        selected = [item for item in a if item["workflow_run"]["id"] == run_id]
+        return {"total_count": len(selected), "artifacts": selected}
+    raise ValueError("Unexpected URL")
 try:
     audit(changed_fetch)
 except ValueError:
@@ -102,5 +133,4 @@ except ValueError:
 else:
     raise AssertionError("Changing PR head accepted")
 
-assert cases == 24, cases
-print(f"EZ2_RELEASE_EVIDENCE_PASS cases={cases}")
+print(f"EZ2_RELEASE_EVIDENCE_PASS cases={cases} matrix=6 workflows=5")
