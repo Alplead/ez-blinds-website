@@ -19,6 +19,7 @@ from ez2_delivery_preflight import check as check_delivery
 from ez2_elementor_export_check import check as check_elementor, unique, reject_nonfinite
 from ez2_plugin_dependency_check import read as read_lock
 from ez2_release_set import run as check_release, safe_read
+from ez2_wp_snapshot_drift import compare as compare_wp_snapshots
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -68,7 +69,7 @@ def verify_prior_release(directory, previous_sha, incoming_sha):
     }
 
 
-def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, previous_digest, prior_proof):
+def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, previous_digest, prior_proof, snapshot_comparison=None):
     """Bind a reproducible, non-executable transaction preview to verified inputs.
 
     A future isolated-site agent must re-read the live site and verify every
@@ -104,6 +105,10 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
         blockers.append("missing_official_plugin_checksum")
     if result["unresolved_media_slots"]:
         blockers.append("unregistered_symbolic_media_slot")
+    if snapshot_comparison is not None:
+        blockers.append("untrusted_managed_snapshot_baseline")
+        if snapshot_comparison["change_count"]:
+            blockers.append("managed_content_drift_detected")
     binding = {
         "source_sha": exact_sha,
         "target_site": "ez2-isolated-only",
@@ -114,6 +119,7 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
         "previous_digest_untrusted": previous_digest if prior_proof is None else None,
         "verified_prior_release_candidate": prior_proof,
         "content_actions": result["content"]["actions"],
+        "managed_snapshot_comparison": snapshot_comparison,
         "phases": phases,
     }
     raw = json.dumps(binding, sort_keys=True, ensure_ascii=False,
@@ -129,6 +135,7 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
         "preflight_status": result["status"],
         "previous_baseline_trusted": False,
         "prior_release_candidate_verified": prior_proof is not None,
+        "managed_snapshot_comparison": snapshot_comparison,
         "can_apply": False,
         "applied": False,
         "localwp_touched": False,
@@ -137,7 +144,8 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
 
 
 def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_digest=None,
-         prior_release_dir=None, prior_release_sha=None):
+         prior_release_dir=None, prior_release_sha=None,
+         snapshot_baseline=None, snapshot_current=None):
     if previous_digest is not None and (
             not isinstance(previous_digest, str) or not SHA256.fullmatch(previous_digest)):
         raise ValueError("Invalid previous managed-content digest")
@@ -145,6 +153,15 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         raise ValueError("Prior release directory and SHA must be supplied together")
     if prior_release_dir is not None and previous_digest is not None:
         raise ValueError("Do not mix untrusted digest with verified prior release")
+    if (snapshot_baseline is None) != (snapshot_current is None):
+        raise ValueError("Both managed WordPress snapshots are required")
+    comparison = None
+    if snapshot_baseline is not None:
+        left = json.loads(regular_input(snapshot_baseline, 65536).read_text(encoding="utf-8"),
+                          object_pairs_hook=unique, parse_constant=reject_nonfinite)
+        right = json.loads(regular_input(snapshot_current, 65536).read_text(encoding="utf-8"),
+                           object_pairs_hook=unique, parse_constant=reject_nonfinite)
+        comparison = compare_wp_snapshots(left, right)
     prior_proof = (verify_prior_release(prior_release_dir, prior_release_sha, exact_sha)
                    if prior_release_dir is not None else None)
     if prior_proof is not None:
@@ -203,6 +220,7 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "target_site": "ez2-isolated-only",
         "release_catalog_verified": True,
         "prior_release_baseline": prior_proof,
+        "managed_snapshot_comparison": comparison,
         "installed_site_baseline_attested": False,
         "candidate_archive_verified": True,
         "elementor_version_pinned": candidate["version"],
@@ -220,22 +238,35 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "deployment_authorized": False,
         "applied": False,
         "transaction_preview": transaction_preview(catalog, lock, installed, candidate,
-                                                    result, exact_sha, previous_digest, prior_proof),
+                                                    result, exact_sha, previous_digest, prior_proof,
+                                                    comparison),
     }
 
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) not in (5, 6, 8):
-            raise ValueError("Usage: ez2_release_delivery_bridge.py RELEASE_DIR EXACT_SHA PLUGIN_LOCK INSTALLED_SNAPSHOT [PREVIOUS_SHA256|- | --prior-release PRIOR_DIR PRIOR_SHA]")
-        if len(sys.argv) == 8:
-            if sys.argv[5] != "--prior-release":
-                raise ValueError("Invalid prior-release option")
-            result = plan(*sys.argv[1:5], prior_release_dir=sys.argv[6],
-                          prior_release_sha=sys.argv[7])
-        else:
-            previous = None if len(sys.argv) == 5 or sys.argv[5] == "-" else sys.argv[5]
-            result = plan(*sys.argv[1:5], previous)
+        argv = sys.argv[1:]
+        if len(argv) < 4:
+            raise ValueError("Usage: RELEASE_DIR EXACT_SHA PLUGIN_LOCK INSTALLED_SNAPSHOT [PREVIOUS_SHA256|-] [--prior-release DIR SHA] [--snapshots BASELINE CURRENT]")
+        args, options = argv[:4], argv[4:]
+        kw = {}
+        if options and not options[0].startswith("--"):
+            kw["previous_digest"] = None if options[0] == "-" else options[0]
+            options = options[1:]
+        while options:
+            if len(options) < 3 or options[0] not in ("--prior-release", "--snapshots"):
+                raise ValueError("Invalid release bridge option")
+            option, a, b = options[:3]
+            if option == "--prior-release":
+                if "prior_release_dir" in kw:
+                    raise ValueError("Duplicate prior-release option")
+                kw.update(prior_release_dir=a, prior_release_sha=b)
+            else:
+                if "snapshot_baseline" in kw:
+                    raise ValueError("Duplicate snapshots option")
+                kw.update(snapshot_baseline=a, snapshot_current=b)
+            options = options[3:]
+        result = plan(*args, **kw)
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["status"] == "BLOCKED_PREFLIGHT" else 0)
     except (OSError, ValueError, TypeError, KeyError, zipfile.BadZipFile) as exc:

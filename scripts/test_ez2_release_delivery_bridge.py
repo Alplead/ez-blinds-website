@@ -229,5 +229,42 @@ with tempfile.TemporaryDirectory() as temp:
     installed.write_text(json.dumps({"schema_version": 1, "items": []}))
     (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
     reject(lambda: plan(release, SHA, lock, installed))
-    assert CASES == 31, CASES
+    # Compare two read-only WordPress digest observations, never as a trusted
+    # prior-release baseline or permission to overwrite an Owner edit.
+    from ez2_wp_snapshot_drift import compare as compare_snapshots
+    observation = {"schema_version": 1, "status": "MANAGED_CONTENT_DIGESTS_COLLECTED",
+                   "mode": "read-only", "target_site": "ez2-isolated-only",
+                   "runtime_gate_passed": True, "managed_count": 1,
+                   "entries": [{"key": "ez2-home-hero", "post_id": 12, "post_status": "draft",
+                                "content_sha256": "a" * 64,
+                                "elementor_data_sha256": "b" * 64}],
+                   "private_content_emitted": False, "installed_release_attested": False,
+                   "localwp_verified": False, "owner_edit_baseline_trusted": False,
+                   "deployment_authorized": False, "applied": False}
+    first, second = root / "wp-before.json", root / "wp-after.json"
+    first.write_text(json.dumps(observation))
+    second.write_text(json.dumps(observation))
+    observed = plan(release, SHA, lock, installed, snapshot_baseline=first,
+                    snapshot_current=second)
+    assert observed["managed_snapshot_comparison"]["change_count"] == 0
+    assert "untrusted_managed_snapshot_baseline" in observed["transaction_preview"]["blocking_gates"]
+    assert observed["transaction_preview"]["can_apply"] is False
+    CASES += 1
+    edited = json.loads(second.read_text())
+    edited["entries"][0]["content_sha256"] = "c" * 64
+    second.write_text(json.dumps(edited))
+    drifted = plan(release, SHA, lock, installed, snapshot_baseline=first,
+                   snapshot_current=second)
+    assert drifted["managed_snapshot_comparison"]["change_count"] == 1
+    assert "managed_content_drift_detected" in drifted["transaction_preview"]["blocking_gates"]
+    assert drifted["transaction_preview"]["input_binding_sha256"] != observed["transaction_preview"]["input_binding_sha256"]
+    CASES += 1
+    reject(lambda: plan(release, SHA, lock, installed, snapshot_baseline=first))
+    second.write_text(second.read_text().replace('"applied": false', '"applied": true'))
+    reject(lambda: plan(release, SHA, lock, installed,
+                        snapshot_baseline=first, snapshot_current=second))
+    second.write_text('{"schema_version":1,"schema_version":1}')
+    reject(lambda: plan(release, SHA, lock, installed,
+                        snapshot_baseline=first, snapshot_current=second))
+    assert CASES == 36, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")

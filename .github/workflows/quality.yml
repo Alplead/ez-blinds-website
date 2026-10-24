@@ -376,7 +376,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_release_delivery_bridge.py scripts/test_ez2_release_delivery_bridge.py
           python3 scripts/test_ez2_release_delivery_bridge.py | tee /tmp/ez2-release-bridge.log
-          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=31' /tmp/ez2-release-bridge.log
+          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=36' /tmp/ez2-release-bridge.log
 
       - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
         run: |
@@ -445,6 +445,12 @@ jobs:
           php -l scripts/test_ez2_wp_managed_snapshot.php
           php scripts/test_ez2_wp_managed_snapshot.php | tee /tmp/ez2-managed-snapshot.log
           grep -Fq 'EZ2_MANAGED_SNAPSHOT_PASS cases=24' /tmp/ez2-managed-snapshot.log
+
+      - name: Reject managed WordPress content drift without trusted baseline
+        run: |
+          python3 -m py_compile scripts/ez2_wp_snapshot_drift.py scripts/test_ez2_wp_snapshot_drift.py
+          python3 scripts/test_ez2_wp_snapshot_drift.py | tee /tmp/ez2-wp-snapshot-drift.log
+          grep -Fq 'EZ2_WP_SNAPSHOT_DRIFT_PASS cases=30' /tmp/ez2-wp-snapshot-drift.log
 
       - name: Build and validate deployment bundle
         run: |
