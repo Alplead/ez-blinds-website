@@ -44,6 +44,20 @@ def gate(release, sha):
     verify_release('verify', Path(release), sha)
 
 
+def verify_elementor_source():
+    """Require Elementor Free in the *source* CI WordPress database.
+
+    The workflow independently verifies its exact version and runtime activation.
+    This additional DB prerequisite is checked before cloning and fault injection.
+    """
+    active = sql(('-e', "SELECT option_value FROM wordpress.wp_options WHERE option_name='active_plugins'")).strip()
+    if (not active.startswith(b'a:') or len(active) > 8192
+            or b's:23:"elementor/elementor.php";' not in active
+            or b'elementor-pro/' in active):
+        raise ValueError('Disposable source Elementor Free is not exclusively active')
+    return True
+
+
 def sql(args, data=None):
     command = (*COMPOSE, 'exec', '-T', 'release-db', 'sh', '-c',
                'export MYSQL_PWD="$MARIADB_ROOT_PASSWORD"; exec mariadb -uroot --batch --skip-column-names "$@"',
@@ -301,6 +315,7 @@ def main(release, sha):
         raise ValueError('Scratch clone already exists; refuse to overwrite')
     if sql(('-e', 'SELECT option_value FROM wordpress.wp_options WHERE option_name="home"')).strip() != b'http://localhost:8081':
         raise ValueError('Not the synthetic release WordPress fixture')
+    verify_elementor_source()
     source_digest = digest('wordpress')
     original_sql = dump('wordpress')
     if not original_sql or len(original_sql) > 128 * 1024 * 1024:
@@ -364,7 +379,7 @@ def main(release, sha):
             if (snapshot(success_live) != success_before or
                     digest(CLONE) != source_digest or digest('wordpress') != source_digest):
                 raise ValueError('Successful transaction recovery failed to restore both domains')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true first_party_release_byte_parity=true checked_release_files=' + str(checked_release_files))
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true first_party_release_byte_parity=true elementor_active=true checked_release_files=' + str(checked_release_files))
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))

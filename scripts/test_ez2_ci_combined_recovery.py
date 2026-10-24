@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from ez2_ci_combined_recovery import (CLONE, SCRATCH_FAULT_PHASES, candidate_payload,
                                       exercise_swap_faults, gate, inject_content_fault,
-                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction, verify_release_bytes)
+                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction, verify_release_bytes, verify_elementor_source)
 from ez2_content_candidate_bundle import package
 
 CASES = 0
@@ -31,6 +31,21 @@ for env in ({}, {'GITHUB_ACTIONS': 'true'},
     with patch.dict(os.environ, env, clear=True):
         expect_blocked(lambda: gate('/tmp/not-release', 'a' * 40))
 
+
+# The combined transaction must start from the real disposable WordPress
+# database with Elementor Free already activated, not a theme/core-only fixture.
+with patch('ez2_ci_combined_recovery.sql',
+           return_value=b'a:1:{i:0;s:23:"elementor/elementor.php";}') as db:
+    assert verify_elementor_source() is True
+    assert 'wordpress.wp_options' in db.call_args.args[0][1]
+    CASES += 1
+for invalid in (
+    b'a:0:{}',
+    b'a:1:{i:0;s:22:"elementor/elementor.php";}',
+    b'a:2:{i:0;s:23:"elementor/elementor.php";i:1;s:32:"elementor-pro/elementor-pro.php";}',
+):
+    with patch('ez2_ci_combined_recovery.sql', return_value=invalid):
+        expect_blocked(verify_elementor_source)
 
 def make_zip(path, entries):
     with zipfile.ZipFile(path, 'w') as archive:
@@ -205,5 +220,5 @@ with tempfile.TemporaryDirectory() as tmp:
 
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 37, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=37 file_fault_scenarios=4')
+assert CASES == 41, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=41 file_fault_scenarios=4')
