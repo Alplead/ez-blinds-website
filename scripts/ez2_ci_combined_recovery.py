@@ -26,6 +26,8 @@ from ez2_release_set import run as verify_release
 REPO = Path(__file__).resolve().parents[1]
 CLONE = 'ez2_ci_combined_disposable'
 COMPOSE = ('docker', 'compose', '-f', '.github/release-install/docker-compose.yml')
+SCRATCH_FAULT_PHASES = ('after_first_backup', 'after_first_install',
+                        'after_second_backup', 'after_second_install')
 
 
 def gate(release, sha):
@@ -136,8 +138,10 @@ def inject_content_fault(db, elementor_payload=None):
     return post_id
 
 
-def scratch_upgrade(release, root):
-    """Install real release ZIP bytes over synthetic old files; keep backups."""
+def scratch_upgrade(release, root, fault_phase=None):
+    """Swap exact-release files in disposable scratch, including interruption probes."""
+    if fault_phase is not None and fault_phase not in SCRATCH_FAULT_PHASES:
+        raise ValueError("Unrecognised scratch file-swap fault phase")
     live, stage, backup = (root / name for name in ('live', 'stage', 'backup'))
     for folder in (live, stage, backup):
         folder.mkdir()
@@ -156,17 +160,24 @@ def scratch_upgrade(release, root):
             raise ValueError('Release entrypoint missing')
     moved = []
     try:
-        for _, category, name, _ in COMPONENTS:
+        for index, (_, category, name, _) in enumerate(COMPONENTS):
             old, saved = live / category / name, backup / category / name
             saved.parent.mkdir(exist_ok=True)
             os.replace(old, saved)
             moved.append((old, saved))
+            ordinal = ("first", "second")[index]
+            if fault_phase == "after_" + ordinal + "_backup":
+                raise RuntimeError("INJECTED_SCRATCH_FILE_FAULT")
             os.replace(stage / category / name, old)
+            if fault_phase == "after_" + ordinal + "_install":
+                raise RuntimeError("INJECTED_SCRATCH_FILE_FAULT")
         if snapshot(live) == before:
             raise ValueError('File upgrade did not change synthetic installed files')
         return live, before, moved
     except BaseException:
         restore_files(moved)
+        if snapshot(live) != before:
+            raise ValueError("Interrupted scratch file-swap failed to restore original bytes")
         raise
 
 
@@ -178,6 +189,31 @@ def restore_files(moved):
         if current.exists():
             shutil.rmtree(current)
         os.replace(saved, current)
+
+
+def exercise_swap_faults(release, root):
+    """Rehearse each interruption before the combined SQL fault; never touch WP."""
+    root = Path(root)
+    root.mkdir()
+    for phase in SCRATCH_FAULT_PHASES:
+        attempt = root / phase
+        attempt.mkdir()
+        try:
+            scratch_upgrade(release, attempt, fault_phase=phase)
+        except RuntimeError as exc:
+            if str(exc) != "INJECTED_SCRATCH_FILE_FAULT":
+                raise
+        else:
+            raise ValueError("Scratch fault was not injected: " + phase)
+        live = attempt / "live"
+        for _, category, name, _ in COMPONENTS:
+            if (live / category / name / "owner-original.txt").read_bytes() != b"synthetic owner fixture":
+                raise ValueError("Interrupted scratch file-swap lost original component")
+        if (live / "uploads" / "2026" / "owner-media.txt").read_bytes() != b"synthetic upload preserved":
+            raise ValueError("Interrupted scratch file-swap modified uploads")
+        if any((attempt / "backup").rglob("owner-original.txt")):
+            raise ValueError("Interrupted scratch file-swap left an un-restored backup")
+    return len(SCRATCH_FAULT_PHASES)
 
 
 def main(release, sha):
@@ -209,6 +245,9 @@ def main(release, sha):
             sql((CLONE,), data=original_sql)
             if digest(CLONE) != source_digest:
                 raise ValueError('Initial clone differs from original WordPress database')
+            file_faults = exercise_swap_faults(release, root / "file-fault-matrix")
+            if digest(CLONE) != source_digest or digest("wordpress") != source_digest:
+                raise ValueError("File fault matrix unexpectedly changed WordPress SQL")
             live, before, moved = scratch_upgrade(release, root)
             try:
                 # Both domains now differ at once. Inject a fault after the file
@@ -233,7 +272,7 @@ def main(release, sha):
                 raise ValueError('Synthetic Elementor-shaped content rows were not restored')
             if digest('wordpress') != source_digest:
                 raise ValueError('Installed synthetic WordPress source database changed')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true')
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))
