@@ -53,6 +53,15 @@ final class Ez2CiMediaInventory {
        || isset($seen[$real]) || $stat['size']<32 || $stat['size']>20971520) {
     throw new RuntimeException('UNSAFE_ATTACHMENT_FILE');
    }
+   // A valid attachment ID is not enough: the public URL must name the
+   // exact regular file WordPress resolves inside this disposable uploads root.
+   // Otherwise a valid image can be silently assigned to the wrong hero slot.
+   $relative=substr($real,strlen($root)+1);
+   $urlPath=is_string($entry['url']??null) ? parse_url($entry['url'],PHP_URL_PATH) : false;
+   if (!is_string($urlPath) ||
+       $urlPath!=='/wp-content/uploads/'.str_replace(DIRECTORY_SEPARATOR,'/',$relative)) {
+    throw new RuntimeException('ATTACHMENT_URL_FILE_MISMATCH');
+   }
    $image=@getimagesize($real);
    if ($image===false || ($image['mime']??null)!=='image/png'
        || ($image[0]??0)<1 || ($image[1]??0)<1) {

@@ -65,6 +65,13 @@ file_put_contents($outside,$pixel);
 rejectFiles($state,$root,static fn(int $id) => $id===1?$outside:$paths[$id]);
 rejectFiles($state,$root,static fn(int $id) => $id===2?$root.'/missing.png':$paths[$id]);
 rejectFiles($state,$root,static fn(int $id) => $id===2?$paths[1]:$paths[$id]);
+// A real, valid attachment must not be paired with another photo's URL or date path.
+$wrongUrl=$state;
+$wrongUrl['media'][0]['url']=$state['media'][1]['url'];
+rejectFiles($wrongUrl,$root,$resolve);
+$wrongUrl=$state;
+$wrongUrl['media'][0]['url']=str_replace('/2026/10/','/2025/10/',$state['media'][0]['url']);
+rejectFiles($wrongUrl,$root,$resolve);
 $wrong=$state;$wrong['media'][0]['mime']='image/webp';
 rejectFiles($wrong,$root,$resolve);
 file_put_contents($paths[1],'not a PNG');
@@ -84,5 +91,5 @@ foreach($paths as $path)unlink($path);
 unlink($outside);
 rmdir($root.'/2026/10');rmdir($root.'/2026');rmdir($root);rmdir($tmp);
 
-if ($cases!==21) throw new RuntimeException('cases='.$cases);
+if ($cases!==23) throw new RuntimeException('cases='.$cases);
 echo 'EZ2_CI_MEDIA_INVENTORY_PASS cases='.$cases."\n";
