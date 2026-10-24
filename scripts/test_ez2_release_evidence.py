@@ -22,6 +22,12 @@ def fixture():
           "base": {"ref": "main"}, "head": {"ref": "feature/vertical-slice-v1",
           "sha": SHA, "repo": {"full_name": "Alplead/ez-blinds-website"}}}
     runs = [{"id": i, "name": name, "head_sha": SHA, "event": "pull_request",
+             "head_branch": "feature/vertical-slice-v1",
+             "repository": {"full_name": "Alplead/ez-blinds-website"},
+             "head_repository": {"full_name": "Alplead/ez-blinds-website"},
+             "pull_requests": [{"number": 1,
+                                "head": {"ref": "feature/vertical-slice-v1", "sha": SHA},
+                                "base": {"ref": "main"}}],
              "status": "completed", "conclusion": "success",
              "created_at": "2026-10-16T00:00:00Z", "run_attempt": 1}
             for i, name in enumerate(WORKFLOWS, 101)]
@@ -81,6 +87,34 @@ for change in (
     change(r, a)
     assert evaluate(SHA, r, a, NOW)["status"] == "BLOCKED_EVIDENCE"
     cases += 1
+
+# A green run for the same SHA is not evidence for PR #1 if its branch,
+# repository or pull-request association is wrong or missing.
+for mutate in (
+    lambda r: r[0].update(head_branch="unrelated-branch"),
+    lambda r: r[0]["repository"].update(full_name="other/repo"),
+    lambda r: r[0]["head_repository"].update(full_name="other/repo"),
+    lambda r: r[0].update(pull_requests=[]),
+    lambda r: r[0].update(pull_requests=None),
+    lambda r: r[0]["pull_requests"][0].update(number=2),
+    lambda r: r[0]["pull_requests"][0].update(number=True),
+    lambda r: r[0]["pull_requests"][0]["head"].update(sha="b" * 40),
+    lambda r: r[0]["pull_requests"][0]["head"].update(ref="other-branch"),
+    lambda r: r[0]["pull_requests"][0]["base"].update(ref="develop"),
+    lambda r: r[0].pop("repository"),
+    lambda r: r[0].pop("head_repository"),
+):
+    _, r, a = copy.deepcopy(fixture())
+    mutate(r)
+    assert evaluate(SHA, r, a, NOW)["status"] == "BLOCKED_EVIDENCE"
+    cases += 1
+
+# A run may list several PRs, but one exact matching PR #1 is mandatory.
+_, r, a = copy.deepcopy(fixture())
+r[0]["pull_requests"].insert(0, {"number": 2, "head": {"ref": "other",
+                             "sha": SHA}, "base": {"ref": "main"}})
+assert evaluate(SHA, r, a, NOW)["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
+cases += 1
 
 for index in range(6):
     _, r, a = copy.deepcopy(fixture())

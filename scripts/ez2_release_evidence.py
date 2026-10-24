@@ -54,12 +54,35 @@ ARTIFACT_MATRIX = (
 )
 
 
+def belongs_to_target_pr(run, sha):
+    """Reject unrelated workflow runs even when they happen to share a commit."""
+    if (run.get("head_branch") != BRANCH
+            or not isinstance(run.get("repository"), dict)
+            or run["repository"].get("full_name") != REPO
+            or not isinstance(run.get("head_repository"), dict)
+            or run["head_repository"].get("full_name") != REPO):
+        return False
+    pulls = run.get("pull_requests")
+    if not isinstance(pulls, list):
+        return False
+    for pr in pulls:
+        if not isinstance(pr, dict) or type(pr.get("number")) is not int:
+            continue
+        head, base = pr.get("head"), pr.get("base")
+        if (pr["number"] == PR and isinstance(head, dict)
+                and isinstance(base, dict) and head.get("sha") == sha
+                and head.get("ref") == BRANCH and base.get("ref") == "main"):
+            return True
+    return False
+
+
 def choose_runs(sha, runs):
     chosen = {}
     for run in runs:
         if (not isinstance(run, dict) or run.get("name") not in REQUIRED + EXTRA
                 or run.get("head_sha") != sha or run.get("event") != "pull_request"
-                or type(run.get("id")) is not int or run["id"] <= 0):
+                or type(run.get("id")) is not int or run["id"] <= 0
+                or not belongs_to_target_pr(run, sha)):
             continue
         name = run["name"]
         if (name not in chosen or (run.get("created_at", ""), run.get("run_attempt", 0), run["id"])
