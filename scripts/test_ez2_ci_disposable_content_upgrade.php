@@ -39,17 +39,18 @@ if (!$r['changed'] || $r['nodes'][0]['elements'][0]['settings']['title'] !== Ez2
 $r2 = Ez2CiDisposableContentUpgrade::transform($r['nodes']);
 if ($r2['changed'] || $r2['nodes'] !== $r['nodes']) throw new Exception('Update not idempotent');
 ++$cases;
-foreach ([
- [], array_merge($nodes,$nodes),
+$badCases = [
+ [], array_merge($nodes, $nodes),
  [['elType'=>'section','elements'=>$nodes[0]['elements']]],
  [['elType'=>'container','elements'=>[$nodes[0]['elements'][0]]]],
- [['elType'=>'container','elements'=>[
-  ['elType'=>'widget','widgetType'=>'heading','settings'=>['title'=>'Owner edit']],
-  $nodes[0]['elements'][1]]]],
- [['elType'=>'container','elements'=>[
-  $nodes[0]['elements'][0],
-  ['elType'=>'widget','widgetType'=>'button','settings'=>['link'=>['url'=>'https://example.invalid']]]]],
-] as $bad) {
+];
+$ownerEdit = $nodes;
+$ownerEdit[0]['elements'][0]['settings']['title'] = 'Owner edit';
+$badCases[] = $ownerEdit;
+$externalLink = $nodes;
+$externalLink[0]['elements'][1]['settings']['link']['url'] = 'https://example.invalid';
+$badCases[] = $externalLink;
+foreach ($badCases as $bad) {
  try { Ez2CiDisposableContentUpgrade::transform($bad); }
  catch (RuntimeException $e) { ++$cases; continue; }
  throw new Exception('Unexpected content accepted');
