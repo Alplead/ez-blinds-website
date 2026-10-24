@@ -72,16 +72,23 @@ with patch('ez2_ci_combined_recovery.sql') as forbidden_sql:
 
 # Prove the synthetic content mutation targets the clone exclusively.
 with patch('ez2_ci_combined_recovery.sql',
-           side_effect=[b'0', b'1', b'Home', b'', b'EZ2 synthetic content fault', b'1']) as fake_sql:
+           side_effect=[b'0', b'1', b'Home', b'0', b'', b'EZ2 synthetic content fault', b'EZ2 synthetic body fault', b'4']) as fake_sql:
     assert inject_content_fault(CLONE) == 1
     calls = [call.args[0][-1] for call in fake_sql.call_args_list]
-    assert len(calls) == 6
+    assert len(calls) == 8
     assert all('`ez2_ci_combined_disposable`' in query for query in calls)
     assert all('`wordpress`' not in query for query in calls)
-    assert '_ez2_ci_transaction_fault' in calls[3]
+    assert '_ez2_ci_transaction_fault' in calls[4]
+    assert '_elementor_data' in calls[4] and '_elementor_page_settings' in calls[4]
+    assert 'post_content=' in calls[4]
     CASES += 1
+
+# Existing Elementor content on a synthetic page is a conflict, not update scope.
+with patch('ez2_ci_combined_recovery.sql', side_effect=[b'0', b'1', b'Home', b'1']) as fake_sql:
+    expect_blocked(lambda: inject_content_fault(CLONE))
+    assert len(fake_sql.call_args_list) == 4
 
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 12, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=12')
+assert CASES == 13, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=13')

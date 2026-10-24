@@ -73,14 +73,27 @@ def inject_content_fault(db):
     title = sql(('-e', f"SELECT post_title FROM `{db}`.wp_posts WHERE ID={post_id} AND post_type='page'")).strip()
     if title != b'Home':
         raise ValueError('Unexpected synthetic front-page title')
+    # Refuse to overwrite existing Elementor-shaped content even in synthetic CI.
+    keys = "'_elementor_data','_elementor_edit_mode','_elementor_page_settings'"
+    existing = sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ({keys})")).strip()
+    if existing != b'0':
+        raise ValueError('Synthetic home already has Elementor metadata')
+    elementor_data = '[{"id":"ez2-ci-fault","elType":"container","elements":[]}]'
+    elementor_settings = '{"ez2_ci_fault":true}'
     sql(('-e',
          f"UPDATE `{db}`.wp_options SET option_value='http://ez2-ci-combined-fault.invalid' WHERE option_name='home';"
-         f"UPDATE `{db}`.wp_posts SET post_title='EZ2 synthetic content fault' WHERE ID={post_id} AND post_type='page';"
-         f"INSERT INTO `{db}`.wp_postmeta (post_id,meta_key,meta_value) VALUES ({post_id},'{marker}','synthetic candidate metadata');"))
+         f"UPDATE `{db}`.wp_posts SET post_title='EZ2 synthetic content fault', post_content='EZ2 synthetic body fault' WHERE ID={post_id} AND post_type='page';"
+         f"INSERT INTO `{db}`.wp_postmeta (post_id,meta_key,meta_value) VALUES "
+         f"({post_id},'{marker}','synthetic candidate metadata'),"
+         f"({post_id},'_elementor_data','{elementor_data}'),"
+         f"({post_id},'_elementor_edit_mode','builder'),"
+         f"({post_id},'_elementor_page_settings','{elementor_settings}');"))
     changed_title = sql(('-e', f"SELECT post_title FROM `{db}`.wp_posts WHERE ID={post_id}")).strip()
-    marker_count = sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE meta_key='{marker}'")).strip()
-    if changed_title != b'EZ2 synthetic content fault' or marker_count != b'1':
-        raise ValueError('Synthetic content fault did not apply')
+    changed_body = sql(('-e', f"SELECT post_content FROM `{db}`.wp_posts WHERE ID={post_id}")).strip()
+    marker_count = sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ('{marker}',{keys})")).strip()
+    if (changed_title != b'EZ2 synthetic content fault' or
+            changed_body != b'EZ2 synthetic body fault' or marker_count != b'4'):
+        raise ValueError('Synthetic Elementor-shaped content fault did not apply')
     return post_id
 
 
@@ -173,12 +186,14 @@ def main(release, sha):
             if snapshot(live) != before or digest(CLONE) != source_digest:
                 raise ValueError('Combined file and database rollback did not restore both domains')
             restored_title = sql(('-e', f"SELECT post_title FROM `{CLONE}`.wp_posts WHERE ID={front_id}")).strip()
-            remaining_marker = sql(('-e', f"SELECT COUNT(*) FROM `{CLONE}`.wp_postmeta WHERE meta_key='_ez2_ci_transaction_fault'")).strip()
-            if restored_title != b'Home' or remaining_marker != b'0':
-                raise ValueError('Synthetic content rows were not restored')
+            restored_body = sql(('-e', f"SELECT post_content FROM `{CLONE}`.wp_posts WHERE ID={front_id}")).strip()
+            remaining_marker = sql(('-e', f"SELECT COUNT(*) FROM `{CLONE}`.wp_postmeta WHERE post_id={front_id} AND meta_key IN ('_ez2_ci_transaction_fault','_elementor_data','_elementor_edit_mode','_elementor_page_settings')")).strip()
+            if (restored_title != b'Home' or remaining_marker != b'0' or
+                    restored_body == b'EZ2 synthetic body fault'):
+                raise ValueError('Synthetic Elementor-shaped content rows were not restored')
             if digest('wordpress') != source_digest:
                 raise ValueError('Installed synthetic WordPress source database changed')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false')
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))
