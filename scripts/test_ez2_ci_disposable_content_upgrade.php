@@ -54,5 +54,5 @@ foreach ([
  catch (RuntimeException $e) { ++$cases; continue; }
  throw new Exception('Unexpected content accepted');
 }
-if ($cases !== 21) throw new Exception("Unexpected case count: $cases");
+if ($cases !== 22) throw new Exception("Unexpected case count: $cases");
 echo "EZ2_CI_CONTENT_UPGRADE_GUARD_PASS cases=$cases synthetic_only=true\n";
