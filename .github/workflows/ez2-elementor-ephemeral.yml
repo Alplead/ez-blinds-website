@@ -17,6 +17,8 @@ on:
       - 'scripts/ez2_disposable_import_once.php'
       - 'scripts/ez2_isolated_elementor_preview.mjs'
       - 'scripts/test_ez2_isolated_elementor_preview.mjs'
+      - 'scripts/ez2_ci_media_inventory.php'
+      - 'scripts/test_ez2_ci_media_inventory.php'
       - 'scripts/ez2_ci_compiled_roundtrip.php'
       - 'scripts/test_ez2_ci_compiled_roundtrip.php'
       - 'scripts/ez2_ci_owner_edit_probe.php'
