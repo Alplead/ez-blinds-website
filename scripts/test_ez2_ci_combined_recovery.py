@@ -1,12 +1,14 @@
 """Offline regressions for CI-only cross-domain recovery. No Docker needed."""
 import os
 import stat
+import json
 import tempfile
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ez2_ci_combined_recovery import CLONE, gate, inject_content_fault, restore_files, scratch_upgrade, snapshot
+from ez2_ci_combined_recovery import CLONE, candidate_payload, gate, inject_content_fault, restore_files, scratch_upgrade, snapshot
+from ez2_content_candidate_bundle import package
 
 CASES = 0
 
@@ -65,6 +67,22 @@ with tempfile.TemporaryDirectory() as temp:
     bad.mkdir()
     expect_blocked(lambda: scratch_upgrade(release, bad))
 
+# The actual committed public candidate, not a hand-written Elementor placeholder,
+# must survive release archive verification before entering the disposable SQL clone.
+with tempfile.TemporaryDirectory() as tmp:
+    release = Path(tmp)
+    sha = 'a' * 40
+    source = (Path(__file__).resolve().parents[1] /
+              'design/ez2-home-hero-candidate.json').read_bytes()
+    candidate_zip = release / 'ez2-content-candidate.zip'
+    candidate_zip.write_bytes(package(sha, source))
+    payload = candidate_payload(release, sha)
+    assert json.loads(payload) == json.loads(source)['content']
+    CASES += 1
+    expect_blocked(lambda: candidate_payload(release, 'b' * 40))
+    candidate_zip.write_bytes(b'not a candidate zip')
+    expect_blocked(lambda: candidate_payload(release, sha))
+
 # Reject a fault directed at the installed WordPress database.
 with patch('ez2_ci_combined_recovery.sql') as forbidden_sql:
     expect_blocked(lambda: inject_content_fault('wordpress'))
@@ -83,6 +101,22 @@ with patch('ez2_ci_combined_recovery.sql',
     assert 'post_content=' in calls[4]
     CASES += 1
 
+# Verify that the exact candidate bytes (including quotes) are stored intact,
+# rather than accepting a manually invented Elementor-shaped SQL string.
+with patch('ez2_ci_combined_recovery.sql',
+           side_effect=[b'0', b'1', b'Home', b'0', b'',
+                        b'EZ2 synthetic content fault', b'EZ2 synthetic body fault',
+                        b'4', payload.hex().upper().encode()]) as fake_sql:
+    assert inject_content_fault(CLONE, payload) == 1
+    assert '0x' + payload.hex() in fake_sql.call_args_list[4].args[0][-1]
+    assert 'HEX(meta_value)' in fake_sql.call_args_list[8].args[0][-1]
+    CASES += 1
+with patch('ez2_ci_combined_recovery.sql',
+           side_effect=[b'0', b'1', b'Home', b'0', b'',
+                        b'EZ2 synthetic content fault', b'EZ2 synthetic body fault',
+                        b'4', b'00']):
+    expect_blocked(lambda: inject_content_fault(CLONE, payload))
+
 # Existing Elementor content on a synthetic page is a conflict, not update scope.
 with patch('ez2_ci_combined_recovery.sql', side_effect=[b'0', b'1', b'Home', b'1']) as fake_sql:
     expect_blocked(lambda: inject_content_fault(CLONE))
@@ -90,5 +124,5 @@ with patch('ez2_ci_combined_recovery.sql', side_effect=[b'0', b'1', b'Home', b'1
 
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 13, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=13')
+assert CASES == 18, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=18')

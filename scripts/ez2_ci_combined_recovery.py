@@ -5,13 +5,20 @@ Never accepts a site path, never modifies the installed WordPress database, and
 never installs to LocalWP. This is a recovery rehearsal, not an EZ2 updater.
 """
 import hashlib
+import io
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
+
+from ez2_content_candidate_bundle import NAME, SLOTS, verify as verify_candidate
+from ez2_elementor_export_check import check as check_elementor, unique, reject_nonfinite
+from ez2_release_set import safe_read
 
 from ez2_ci_file_upgrade import COMPONENTS, snapshot, unpack
 from ez2_release_set import run as verify_release
@@ -56,7 +63,28 @@ def digest(db):
     return hashlib.sha256(dump(db, data_only=True)).hexdigest()
 
 
-def inject_content_fault(db):
+def candidate_payload(release, sha):
+    """Bind the SQL fault rehearsal to the real exact-head public review ZIP.
+
+    Only the public symbolic Elementor candidate is used. This deliberately
+    does not resolve private media or install anything in WordPress.
+    """
+    archive = safe_read(Path(release), 'ez2-content-candidate.zip')
+    verify_candidate(sha, archive)
+    with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
+        doc = json.loads(zipped.read(NAME), object_pairs_hook=unique,
+                         parse_constant=reject_nonfinite)
+    summary = check_elementor(doc)
+    if doc['version'] != '4.3.4' or set(summary['media_slots']) != SLOTS:
+        raise ValueError('Unexpected exact-head Elementor candidate')
+    payload = json.dumps(doc['content'], ensure_ascii=False,
+                         separators=(',', ':'), allow_nan=False).encode('utf-8')
+    if not 0 < len(payload) <= 256000:
+        raise ValueError('Unsafe candidate content size')
+    return payload
+
+
+def inject_content_fault(db, elementor_payload=None):
     """Change a synthetic page, option and metadata row in the SQL clone only.
 
     Not an Elementor importer, LocalWP updater or deployment path.
@@ -78,14 +106,20 @@ def inject_content_fault(db):
     existing = sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ({keys})")).strip()
     if existing != b'0':
         raise ValueError('Synthetic home already has Elementor metadata')
-    elementor_data = '[{"id":"ez2-ci-fault","elType":"container","elements":[]}]'
+    if elementor_payload is not None and (not isinstance(elementor_payload, bytes)
+                                          or not 0 < len(elementor_payload) <= 256000):
+        raise ValueError('Invalid exact-head Elementor payload')
+    elementor_data = (elementor_payload if elementor_payload is not None
+                      else b'[{"id":"ez2-ci-fault","elType":"container","elements":[]}]')
+    # Hex literals prevent quote/escape handling from altering real candidate JSON.
+    encoded_data = '0x' + elementor_data.hex()
     elementor_settings = '{"ez2_ci_fault":true}'
     sql(('-e',
          f"UPDATE `{db}`.wp_options SET option_value='http://ez2-ci-combined-fault.invalid' WHERE option_name='home';"
          f"UPDATE `{db}`.wp_posts SET post_title='EZ2 synthetic content fault', post_content='EZ2 synthetic body fault' WHERE ID={post_id} AND post_type='page';"
          f"INSERT INTO `{db}`.wp_postmeta (post_id,meta_key,meta_value) VALUES "
          f"({post_id},'{marker}','synthetic candidate metadata'),"
-         f"({post_id},'_elementor_data','{elementor_data}'),"
+         f"({post_id},'_elementor_data',{encoded_data}),"
          f"({post_id},'_elementor_edit_mode','builder'),"
          f"({post_id},'_elementor_page_settings','{elementor_settings}');"))
     changed_title = sql(('-e', f"SELECT post_title FROM `{db}`.wp_posts WHERE ID={post_id}")).strip()
@@ -94,6 +128,11 @@ def inject_content_fault(db):
     if (changed_title != b'EZ2 synthetic content fault' or
             changed_body != b'EZ2 synthetic body fault' or marker_count != b'4'):
         raise ValueError('Synthetic Elementor-shaped content fault did not apply')
+    if elementor_payload is not None:
+        stored = sql(('-e', f"SELECT HEX(meta_value) FROM `{db}`.wp_postmeta "
+                             f"WHERE post_id={post_id} AND meta_key='_elementor_data'")).strip()
+        if stored.upper() != elementor_payload.hex().upper().encode('ascii'):
+            raise ValueError('Exact-head candidate was not stored byte-for-byte')
     return post_id
 
 
@@ -144,6 +183,7 @@ def restore_files(moved):
 def main(release, sha):
     gate(release, sha)
     release = Path(release)
+    payload = candidate_payload(release, sha)
     fixture = sql(('-e', 'SELECT @@hostname'))
     if not fixture.strip():
         raise ValueError('Disposable MariaDB fixture unavailable')
@@ -173,7 +213,7 @@ def main(release, sha):
             try:
                 # Both domains now differ at once. Inject a fault after the file
                 # replacement AND the SQL mutation, then restore both domains.
-                front_id = inject_content_fault(CLONE)
+                front_id = inject_content_fault(CLONE, payload)
                 if digest(CLONE) == source_digest:
                     raise ValueError('SQL fault was not applied to disposable clone')
             finally:
@@ -193,7 +233,7 @@ def main(release, sha):
                 raise ValueError('Synthetic Elementor-shaped content rows were not restored')
             if digest('wordpress') != source_digest:
                 raise ValueError('Installed synthetic WordPress source database changed')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true')
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))
@@ -204,7 +244,7 @@ if __name__ == '__main__':
         if len(sys.argv) != 3:
             raise ValueError('Usage: ez2_ci_combined_recovery.py .release EXACT_SHA')
         main(sys.argv[1], sys.argv[2])
-    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, zipfile.BadZipFile, subprocess.CalledProcessError) as exc:
         # Do not echo database SQL, passwords or subprocess stderr.
         print('EZ2_CI_COMBINED_ROLLBACK_FAIL: ' + type(exc).__name__, file=sys.stderr)
         sys.exit(1)
