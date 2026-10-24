@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from ez2_ci_combined_recovery import (CLONE, SCRATCH_FAULT_PHASES, candidate_payload,
                                       exercise_swap_faults, gate, inject_content_fault,
-                                      restore_files, scratch_upgrade, snapshot)
+                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction)
 from ez2_content_candidate_bundle import package
 
 CASES = 0
@@ -136,7 +136,49 @@ with patch('ez2_ci_combined_recovery.sql', side_effect=[b'0', b'1', b'Home', b'1
     expect_blocked(lambda: inject_content_fault(CLONE))
     assert len(fake_sql.call_args_list) == 4
 
+
+
+# A successful candidate must prove BOTH installed component bytes and the
+# exact-head Elementor payload reached only the disposable database clone.
+with tempfile.TemporaryDirectory() as tmp:
+    live = Path(tmp)
+    for category, name, entry in (('themes', 'ezb-theme', 'style.css'),
+                                  ('plugins', 'ezb-core', 'ezb-core.php')):
+        dest = live / category / name / entry
+        dest.parent.mkdir(parents=True)
+        dest.write_bytes(b'synthetic release file')
+    media = live / 'uploads/2026/owner-media.txt'
+    media.parent.mkdir(parents=True)
+    media.write_bytes(b'synthetic upload preserved')
+    original = {'old/owner.txt': 'prior-snapshot'}
+    source_digest = 'a' * 64
+    observations = [
+        b'http://ez2-ci-combined-fault.invalid',
+        b'EZ2 synthetic content fault',
+        b'EZ2 synthetic body fault',
+        b'4',
+        payload.hex().upper().encode('ascii'),
+    ]
+    with patch('ez2_ci_combined_recovery.digest', side_effect=['b' * 64, source_digest]), \
+         patch('ez2_ci_combined_recovery.sql', side_effect=observations):
+        assert verify_applied_transaction(live, original, source_digest, payload, 1)
+    CASES += 1
+    expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 0))
+    expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, b'', 1))
+    media.write_bytes(b'changed upload')
+    expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 1))
+    media.write_bytes(b'synthetic upload preserved')
+    (live / 'themes/ezb-theme/style.css').unlink()
+    expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 1))
+    (live / 'themes/ezb-theme/style.css').write_bytes(b'synthetic release file')
+    expect_blocked(lambda: verify_applied_transaction(live, snapshot(live), source_digest, payload, 1))
+    with patch('ez2_ci_combined_recovery.digest', side_effect=['b' * 64, 'c' * 64]):
+        expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 1))
+    with patch('ez2_ci_combined_recovery.digest', side_effect=['b' * 64, source_digest]), \
+         patch('ez2_ci_combined_recovery.sql', side_effect=observations[:-1] + [b'00']):
+        expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 1))
+
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 24, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=24 file_fault_scenarios=4')
+assert CASES == 32, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=32 file_fault_scenarios=4')

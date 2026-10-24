@@ -216,6 +216,46 @@ def exercise_swap_faults(release, root):
     return len(SCRATCH_FAULT_PHASES)
 
 
+def verify_applied_transaction(live, before, source_digest, payload, post_id):
+    """Assert a *successful* synthetic cross-domain apply before rollback.
+
+    The database is always the fixed disposable clone; no installed WordPress
+    site is accepted as an argument. This is not a deploy or commit operation.
+    """
+    if type(post_id) is not int or post_id < 1:
+        raise ValueError('Invalid synthetic page identifier')
+    if not isinstance(payload, bytes) or not 0 < len(payload) <= 256000:
+        raise ValueError('Invalid exact-head candidate payload')
+    live = Path(live)
+    for _, category, name, entry in COMPONENTS:
+        if not (live / category / name / entry).is_file():
+            raise ValueError('Synthetic installed release component missing')
+    if (live / 'uploads' / '2026' / 'owner-media.txt').read_bytes() != b'synthetic upload preserved':
+        raise ValueError('Synthetic upload changed during successful apply')
+    if snapshot(live) == before:
+        raise ValueError('Successful synthetic file apply made no change')
+    if digest(CLONE) == source_digest or digest('wordpress') != source_digest:
+        raise ValueError('Successful apply did not isolate database changes')
+    queries = (
+        f"SELECT option_value FROM \`{CLONE}\`.wp_options WHERE option_name='home'",
+        f"SELECT post_title FROM \`{CLONE}\`.wp_posts WHERE ID={post_id}",
+        f"SELECT post_content FROM \`{CLONE}\`.wp_posts WHERE ID={post_id}",
+        f"SELECT COUNT(*) FROM \`{CLONE}\`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ('_ez2_ci_transaction_fault','_elementor_data','_elementor_edit_mode','_elementor_page_settings')",
+        f"SELECT HEX(meta_value) FROM \`{CLONE}\`.wp_postmeta WHERE post_id={post_id} AND meta_key='_elementor_data'",
+    )
+    observed = [sql(('-e', query)).strip() for query in queries]
+    expected = [
+        b'http://ez2-ci-combined-fault.invalid',
+        b'EZ2 synthetic content fault',
+        b'EZ2 synthetic body fault',
+        b'4',
+        payload.hex().upper().encode('ascii'),
+    ]
+    if [value.upper() for value in observed] != [value.upper() for value in expected]:
+        raise ValueError('Synthetic applied WordPress content did not match exact-head candidate')
+    return True
+
+
 def main(release, sha):
     gate(release, sha)
     release = Path(release)
@@ -272,7 +312,28 @@ def main(release, sha):
                 raise ValueError('Synthetic Elementor-shaped content rows were not restored')
             if digest('wordpress') != source_digest:
                 raise ValueError('Installed synthetic WordPress source database changed')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true')
+            # A rollback-only test could pass while never proving the staged
+            # theme/core and Elementor candidate worked together. Apply both
+            # domains successfully in a SECOND disposable transaction, inspect
+            # the exact candidate bytes, then rehearse recovery once more.
+            success_root = root / 'successful-apply'
+            success_root.mkdir()
+            success_live, success_before, success_moved = scratch_upgrade(release, success_root)
+            try:
+                success_id = inject_content_fault(CLONE, payload)
+                verify_applied_transaction(success_live, success_before,
+                                           source_digest, payload, success_id)
+            finally:
+                restore_files(success_moved)
+            sql(('-e', f'DROP DATABASE \`{CLONE}\`'))
+            created = False
+            sql(('-e', f'CREATE DATABASE \`{CLONE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'))
+            created = True
+            sql((CLONE,), data=original_sql)
+            if (snapshot(success_live) != success_before or
+                    digest(CLONE) != source_digest or digest('wordpress') != source_digest):
+                raise ValueError('Successful transaction recovery failed to restore both domains')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true')
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))
