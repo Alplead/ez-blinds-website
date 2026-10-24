@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from ez2_ci_combined_recovery import (CLONE, SCRATCH_FAULT_PHASES, candidate_payload,
                                       exercise_swap_faults, gate, inject_content_fault,
-                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction)
+                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction, verify_release_bytes)
 from ez2_content_candidate_bundle import package
 
 CASES = 0
@@ -63,6 +63,31 @@ with tempfile.TemporaryDirectory() as temp:
     work.mkdir()
     live, before, moved = scratch_upgrade(release, work)
     assert snapshot(live) != before
+
+    # Both components must match the exact release ZIP, not merely contain
+    # their expected entrypoint names. Owner uploads are outside this scope.
+    assert verify_release_bytes(live, release) >= 3
+    CASES += 1
+    theme_file = live / 'themes/ezb-theme/style.css'
+    original_theme = theme_file.read_bytes()
+    theme_file.write_bytes(b'corrupted but still a valid file')
+    expect_blocked(lambda: verify_release_bytes(live, release))
+    theme_file.write_bytes(original_theme)
+    unexpected = live / 'plugins/ezb-core/extra.php'
+    unexpected.write_bytes(b'<?php // unapproved file')
+    expect_blocked(lambda: verify_release_bytes(live, release))
+    unexpected.unlink()
+    theme_file.unlink()
+    expect_blocked(lambda: verify_release_bytes(live, release))
+    theme_file.write_bytes(original_theme)
+    theme_dir = theme_file.parent
+    aside = theme_dir.with_name('ezb-theme-aside')
+    theme_dir.rename(aside)
+    theme_dir.symlink_to(aside, target_is_directory=True)
+    expect_blocked(lambda: verify_release_bytes(live, release))
+    theme_dir.unlink()
+    aside.rename(theme_dir)
+    assert verify_release_bytes(live, release) >= 3
     assert (live / 'uploads/2026/owner-media.txt').read_bytes() == b'synthetic upload preserved'
     CASES += 1
     restore_files(moved)
@@ -180,5 +205,5 @@ with tempfile.TemporaryDirectory() as tmp:
 
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 32, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=32 file_fault_scenarios=4')
+assert CASES == 37, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=37 file_fault_scenarios=4')

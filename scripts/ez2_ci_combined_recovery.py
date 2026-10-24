@@ -216,6 +216,35 @@ def exercise_swap_faults(release, root):
     return len(SCRATCH_FAULT_PHASES)
 
 
+
+def verify_release_bytes(live, release):
+    """Prove installed scratch components match every byte in exact-head ZIPs.
+
+    This is CI-only evidence. It never attests a LocalWP installation.
+    """
+    live = Path(live)
+    release = Path(release)
+    checked = 0
+    with tempfile.TemporaryDirectory(prefix='ez2-ci-release-byte-parity-') as temp:
+        expected_root = Path(temp)
+        for archive, category, name, entry in COMPONENTS:
+            parent = expected_root / category
+            parent.mkdir(parents=True, exist_ok=True)
+            unpack(release / archive, parent, name)
+            expected = expected_root / category / name
+            actual = live / category / name
+            if (live.is_symlink() or (live / category).is_symlink()
+                    or actual.is_symlink() or not actual.is_dir()
+                    or not (actual / entry).is_file()):
+                raise ValueError('Missing or linked installed release component')
+            expected_files = snapshot(expected)
+            installed_files = snapshot(actual)
+            if not expected_files or expected_files != installed_files:
+                raise ValueError('Installed scratch bytes differ from verified release ZIP')
+            checked += len(expected_files)
+    return checked
+
+
 def verify_applied_transaction(live, before, source_digest, payload, post_id):
     """Assert a *successful* synthetic cross-domain apply before rollback.
 
@@ -290,6 +319,7 @@ def main(release, sha):
                 raise ValueError("File fault matrix unexpectedly changed WordPress SQL")
             live, before, moved = scratch_upgrade(release, root)
             try:
+                verify_release_bytes(live, release)
                 # Both domains now differ at once. Inject a fault after the file
                 # replacement AND the SQL mutation, then restore both domains.
                 front_id = inject_content_fault(CLONE, payload)
@@ -320,6 +350,7 @@ def main(release, sha):
             success_root.mkdir()
             success_live, success_before, success_moved = scratch_upgrade(release, success_root)
             try:
+                checked_release_files = verify_release_bytes(success_live, release)
                 success_id = inject_content_fault(CLONE, payload)
                 verify_applied_transaction(success_live, success_before,
                                            source_digest, payload, success_id)
@@ -333,7 +364,7 @@ def main(release, sha):
             if (snapshot(success_live) != success_before or
                     digest(CLONE) != source_digest or digest('wordpress') != source_digest):
                 raise ValueError('Successful transaction recovery failed to restore both domains')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true first_party_release_byte_parity=true checked_release_files=' + str(checked_release_files))
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))
