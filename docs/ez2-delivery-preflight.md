@@ -39,3 +39,12 @@ it does not assert runtime compatibility or authorize installation.
 ## Synthetic database fault-and-recovery rehearsal
 
 Release Install Smoke additionally changes the `home` option **only in the disposable restored clone**, verifies that the changed value and fingerprint differ from the original, destroys the clone, and reimports the verified compressed backup. It then checks table, post, page and option counts, the original home URL, the ordered-data fingerprint and the untouched source database. A second import that fails to recover the original bytes fails CI. This demonstrates a synthetic database rollback scenario; it does **not** restore an Owner LocalWP database, perform a combined files-plus-database transaction, or authorize an EZ2 deployment.
+
+
+## Verified prior release baseline (not installed-site attestation)
+
+An update can now derive the old managed Elementor content digest from a separately verified, exact-SHA prior release rather than trusting a caller-supplied digest:
+
+`python3 scripts/ez2_release_delivery_bridge.py RELEASE_DIR NEW_SHA PLUGINS_JSON INSTALLED_DIGESTS_JSON --prior-release PRIOR_RELEASE_DIR PRIOR_SHA`
+
+The previous release catalog, release ZIPs and Elementor candidate are checked before deriving the digest. A current installed snapshot differing from the previous candidate remains an Owner-edit conflict. A verified public release **does not prove that release was installed** on LocalWP, nor that the installed snapshot came from WordPress. The preview therefore remains `can_apply=false` with `prior_release_not_attested_as_installed_on_localwp` as an explicit blocker. An isolated-site agent must independently attest installed source, managed content and backup before any write. The older caller-supplied digest form remains diagnostic only and blocks update readiness.

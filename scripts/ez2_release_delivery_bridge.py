@@ -4,6 +4,7 @@
 NOT a WordPress installer, LocalWP sync tool or publication gate. No private
 media, plugins or pages are installed, downloaded or uploaded by this script.
 """
+import hashlib
 import io
 import json
 import re
@@ -13,12 +14,13 @@ import zipfile
 from pathlib import Path
 
 from ez2_content_candidate_bundle import NAME, verify as verify_candidate
-from ez2_content_guard import read as read_installed
+from ez2_content_guard import digest as content_digest, read as read_installed
 from ez2_delivery_preflight import check as check_delivery
 from ez2_elementor_export_check import check as check_elementor, unique, reject_nonfinite
 from ez2_plugin_dependency_check import read as read_lock
 from ez2_release_set import run as check_release, safe_read
 
+COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -33,7 +35,40 @@ def regular_input(path, max_bytes):
 
 
 
-def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, previous_digest):
+
+def verify_prior_release(directory, previous_sha, incoming_sha):
+    """Verify previous release bytes; never attest what LocalWP installed."""
+    if (not isinstance(previous_sha, str) or not COMMIT.fullmatch(previous_sha)
+            or previous_sha == incoming_sha):
+        raise ValueError("Invalid or identical prior release SHA")
+    root = Path(directory)
+    catalog = check_release("verify", root, previous_sha)
+    if (catalog.get("source_sha") != previous_sha
+            or catalog.get("target_site") != "ez2-isolated-only"
+            or catalog.get("scope") != "engineering-evidence-only"
+            or catalog.get("deployment_authorized") is not False):
+        raise ValueError("Prior release is not an isolated engineering candidate")
+    raw = safe_read(root, "ez2-content-candidate.zip")
+    manifest = verify_candidate(previous_sha, raw)
+    if (manifest.get("source_sha") != previous_sha
+            or manifest.get("scope") != "public-review-candidate-only"):
+        raise ValueError("Prior candidate scope or SHA mismatch")
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        candidate = json.loads(archive.read(NAME), object_pairs_hook=unique,
+                               parse_constant=reject_nonfinite)
+    check_elementor(candidate)
+    return {
+        "source_sha": previous_sha,
+        "managed_key": "ez2-home-hero",
+        "content_sha256": content_digest(candidate),
+        "candidate_archive_sha256": hashlib.sha256(raw).hexdigest(),
+        "release_catalog_sha256": hashlib.sha256(
+            safe_read(root, "EZ2_RELEASE_SET.json")).hexdigest(),
+        "installed_site_attested": False,
+    }
+
+
+def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, previous_digest, prior_proof):
     """Bind a reproducible, non-executable transaction preview to verified inputs.
 
     A future isolated-site agent must re-read the live site and verify every
@@ -61,8 +96,10 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
     ]
     if result["content"]["conflict_count"]:
         blockers.append("owner_modified_content_conflict")
-    if any(action["action"] == "update" for action in result["content"]["actions"]):
+    if any(action["action"] == "update" for action in result["content"]["actions"]) and prior_proof is None:
         blockers.append("unattested_previous_content_baseline")
+    if prior_proof is not None:
+        blockers.append("prior_release_not_attested_as_installed_on_localwp")
     if result["missing_plugin_checksums"]:
         blockers.append("missing_official_plugin_checksum")
     if result["unresolved_media_slots"]:
@@ -74,7 +111,8 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
         "plugin_lock": lock,
         "installed_snapshot": installed,
         "candidate": candidate,
-        "previous_digest_untrusted": previous_digest,
+        "previous_digest_untrusted": previous_digest if prior_proof is None else None,
+        "verified_prior_release_candidate": prior_proof,
         "content_actions": result["content"]["actions"],
         "phases": phases,
     }
@@ -90,6 +128,7 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
         "blocking_gates": blockers,
         "preflight_status": result["status"],
         "previous_baseline_trusted": False,
+        "prior_release_candidate_verified": prior_proof is not None,
         "can_apply": False,
         "applied": False,
         "localwp_touched": False,
@@ -97,10 +136,19 @@ def transaction_preview(catalog, lock, installed, candidate, result, exact_sha, 
     }
 
 
-def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_digest=None):
+def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_digest=None,
+         prior_release_dir=None, prior_release_sha=None):
     if previous_digest is not None and (
             not isinstance(previous_digest, str) or not SHA256.fullmatch(previous_digest)):
         raise ValueError("Invalid previous managed-content digest")
+    if (prior_release_dir is None) != (prior_release_sha is None):
+        raise ValueError("Prior release directory and SHA must be supplied together")
+    if prior_release_dir is not None and previous_digest is not None:
+        raise ValueError("Do not mix untrusted digest with verified prior release")
+    prior_proof = (verify_prior_release(prior_release_dir, prior_release_sha, exact_sha)
+                   if prior_release_dir is not None else None)
+    if prior_proof is not None:
+        previous_digest = prior_proof["content_sha256"]
     release_dir = Path(release_dir)
     catalog = check_release("verify", release_dir, exact_sha)
     for key, expected in (
@@ -146,13 +194,16 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
     # A caller-provided previous digest is not proof of the prior trusted release.
     # Preserve the proposed update action for review, but do not call it ready
     # until a future isolated-site agent independently attests that baseline.
-    if any(action["action"] == "update" for action in result["content"]["actions"]):
+    if (prior_proof is None and any(action["action"] == "update"
+                                    for action in result["content"]["actions"])):
         result = {**result, "status": "BLOCKED_PREFLIGHT"}
     return {
         "status": result["status"],
         "source_sha": exact_sha,
         "target_site": "ez2-isolated-only",
         "release_catalog_verified": True,
+        "prior_release_baseline": prior_proof,
+        "installed_site_baseline_attested": False,
         "candidate_archive_verified": True,
         "elementor_version_pinned": candidate["version"],
         "plugin_status": result["plugin_status"],
@@ -169,16 +220,22 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "deployment_authorized": False,
         "applied": False,
         "transaction_preview": transaction_preview(catalog, lock, installed, candidate,
-                                                    result, exact_sha, previous_digest),
+                                                    result, exact_sha, previous_digest, prior_proof),
     }
 
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) not in (5, 6):
-            raise ValueError("Usage: ez2_release_delivery_bridge.py RELEASE_DIR EXACT_SHA PLUGIN_LOCK INSTALLED_SNAPSHOT [PREVIOUS_SHA256|-]")
-        previous = None if len(sys.argv) == 5 or sys.argv[5] == "-" else sys.argv[5]
-        result = plan(*sys.argv[1:5], previous)
+        if len(sys.argv) not in (5, 6, 8):
+            raise ValueError("Usage: ez2_release_delivery_bridge.py RELEASE_DIR EXACT_SHA PLUGIN_LOCK INSTALLED_SNAPSHOT [PREVIOUS_SHA256|- | --prior-release PRIOR_DIR PRIOR_SHA]")
+        if len(sys.argv) == 8:
+            if sys.argv[5] != "--prior-release":
+                raise ValueError("Invalid prior-release option")
+            result = plan(*sys.argv[1:5], prior_release_dir=sys.argv[6],
+                          prior_release_sha=sys.argv[7])
+        else:
+            previous = None if len(sys.argv) == 5 or sys.argv[5] == "-" else sys.argv[5]
+            result = plan(*sys.argv[1:5], previous)
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["status"] == "BLOCKED_PREFLIGHT" else 0)
     except (OSError, ValueError, TypeError, KeyError, zipfile.BadZipFile) as exc:
