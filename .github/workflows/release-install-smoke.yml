@@ -132,6 +132,16 @@ jobs:
           bash scripts/ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-wordpress-db-restore.log
           grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_PASS' /tmp/ez2-ci-wordpress-db-restore.log
 
+      - name: Rehearse combined theme/core file and SQL clone rollback after injected fault
+        env:
+          EZ2_CI_COMBINED_ROLLBACK: YES_DISPOSABLE_STACK_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_combined_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true source_db_untouched=true localwp_touched=false one_click_complete=false' /tmp/ez2-ci-combined-recovery.log
+
       - name: Verify installed site responds
         run: |
           set -euo pipefail
