@@ -4,6 +4,13 @@ define('EZ2_DISPOSABLE_IMPORT_LIBRARY_ONLY',true);
 require_once __DIR__.'/ez2_disposable_import.php';
 final class Ez2ReleaseCandidateCi {
  const HOME='http://localhost:8081', TITLE='EZ2 synthetic release candidate - NEVER PUBLISH';
+ const MARKER='_ez2_ci_release_candidate_source_sha';
+ /** A renamed/Owner-edited CI draft must block re-import rather than be duplicated. */
+ static function candidateConflicts(array $byTitle,array $byMarker):bool {
+  foreach(array_merge($byTitle,$byMarker) as $id)
+   if(!is_int($id)||$id<1)throw new RuntimeException('INVALID_EXISTING_CANDIDATE_ID');
+  return count($byTitle)>0||count($byMarker)>0;
+ }
  static function gate(array $f):array {
   $expected=['wp_cli'=>true,'opt_in'=>'YES_DISPOSABLE_RELEASE_ONLY','home'=>self::HOME,
    'siteurl'=>self::HOME,'environment'=>'staging','multisite'=>false,
@@ -43,8 +50,13 @@ final class Ez2ReleaseCandidateCi {
   $doc=json_decode(file_get_contents($candidate),true,32,JSON_THROW_ON_ERROR);
   if(!is_array($doc))throw new RuntimeException('CANDIDATE_TYPE');
   self::compile($doc);
-  if(get_posts(['post_type'=>'page','post_status'=>'any','title'=>self::TITLE,
-   'posts_per_page'=>2,'fields'=>'ids']))throw new RuntimeException('EXISTING_DRAFT');
+  $statuses=['publish','future','draft','pending','private','trash'];
+  $byTitle=get_posts(['post_type'=>'page','post_status'=>$statuses,'title'=>self::TITLE,
+   'posts_per_page'=>3,'fields'=>'ids']);
+  $byMarker=get_posts(['post_type'=>'page','post_status'=>$statuses,'meta_key'=>self::MARKER,
+   'posts_per_page'=>3,'fields'=>'ids']);
+  if(self::candidateConflicts($byTitle,$byMarker))
+   throw new RuntimeException('EXISTING_OR_OWNER_EDITED_CI_DRAFT');
   $fault=getenv('EZ2_CI_RELEASE_FAULT')?:'';
   if(!in_array($fault,['','AFTER_FIRST_ATTACHMENT','AFTER_META'],true))
    throw new RuntimeException('INVALID_FAULT');
@@ -54,6 +66,8 @@ final class Ez2ReleaseCandidateCi {
   try {
    $post=wp_insert_post(['post_type'=>'page','post_status'=>'draft','post_title'=>self::TITLE],true);
    if(is_wp_error($post)||!$post)throw new RuntimeException('DRAFT_INSERT');
+   if(!update_post_meta($post,self::MARKER,$f['sha']))
+    throw new RuntimeException('DRAFT_SOURCE_MARKER');
    $media=[];
    foreach(Ez2DisposableImport::SLOTS as $i=>$slot){
     $upload=wp_upload_bits('ez2-ci-release-'.($i+1).'.png',null,$pixel);

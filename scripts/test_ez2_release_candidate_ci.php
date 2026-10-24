@@ -21,5 +21,17 @@ catch(RuntimeException $e){if($e->getMessage()==='ACCEPTED')throw $e;$n++;}
 $b=$d;$b['content'][0]['settings']['background_slideshow_gallery'][0]['url']='https://ezbns.com.au/private.webp';
 try{Ez2ReleaseCandidateCi::compile($b);throw new RuntimeException('ACCEPTED');}
 catch(RuntimeException $e){if($e->getMessage()==='ACCEPTED')throw $e;$n++;}
-if($n!==18)throw new RuntimeException('COUNT_'.$n);
-echo "EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=18\n";
+if(Ez2ReleaseCandidateCi::candidateConflicts([],[]))throw new RuntimeException('EMPTY_CONFLICT');
+$n++;
+foreach([[[1],[]],[[],[2]],[[3],[3]],[[3],[4]]] as [$titles,$marked]){
+ if(!Ez2ReleaseCandidateCi::candidateConflicts($titles,$marked))
+  throw new RuntimeException('MISSED_EXISTING_CANDIDATE');
+ $n++;
+}
+foreach([0,-1,'1',null,false,1.5] as $invalid){
+ try{Ez2ReleaseCandidateCi::candidateConflicts([],[$invalid]);throw new RuntimeException('INVALID_ACCEPTED');}
+ catch(RuntimeException $e){if($e->getMessage()==='INVALID_ACCEPTED')throw $e;}
+ $n++;
+}
+if($n!==29)throw new RuntimeException('COUNT_'.$n);
+echo "EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=29\n";

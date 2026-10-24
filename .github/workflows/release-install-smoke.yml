@@ -274,6 +274,50 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
           python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"
           digest="$(sha256sum design/ez2-home-hero-candidate.json | cut -d" " -f1)"
+          # Real WordPress conflict probe: a synthetic draft renamed by an Owner
+          # remains protected by its source marker. Never overwrite or duplicate.
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap eval '
+              if (wp_get_environment_type() !== "staging" ||
+                  get_option("home") !== "http://localhost:8081" ||
+                  get_option("stylesheet") !== "ezb-theme") throw new Exception("CI_CONFLICT_SITE_GATE");
+              $post = wp_insert_post(["post_type"=>"page","post_status"=>"draft",
+                "post_title"=>"EZ2 synthetic Owner-renamed CI draft - KEEP"],true);
+              if (is_wp_error($post) || !$post ||
+                  !update_post_meta($post,"_ez2_ci_release_candidate_source_sha",getenv("EZ2_CI_RELEASE_SHA")))
+                throw new Exception("CI_CONFLICT_SETUP");
+              echo "EZ2_CI_RENAMED_DRAFT_PREPARED\n";
+            ' --allow-root
+          if docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root; then
+            echo "Owner-renamed synthetic draft was not protected" >&2; exit 1
+          fi
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap eval '
+              if (wp_get_environment_type() !== "staging" ||
+                  get_option("home") !== "http://localhost:8081") throw new Exception("CI_VERIFY_SITE_GATE");
+              $ids=get_posts(["post_type"=>"page","post_status"=>["draft","publish","pending","private","trash"],
+                "meta_key"=>"_ez2_ci_release_candidate_source_sha",
+                "posts_per_page"=>3,"fields"=>"ids"]);
+              if (count($ids)!==1) throw new Exception("CI_CONFLICT_DRAFT_COUNT");
+              $post=(int)$ids[0];
+              if (get_post_field("post_title",$post)!=="EZ2 synthetic Owner-renamed CI draft - KEEP" ||
+                  get_post_meta($post,"_ez2_ci_release_candidate_source_sha",true)!==getenv("EZ2_CI_RELEASE_SHA"))
+                throw new Exception("CI_OWNER_EDIT_OVERWRITTEN");
+              $attachments=get_posts(["post_type"=>"attachment","post_status"=>"inherit",
+                "posts_per_page"=>10,"fields"=>"ids"]);
+              if ($attachments) throw new Exception("CI_CONFLICT_CREATED_MEDIA");
+              if (!wp_delete_post($post,true) || get_post($post))
+                throw new Exception("CI_CONFLICT_CLEANUP");
+              echo "EZ2_CI_OWNER_RENAMED_RELEASE_CONFLICT_PASS preserved=true duplicate=false uploads_unchanged=true\n";
+            ' --allow-root | tee /tmp/ez2-release-owner-conflict.log
+          grep -Fq 'EZ2_CI_OWNER_RENAMED_RELEASE_CONFLICT_PASS preserved=true' /tmp/ez2-release-owner-conflict.log
           for fault in AFTER_FIRST_ATTACHMENT AFTER_META; do
             if docker compose -f .github/release-install/docker-compose.yml run --rm \
               -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \

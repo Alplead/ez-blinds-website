@@ -246,7 +246,7 @@ jobs:
           php -l scripts/ez2_release_candidate_ci.php
           php -l scripts/test_ez2_release_candidate_ci.php
           php scripts/test_ez2_release_candidate_ci.php | tee /tmp/ez2-release-candidate-ci-guard.log
-          grep -Fq 'EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=18' /tmp/ez2-release-candidate-ci-guard.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=29' /tmp/ez2-release-candidate-ci-guard.log
 
       - name: Test synthetic Elementor draft import fail-closed guards
         run: |
