@@ -12,6 +12,7 @@
     var previous = hero.querySelector('[data-ezb-prev]');
     var next = hero.querySelector('[data-ezb-next]');
     var toggle = hero.querySelector('[data-ezb-toggle]');
+    var announcement = hero.querySelector('[data-ezb-slide-status]');
     var current = 0;
     var interval = null;
     var paused = false;
@@ -30,6 +31,7 @@
       slide.remove();
       if (index < current) current -= 1;
       if (current >= slides.length) current = 0;
+      if (announcement) announcement.textContent = '';
       if (!slides.length) hero.classList.add('ezb-cinema--missing-media');
       var controls = hero.querySelector('.ezb-cinema__controls');
       if (controls) controls.hidden = slides.length < 2;
@@ -39,7 +41,7 @@
       }
     }
 
-    function showSlide(index) {
+    function showSlide(index, announce) {
       if (!slides.length) return;
       current = (index + slides.length) % slides.length;
       // Preload the next photo while the current frame is still on screen.
@@ -53,6 +55,12 @@
       if (progress) {
         progress.textContent = String(current + 1).padStart(2, '0') +
           ' / ' + String(slides.length).padStart(2, '0');
+      }
+      // Only keyboard/button navigation speaks: automatic rotation stays quiet.
+      if (announce && announcement) {
+        var caption = slides[current].querySelector('.ezb-cinema__slide-label');
+        announcement.textContent = 'Photo ' + (current + 1) + ' of ' + slides.length +
+          (caption && caption.textContent ? ': ' + caption.textContent.trim() : '');
       }
     }
 
@@ -86,11 +94,11 @@
     }
 
     if (previous) previous.addEventListener('click', function () {
-      showSlide(current - 1);
+      showSlide(current - 1, true);
       syncTimer();
     });
     if (next) next.addEventListener('click', function () {
-      showSlide(current + 1);
+      showSlide(current + 1, true);
       syncTimer();
     });
     if (toggle) toggle.addEventListener('click', function () {

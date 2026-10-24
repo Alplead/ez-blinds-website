@@ -60,6 +60,7 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const toggle = control();
   const previous = control();
   const next = control();
+  const status = { textContent: '' };
   const slides = Array.from({ length: 4 }, (_, position) => {
     const image = {
       loading: 'lazy', complete: false, naturalWidth: 640, handlers: {},
@@ -68,7 +69,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     const slide = {
       active: false, removed: false, image, attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; },
-      querySelector() { return missingImage && position === 0 ? null : image; },
+      querySelector(selector) {
+        if (selector === '.ezb-cinema__slide-label') return { textContent: 'Image ' + (position + 1) };
+        return missingImage && position === 0 ? null : image;
+      },
       remove() { this.removed = true; }
     };
     slide.classList = { toggle(_name, active) { slide.active = active; } };
@@ -78,7 +82,7 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const heroFlags = new Set();
   const selectors = {
     '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next,
-    '.ezb-cinema__controls': controls
+    '.ezb-cinema__controls': controls, '[data-ezb-slide-status]': status
   };
   const hero = {
     querySelectorAll() { return slides; },
@@ -87,11 +91,12 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   };
   let timerStarts = 0;
   let timerStops = 0;
+  let lastTimerCallback = null;
   let observerCallback = null;
   let observedHero = null;
   const window = {
     matchMedia() { return media; },
-    setInterval() { return ++timerStarts; },
+    setInterval(callback) { lastTimerCallback = callback; return ++timerStarts; },
     clearInterval() { timerStops++; },
     IntersectionObserver: class {
       constructor(callback, options) {
@@ -121,9 +126,11 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   assert.equal(timerStarts, startsBeforeOffscreen, 'Offscreen hero cannot start another timer');
   assert.equal(timerStops > stopsBeforeOffscreen, !initialReduced, 'Offscreen hero clears an active timer');
   next.handlers.click();
+  assert.equal(status.textContent, 'Photo 2 of 4: Image 2', 'Manual Next announces the selected photo');
   assert.equal(slides[1].active, true, 'Manual navigation still works while offscreen');
   assert.equal(timerStarts, startsBeforeOffscreen, 'Offscreen manual navigation does not restart autoplay');
   previous.handlers.click();
+  assert.equal(status.textContent, 'Photo 1 of 4: Image 1', 'Manual Previous announces the selected photo');
   observerCallback([{ target: {}, isIntersecting: true, intersectionRatio: 0.5 }]);
   assert.equal(timerStarts, startsBeforeOffscreen, 'Unrelated observer entries cannot restart autoplay');
   // IntersectionObserver may report an edge-touching target with ratio 0.
@@ -135,8 +142,16 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   assert.equal(slides[1].active, true, 'Manual Next works without autoplay');
   previous.handlers.click();
   assert.equal(slides[0].active, true, 'Manual Previous works without autoplay');
+  if (!initialReduced && !failImages) {
+    const lastAnnouncement = status.textContent;
+    lastTimerCallback();
+    assert.equal(slides[1].active, true, 'Automatic rotation still changes the visible frame');
+    assert.equal(status.textContent, lastAnnouncement, 'Automatic rotation must not interrupt screen readers');
+    previous.handlers.click();
+  }
   if (failImages) {
     slides[0].image.handlers.error();
+    assert.equal(status.textContent, '', 'Failed photos clear any stale announcement');
     assert.equal(slides[0].removed, true, 'Broken first photo is removed');
     assert.equal(slides[1].active, true, 'Next available photo becomes active');
     assert.equal(controls.hidden, false, 'Two or more photos retain controls');

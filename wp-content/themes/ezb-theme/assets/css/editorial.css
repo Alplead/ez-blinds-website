@@ -138,6 +138,18 @@
   letter-spacing: .2em;
 }
 .ezb-cinema__pause { padding: 0 16px; }
+/* Announce deliberate slide changes to screen readers without narrating autoplay. */
+.ezb-cinema__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .ezb-cinema--missing-media { background: linear-gradient(120deg, #222b29, #5c5040); }
 
 /* Full-width photo interludes create pauses between information sections. */

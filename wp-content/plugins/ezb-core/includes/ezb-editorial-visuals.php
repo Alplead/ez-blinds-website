@@ -96,7 +96,7 @@ add_shortcode(
 		$controls = '';
 		if ( $rendered_count > 1 ) {
 			$controls = sprintf(
-				'<nav class="ezb-cinema__controls" aria-label="%1$s"><button type="button" data-ezb-prev aria-label="%2$s">&#8592;</button><span class="ezb-cinema__progress" data-ezb-progress aria-live="off">01 / %3$02d</span><button type="button" data-ezb-next aria-label="%4$s">&#8594;</button><button type="button" class="ezb-cinema__pause" data-ezb-toggle aria-pressed="false">%5$s</button></nav>',
+				'<nav class="ezb-cinema__controls" aria-label="%1$s"><button type="button" data-ezb-prev aria-label="%2$s">&#8592;</button><span class="ezb-cinema__progress" data-ezb-progress aria-live="off">01 / %3$02d</span><button type="button" data-ezb-next aria-label="%4$s">&#8594;</button><button type="button" class="ezb-cinema__pause" data-ezb-toggle aria-pressed="false">%5$s</button><span class="ezb-cinema__sr-only" data-ezb-slide-status role="status" aria-live="polite" aria-atomic="true"></span></nav>',
 				esc_attr__( 'Photo slideshow', 'ezb-core' ),
 				esc_attr__( 'Previous photo', 'ezb-core' ),
 				$rendered_count,
