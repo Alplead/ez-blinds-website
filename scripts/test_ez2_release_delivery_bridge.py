@@ -207,28 +207,6 @@ with tempfile.TemporaryDirectory() as temp:
     assert baseline == {p.name: p.read_bytes() for p in release.iterdir()}
     CASES += 1
 
-    reject(lambda: plan(release, SHA, lock, installed, "invalid"))
-    reject(lambda: plan(release, "f" * 40, lock, installed))
-    original_lock = lock.read_text()
-    lock.write_text(original_lock.replace("4.3.4", "4.3.5"))
-    reject(lambda: plan(release, SHA, lock, installed))
-    lock.write_text(original_lock.replace('"b' + "b" * 63 + '"', "null"))
-    blocked = plan(release, SHA, lock, installed)
-    assert blocked["status"] == "BLOCKED_PREFLIGHT"
-    assert blocked["missing_plugin_checksums"] == ["elementor"]
-    assert "missing_official_plugin_checksum" in blocked["transaction_preview"]["blocking_gates"]
-    CASES += 1
-    CASES += 1
-    lock.write_text(original_lock)
-    installed.write_text('{"schema_version":1,"items":[],"items":[]}')
-    reject(lambda: plan(release, SHA, lock, installed))
-    installed.unlink()
-    installed.symlink_to(lock)
-    reject(lambda: plan(release, SHA, lock, installed))
-    installed.unlink()
-    installed.write_text(json.dumps({"schema_version": 1, "items": []}))
-    (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
-    reject(lambda: plan(release, SHA, lock, installed))
     # Compare two read-only WordPress digest observations, never as a trusted
     # prior-release baseline or permission to overwrite an Owner edit.
     from ez2_wp_snapshot_drift import compare as compare_snapshots
@@ -267,5 +245,27 @@ with tempfile.TemporaryDirectory() as temp:
     second.write_text('{"schema_version":1,"schema_version":1}')
     reject(lambda: plan(release, SHA, lock, installed,
                         snapshot_baseline=first, snapshot_current=second))
+    reject(lambda: plan(release, SHA, lock, installed, "invalid"))
+    reject(lambda: plan(release, "f" * 40, lock, installed))
+    original_lock = lock.read_text()
+    lock.write_text(original_lock.replace("4.3.4", "4.3.5"))
+    reject(lambda: plan(release, SHA, lock, installed))
+    lock.write_text(original_lock.replace('"b' + "b" * 63 + '"', "null"))
+    blocked = plan(release, SHA, lock, installed)
+    assert blocked["status"] == "BLOCKED_PREFLIGHT"
+    assert blocked["missing_plugin_checksums"] == ["elementor"]
+    assert "missing_official_plugin_checksum" in blocked["transaction_preview"]["blocking_gates"]
+    CASES += 1
+    CASES += 1
+    lock.write_text(original_lock)
+    installed.write_text('{"schema_version":1,"items":[],"items":[]}')
+    reject(lambda: plan(release, SHA, lock, installed))
+    installed.unlink()
+    installed.symlink_to(lock)
+    reject(lambda: plan(release, SHA, lock, installed))
+    installed.unlink()
+    installed.write_text(json.dumps({"schema_version": 1, "items": []}))
+    (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
+    reject(lambda: plan(release, SHA, lock, installed))
     assert CASES == 36, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")
