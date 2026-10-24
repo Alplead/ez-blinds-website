@@ -265,6 +265,13 @@ jobs:
           php -l scripts/test_ez2_ci_owner_edit_probe.php
           php scripts/test_ez2_ci_owner_edit_probe.php | grep -Fq 'EZ2_CI_OWNER_EDIT_PROBE_GUARD_PASS cases=22'
 
+      - name: Verify executable disposable Elementor content upgrade and rollback guards
+        run: |
+          php -l scripts/ez2_ci_disposable_content_upgrade.php
+          php -l scripts/test_ez2_ci_disposable_content_upgrade.php
+          php scripts/test_ez2_ci_disposable_content_upgrade.php | tee /tmp/ez2-ci-content-upgrade.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_GUARD_PASS cases=21' /tmp/ez2-ci-content-upgrade.log
+
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py

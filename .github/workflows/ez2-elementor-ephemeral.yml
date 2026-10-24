@@ -22,6 +22,8 @@ on:
       - 'scripts/ez2_ci_compiled_roundtrip.php'
       - 'scripts/test_ez2_ci_compiled_roundtrip.php'
       - 'scripts/ez2_ci_owner_edit_probe.php'
+      - 'scripts/ez2_ci_disposable_content_upgrade.php'
+      - 'scripts/test_ez2_ci_disposable_content_upgrade.php'
       - 'scripts/test_ez2_ci_owner_edit_probe.php'
       - 'scripts/test_ez2_ci_import_reuse.php'
       - 'scripts/test_ez2_disposable_import.php'
@@ -191,6 +193,36 @@ jobs:
           grep -Fq '"status":"DISPOSABLE_COMPILED_WORDPRESS_ROUNDTRIP_PASS"' /tmp/ez2-ci-compiled-roundtrip.json
           grep -Fq '"deployment_authorized":false' /tmp/ez2-ci-compiled-roundtrip.json
           rm -f /tmp/ez2-ci-synthetic-media-map.json /tmp/ez2-ci-compiled-private.json /tmp/ez2-ci-media-compile-report.json
+          # Exercise a real isolated WordPress metadata update, injected failure
+          # rollback, successful retry and idempotent second update. Never LocalWP.
+          if docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            -e EZ2_CI_CONTENT_UPGRADE_FAULT=AFTER_FINGERPRINT_WRITE \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            > /tmp/ez2-ci-content-upgrade-fault.log 2>&1; then
+            echo 'Synthetic content fault unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'INJECTED_CI_CONTENT_UPGRADE_FAULT' /tmp/ez2-ci-content-upgrade-fault.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            | tee /tmp/ez2-ci-content-upgrade-pass.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_PASS changed=true' /tmp/ez2-ci-content-upgrade-pass.log
+          docker compose -p "$EZ2_PROJECT" -f .devcontainer/docker-compose.yml run --rm \
+            -e EZ2_DISPOSABLE_IMPORT=YES_SYNTHETIC_ONLY \
+            -e EZ2_EXPECTED_HOST=ez2-review.local \
+            -e EZ2_EXPECTED_ELEMENTOR_VERSION="$EZ2_ELEMENTOR_VERSION" \
+            -e EZ2_CI_CONTENT_UPGRADE=YES_DISPOSABLE_UPDATE_ONLY \
+            --entrypoint wp bootstrap eval-file /opt/ezb-scripts/ez2_ci_disposable_content_upgrade.php --allow-root \
+            | tee /tmp/ez2-ci-content-upgrade-repeat.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_PASS changed=false' /tmp/ez2-ci-content-upgrade-repeat.log
           # Attach a disposable-only managed marker to the existing CI draft,
           # then snapshot actual WordPress postmeta BEFORE the simulated edit.
           # This marker is never added to a real Owner site or published release.
