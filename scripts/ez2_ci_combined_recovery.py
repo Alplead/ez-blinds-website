@@ -56,6 +56,34 @@ def digest(db):
     return hashlib.sha256(dump(db, data_only=True)).hexdigest()
 
 
+def inject_content_fault(db):
+    """Change a synthetic page, option and metadata row in the SQL clone only.
+
+    Not an Elementor importer, LocalWP updater or deployment path.
+    """
+    if db != CLONE:
+        raise ValueError('Content fault may target only the disposable clone')
+    marker = '_ez2_ci_transaction_fault'
+    if sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE meta_key='{marker}'")).strip() != b'0':
+        raise ValueError('Content fault marker already exists')
+    raw_id = sql(('-e', f"SELECT option_value FROM `{db}`.wp_options WHERE option_name='page_on_front'")).strip()
+    if not re.fullmatch(rb'[1-9][0-9]*', raw_id):
+        raise ValueError('Invalid synthetic front-page identifier')
+    post_id = int(raw_id)
+    title = sql(('-e', f"SELECT post_title FROM `{db}`.wp_posts WHERE ID={post_id} AND post_type='page'")).strip()
+    if title != b'Home':
+        raise ValueError('Unexpected synthetic front-page title')
+    sql(('-e',
+         f"UPDATE `{db}`.wp_options SET option_value='http://ez2-ci-combined-fault.invalid' WHERE option_name='home';"
+         f"UPDATE `{db}`.wp_posts SET post_title='EZ2 synthetic content fault' WHERE ID={post_id} AND post_type='page';"
+         f"INSERT INTO `{db}`.wp_postmeta (post_id,meta_key,meta_value) VALUES ({post_id},'{marker}','synthetic candidate metadata');"))
+    changed_title = sql(('-e', f"SELECT post_title FROM `{db}`.wp_posts WHERE ID={post_id}")).strip()
+    marker_count = sql(('-e', f"SELECT COUNT(*) FROM `{db}`.wp_postmeta WHERE meta_key='{marker}'")).strip()
+    if changed_title != b'EZ2 synthetic content fault' or marker_count != b'1':
+        raise ValueError('Synthetic content fault did not apply')
+    return post_id
+
+
 def scratch_upgrade(release, root):
     """Install real release ZIP bytes over synthetic old files; keep backups."""
     live, stage, backup = (root / name for name in ('live', 'stage', 'backup'))
@@ -132,7 +160,7 @@ def main(release, sha):
             try:
                 # Both domains now differ at once. Inject a fault after the file
                 # replacement AND the SQL mutation, then restore both domains.
-                sql(('-e', f"UPDATE \u0060{CLONE}\u0060.wp_options SET option_value='http://ez2-ci-combined-fault.invalid' WHERE option_name='home'"))
+                front_id = inject_content_fault(CLONE)
                 if digest(CLONE) == source_digest:
                     raise ValueError('SQL fault was not applied to disposable clone')
             finally:
@@ -144,9 +172,13 @@ def main(release, sha):
             sql((CLONE,), data=original_sql)
             if snapshot(live) != before or digest(CLONE) != source_digest:
                 raise ValueError('Combined file and database rollback did not restore both domains')
+            restored_title = sql(('-e', f"SELECT post_title FROM `{CLONE}`.wp_posts WHERE ID={front_id}")).strip()
+            remaining_marker = sql(('-e', f"SELECT COUNT(*) FROM `{CLONE}`.wp_postmeta WHERE meta_key='_ez2_ci_transaction_fault'")).strip()
+            if restored_title != b'Home' or remaining_marker != b'0':
+                raise ValueError('Synthetic content rows were not restored')
             if digest('wordpress') != source_digest:
                 raise ValueError('Installed synthetic WordPress source database changed')
-            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true source_db_untouched=true localwp_touched=false one_click_complete=false')
+            print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false')
     finally:
         if created:
             sql(('-e', f'DROP DATABASE IF EXISTS \u0060{CLONE}\u0060'))

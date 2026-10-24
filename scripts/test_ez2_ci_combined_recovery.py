@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ez2_ci_combined_recovery import CLONE, gate, restore_files, scratch_upgrade, snapshot
+from ez2_ci_combined_recovery import CLONE, gate, inject_content_fault, restore_files, scratch_upgrade, snapshot
 
 CASES = 0
 
@@ -65,7 +65,23 @@ with tempfile.TemporaryDirectory() as temp:
     bad.mkdir()
     expect_blocked(lambda: scratch_upgrade(release, bad))
 
+# Reject a fault directed at the installed WordPress database.
+with patch('ez2_ci_combined_recovery.sql') as forbidden_sql:
+    expect_blocked(lambda: inject_content_fault('wordpress'))
+    forbidden_sql.assert_not_called()
+
+# Prove the synthetic content mutation targets the clone exclusively.
+with patch('ez2_ci_combined_recovery.sql',
+           side_effect=[b'0', b'1', b'Home', b'', b'EZ2 synthetic content fault', b'1']) as fake_sql:
+    assert inject_content_fault(CLONE) == 1
+    calls = [call.args[0][-1] for call in fake_sql.call_args_list]
+    assert len(calls) == 6
+    assert all('`ez2_ci_combined_disposable`' in query for query in calls)
+    assert all('`wordpress`' not in query for query in calls)
+    assert '_ez2_ci_transaction_fault' in calls[3]
+    CASES += 1
+
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 10, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=10')
+assert CASES == 12, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=12')

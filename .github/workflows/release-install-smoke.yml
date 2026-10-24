@@ -140,7 +140,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
           python3 scripts/ez2_ci_combined_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-combined-recovery.log
-          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true source_db_untouched=true localwp_touched=false one_click_complete=false' /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false' /tmp/ez2-ci-combined-recovery.log
 
       - name: Verify installed site responds
         run: |
