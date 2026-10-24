@@ -82,7 +82,7 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const heroFlags = new Set();
   const selectors = {
     '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next,
-    '.ezb-cinema__controls': controls, '[data-ezb-slide-status]': status
+    '.ezb-cinema__controls': controls, '[data-ezb-announcement]': status
   };
   const hero = {
     querySelectorAll() { return slides; },

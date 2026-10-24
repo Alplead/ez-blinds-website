@@ -32,7 +32,8 @@ $render = $GLOBALS['shortcodes']['ezb_editorial_hero'];
 $html = $render();
 if (substr_count($html, 'data-ezb-slide') !== 3 ||
     strpos($html, 'ezb-cinema__slide is-active" data-ezb-slide aria-hidden="false"') === false ||
-    strpos($html, '01 / 03') === false) {
+    strpos($html, '01 / 03') === false ||
+    substr_count($html, 'data-ezb-announcement') !== 1) {
     throw new Exception('Partial media failure must preserve the first visible frame and accurate count.');
 }
 if (strpos($html, 'alt="Roller Blinds installation photograph"') === false ||

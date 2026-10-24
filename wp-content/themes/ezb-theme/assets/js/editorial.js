@@ -12,7 +12,7 @@
     var previous = hero.querySelector('[data-ezb-prev]');
     var next = hero.querySelector('[data-ezb-next]');
     var toggle = hero.querySelector('[data-ezb-toggle]');
-    var announcement = hero.querySelector('[data-ezb-slide-status]');
+    var announcement = hero.querySelector('[data-ezb-announcement]');
     var current = 0;
     var interval = null;
     var paused = false;
