@@ -258,6 +258,12 @@ jobs:
           php -l scripts/test_ez2_ci_owner_edit_probe.php
           php scripts/test_ez2_ci_owner_edit_probe.php | grep -Fq 'EZ2_CI_OWNER_EDIT_PROBE_GUARD_PASS cases=22'
 
+      - name: Guard disposable combined files-and-SQL rollback rehearsal
+        run: |
+          python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
+          python3 scripts/test_ez2_ci_combined_recovery.py | tee /tmp/ez2-ci-combined-rollback-guard.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=10' /tmp/ez2-ci-combined-rollback-guard.log
+
       - name: Verify synthetic WordPress attachment-to-Elementor media mapping
         run: |
           php -l scripts/ez2_ci_compiled_roundtrip.php
