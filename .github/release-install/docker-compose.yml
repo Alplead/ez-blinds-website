@@ -54,6 +54,7 @@ services:
       - release_wp_data:/var/www/html
       - ../../.release:/release:ro
       - ../../scripts/release-install-smoke.sh:/opt/ezb-release-install-smoke.sh:ro
+      - ../../scripts:/opt/ezb-ci-scripts:ro
     entrypoint: ["/bin/sh", "/opt/ezb-release-install-smoke.sh"]
 
 volumes:

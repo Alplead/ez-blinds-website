@@ -241,6 +241,13 @@ jobs:
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
           grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=27' /tmp/release-scope-regression.log
 
+      - name: Guard disposable release-installed Elementor roundtrip
+        run: |
+          php -l scripts/ez2_release_candidate_ci.php
+          php -l scripts/test_ez2_release_candidate_ci.php
+          php scripts/test_ez2_release_candidate_ci.php | tee /tmp/ez2-release-candidate-ci-guard.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=18' /tmp/ez2-release-candidate-ci-guard.log
+
       - name: Test synthetic Elementor draft import fail-closed guards
         run: |
           php -l scripts/ez2_disposable_import.php

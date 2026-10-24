@@ -266,6 +266,34 @@ jobs:
           ' --allow-root | tee /tmp/ez2-release-elementor-coexistence.log
           grep -Fq 'EZ2_RELEASE_ELEMENTOR_COEXISTENCE_PASS version=4.3.4' /tmp/ez2-release-elementor-coexistence.log
 
+      - name: Exercise exact-head Elementor candidate in release-installed WordPress (CI only)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"
+          digest="$(sha256sum design/ez2-home-hero-candidate.json | cut -d" " -f1)"
+          for fault in AFTER_FIRST_ATTACHMENT AFTER_META; do
+            if docker compose -f .github/release-install/docker-compose.yml run --rm \
+              -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+              -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+              -e EZ2_CI_RELEASE_DIGEST="$digest" \
+              -e EZ2_CI_RELEASE_FAULT="$fault" \
+              --entrypoint wp release-bootstrap \
+              eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root; then
+              echo "Injected release CI fault unexpectedly succeeded" >&2; exit 1
+            fi
+          done
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root \
+            | tee /tmp/ez2-release-candidate-roundtrip.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_ROUNDTRIP_PASS exact_head=true gallery=4 draft_cleaned=true uploads_cleaned=true publication=false localwp_touched=false one_click_complete=false' /tmp/ez2-release-candidate-roundtrip.log
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:
