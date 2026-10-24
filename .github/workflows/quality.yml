@@ -439,6 +439,13 @@ jobs:
           python3 scripts/test_ez2_installed_code_parity.py | tee /tmp/ez2-code-parity.log
           grep -Fq 'EZ2_INSTALLED_CODE_PARITY_PASS cases=13' /tmp/ez2-code-parity.log
 
+      - name: Test isolated EZ2 managed-content digest snapshot (offline only)
+        run: |
+          php -l scripts/ez2_wp_managed_snapshot.php
+          php -l scripts/test_ez2_wp_managed_snapshot.php
+          php scripts/test_ez2_wp_managed_snapshot.php | tee /tmp/ez2-managed-snapshot.log
+          grep -Fq 'EZ2_MANAGED_SNAPSHOT_PASS cases=24' /tmp/ez2-managed-snapshot.log
+
       - name: Build and validate deployment bundle
         run: |
           bash -n scripts/build-release-bundle.sh
