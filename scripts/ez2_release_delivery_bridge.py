@@ -208,6 +208,10 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         "media_slots": summary["media_slots"],
     }
     result = check_delivery(contract, installed, lock, {"home-hero.json": candidate}, exact_sha)
+    # A changed live WordPress observation must block even a syntactically
+    # valid delivery contract; neither observation is trusted as an install baseline.
+    if comparison is not None and comparison["change_count"]:
+        result = {**result, "status": "BLOCKED_PREFLIGHT"}
     # A caller-provided previous digest is not proof of the prior trusted release.
     # Preserve the proposed update action for review, but do not call it ready
     # until a future isolated-site agent independently attests that baseline.

@@ -256,6 +256,7 @@ with tempfile.TemporaryDirectory() as temp:
     drifted = plan(release, SHA, lock, installed, snapshot_baseline=first,
                    snapshot_current=second)
     assert drifted["managed_snapshot_comparison"]["change_count"] == 1
+    assert drifted["status"] == "BLOCKED_PREFLIGHT"
     assert "managed_content_drift_detected" in drifted["transaction_preview"]["blocking_gates"]
     assert drifted["transaction_preview"]["input_binding_sha256"] != observed["transaction_preview"]["input_binding_sha256"]
     CASES += 1
