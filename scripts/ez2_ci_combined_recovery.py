@@ -237,11 +237,11 @@ def verify_applied_transaction(live, before, source_digest, payload, post_id):
     if digest(CLONE) == source_digest or digest('wordpress') != source_digest:
         raise ValueError('Successful apply did not isolate database changes')
     queries = (
-        f"SELECT option_value FROM \`{CLONE}\`.wp_options WHERE option_name='home'",
-        f"SELECT post_title FROM \`{CLONE}\`.wp_posts WHERE ID={post_id}",
-        f"SELECT post_content FROM \`{CLONE}\`.wp_posts WHERE ID={post_id}",
-        f"SELECT COUNT(*) FROM \`{CLONE}\`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ('_ez2_ci_transaction_fault','_elementor_data','_elementor_edit_mode','_elementor_page_settings')",
-        f"SELECT HEX(meta_value) FROM \`{CLONE}\`.wp_postmeta WHERE post_id={post_id} AND meta_key='_elementor_data'",
+        f"SELECT option_value FROM `{CLONE}`.wp_options WHERE option_name='home'",
+        f"SELECT post_title FROM `{CLONE}`.wp_posts WHERE ID={post_id}",
+        f"SELECT post_content FROM `{CLONE}`.wp_posts WHERE ID={post_id}",
+        f"SELECT COUNT(*) FROM `{CLONE}`.wp_postmeta WHERE post_id={post_id} AND meta_key IN ('_ez2_ci_transaction_fault','_elementor_data','_elementor_edit_mode','_elementor_page_settings')",
+        f"SELECT HEX(meta_value) FROM `{CLONE}`.wp_postmeta WHERE post_id={post_id} AND meta_key='_elementor_data'",
     )
     observed = [sql(('-e', query)).strip() for query in queries]
     expected = [
@@ -325,9 +325,9 @@ def main(release, sha):
                                            source_digest, payload, success_id)
             finally:
                 restore_files(success_moved)
-            sql(('-e', f'DROP DATABASE \`{CLONE}\`'))
+            sql(('-e', f'DROP DATABASE `{CLONE}`'))
             created = False
-            sql(('-e', f'CREATE DATABASE \`{CLONE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'))
+            sql(('-e', f'CREATE DATABASE `{CLONE}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'))
             created = True
             sql((CLONE,), data=original_sql)
             if (snapshot(success_live) != success_before or
