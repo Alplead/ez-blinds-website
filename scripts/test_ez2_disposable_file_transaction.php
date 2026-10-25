@@ -79,6 +79,29 @@ must( matches( $root, 'incoming', 'NEW' ), 'After restore all new code isolated'
 must( ! file_exists( $root . '/recovery-backup' ), 'After restore backup dir cleaned' );
 ez2_ci_fs_remove_tree( $root );
 $root = fixture();
+ez2_ci_fs_swap( $root );
+$old = file_get_contents( $root . '/recovery-backup/ezb-theme/main.php' );
+file_put_contents( $root . '/recovery-backup/ezb-theme/main.php', 'MALICIOUS CHANGE' );
+fails( fn() => ez2_ci_fs_restore( $root ), 'Synthetic backup tampered',
+    'Corrupted saved version cannot be restored blindly' );
+must( matches( $root, 'installed', 'NEW' ), 'Refusal leaves installed candidate intact' );
+file_put_contents( $root . '/recovery-backup/ezb-theme/main.php', $old );
+must( ez2_ci_fs_restore( $root ) === 'SYNTHETIC_RESTORE_PASS',
+    'Once verified bytes restored, rollback succeeds' );
+must( matches( $root, 'installed', 'OLD' ), 'Restored authentic backup bytes' );
+ez2_ci_fs_remove_tree( $root );
+$root = fixture();
+ez2_ci_fs_swap( $root );
+$manifest = $root . '/recovery-backup/SYNTHETIC_BACKUP_MANIFEST.json';
+$unmodified_manifest = file_get_contents( $manifest );
+file_put_contents( $manifest, '{"schema":999,"components":{}}' );
+fails( fn() => ez2_ci_fs_restore( $root ), 'Synthetic recovery manifest schema mismatch',
+    'Invalid recovery manifest blocked' );
+file_put_contents( $manifest, $unmodified_manifest );
+must( ez2_ci_fs_restore( $root ) === 'SYNTHETIC_RESTORE_PASS',
+    'Original manifest restores successfully' );
+ez2_ci_fs_remove_tree( $root );
+$root = fixture();
 file_put_contents( $root . '/incoming/elementor/untrusted-link-source.php', 'unsafe' );
 symlink( '/etc/passwd', $root . '/incoming/elementor/link.php' );
 fails( fn() => ez2_ci_fs_swap( $root ), 'Invalid or symbolic component entry',
@@ -107,5 +130,12 @@ putenv( 'EZ2_DISPOSABLE_FS_SWAP=OFF' );
 fails( fn() => ez2_ci_fs_swap( $root ), 'CI-only filesystem transaction gate closed',
     'Missing explicit opt-in refuses write' );
 must( matches( $root, 'installed', 'OLD' ), 'Disabled gate never changes files' );
+ez2_ci_fs_remove_tree( $root );
+$root = fixture();
+putenv( 'GITHUB_ACTIONS=false' );
+fails( fn() => ez2_ci_fs_swap( $root ), 'CI-only filesystem transaction gate closed',
+    'Non-GitHub-Action execution refused even with fixture marker' );
+putenv( 'GITHUB_ACTIONS=true' );
+must( matches( $root, 'installed', 'OLD' ), 'Outside CI attempt unchanged' );
 ez2_ci_fs_remove_tree( $root );
 echo 'EZ2_CI_FILE_TRANSACTION_PASS cases=' . $cases . "\n";
