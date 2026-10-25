@@ -506,6 +506,13 @@ jobs:
           node scripts/test_ez2_elementor_browser_smoke.mjs | tee /tmp/ez2-browser-guard.log
           grep -q 'EZ2_SYNTHETIC_BROWSER_GUARD_PASS cases=26' /tmp/ez2-browser-guard.log
 
+      - name: Inspect isolated EZ2 backup destination without writing
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-backup-readiness.php
+          php -l scripts/test_ez2_backup_readiness.php
+          php scripts/test_ez2_backup_readiness.php | tee /tmp/ez2-backup-readiness.log
+          grep -Fq 'EZ2_BACKUP_READINESS_GUARD_PASS cases=24 backup_created=false apply_disabled=true' /tmp/ez2-backup-readiness.log
+
       - name: Guard isolated EZ2 delivery agent preview (no installation)
         run: |
           php -l tools/ez2-delivery-agent/ez2-delivery-agent.php
