@@ -13,6 +13,7 @@
 function ez2_ci_fs_root( $root ) {
     if ( ! defined( 'EZ2_CI_DISPOSABLE_ONLY' )
         || EZ2_CI_DISPOSABLE_ONLY !== true
+        || getenv( 'GITHUB_ACTIONS' ) !== 'true'
         || getenv( 'EZ2_DISPOSABLE_FS_SWAP' ) !== 'YES_TEST_TEMP_ONLY'
         || ! is_string( $root ) || ! is_dir( $root ) || is_link( $root ) ) {
         throw new RuntimeException( 'CI-only filesystem transaction gate closed.' );
@@ -141,7 +142,21 @@ function ez2_ci_fs_swap( $root, $fault = null ) {
             if ( ez2_ci_fs_inventory( $root . '/installed/' . $target ) !== $inventory ) {
                 throw new RuntimeException( 'Post-install component mismatch.' );
             }
+            if ( ez2_ci_fs_inventory( $backup . '/' . $target ) !== $before[ $target ] ) {
+                throw new RuntimeException( 'Retained recovery backup differs from original.' );
+            }
         }
+        // Record the ORIGINAL bytes expected at restore time. Without this,
+        // a corrupted or swapped backup could be silently restored.
+        $manifest = json_encode( array( 'schema' => 1, 'components' => $before ), JSON_THROW_ON_ERROR );
+        $manifest_file = $backup . '/SYNTHETIC_BACKUP_MANIFEST.json';
+        $handle = fopen( $manifest_file, 'x' );
+        if ( $handle === false || fwrite( $handle, $manifest ) !== strlen( $manifest ) ) {
+            if ( is_resource( $handle ) ) { fclose( $handle ); }
+            throw new RuntimeException( 'Could not persist test-only backup fingerprint.' );
+        }
+        fclose( $handle );
+        chmod( $manifest_file, 0600 );
         return array( 'status' => 'SYNTHETIC_FILE_SWAP_ONLY',
             'components' => count( $targets ), 'backups_retained' => true,
             'db_backup_verified' => false, 'owner_localwp_changed' => false,
@@ -178,6 +193,9 @@ function ez2_ci_fs_swap( $root, $fault = null ) {
             // Crucial: preserve the backup for manual recovery, never delete it.
             throw new RuntimeException( 'CRITICAL: synthetic recovery incomplete; backups preserved.' );
         }
+        if ( is_file( $backup . '/SYNTHETIC_BACKUP_MANIFEST.json' ) ) {
+            unlink( $backup . '/SYNTHETIC_BACKUP_MANIFEST.json' );
+        }
         rmdir( $backup );
         throw new RuntimeException( 'SAFE_ROLLBACK_COMPLETE: ' . $error->getMessage() );
     }
@@ -190,8 +208,23 @@ function ez2_ci_fs_restore( $root ) {
     if ( ! is_dir( $backup ) || is_link( $backup ) ) {
         throw new RuntimeException( 'No verified synthetic backup.' );
     }
+    $manifest_file = $backup . '/SYNTHETIC_BACKUP_MANIFEST.json';
+    if ( ! is_file( $manifest_file ) || is_link( $manifest_file )
+        || filesize( $manifest_file ) > 150000 ) {
+        throw new RuntimeException( 'Synthetic recovery manifest missing or unsafe.' );
+    }
+    $manifest = json_decode( file_get_contents( $manifest_file ), true );
+    if ( ! is_array( $manifest ) || array_keys( $manifest ) !== array( 'schema', 'components' )
+        || $manifest['schema'] !== 1 || ! is_array( $manifest['components'] )
+        || array_keys( $manifest['components'] ) !== ez2_ci_fs_targets() ) {
+        throw new RuntimeException( 'Synthetic recovery manifest schema mismatch.' );
+    }
     foreach ( ez2_ci_fs_targets() as $target ) {
-        ez2_ci_fs_inventory( $backup . '/' . $target );
+        $expected = $manifest['components'][ $target ];
+        if ( ! is_array( $expected )
+            || ez2_ci_fs_inventory( $backup . '/' . $target ) !== $expected ) {
+            throw new RuntimeException( 'Synthetic backup tampered; restore refused.' );
+        }
         ez2_ci_fs_inventory( $root . '/installed/' . $target );
         if ( file_exists( $root . '/incoming/' . $target ) ) {
             throw new RuntimeException( 'Incoming component path is not empty.' );
@@ -203,6 +236,7 @@ function ez2_ci_fs_restore( $root ) {
             throw new RuntimeException( 'Synthetic restore failed; preserve recovery files.' );
         }
     }
+    unlink( $manifest_file );
     rmdir( $backup );
     return 'SYNTHETIC_RESTORE_PASS';
 }
