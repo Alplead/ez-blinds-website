@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/includes/content-plan.php';
 require_once __DIR__ . '/includes/release-evidence.php';
+require_once __DIR__ . '/includes/source-candidate.php';
 
 const EZ2_GATE_REPO = 'Alplead/ez-blinds-website';
 const EZ2_GATE_PR = 1;
@@ -242,10 +243,16 @@ function ez2_gate_render_admin() {
     }
     $report = null;
     if ( 'POST' === ( $_SERVER['REQUEST_METHOD'] ?? '' )
-        && in_array( $_POST['ez2_gate_action'] ?? '', array( 'preflight', 'snapshot' ), true ) ) {
+        && in_array( $_POST['ez2_gate_action'] ?? '', array( 'preflight', 'snapshot', 'candidate' ), true ) ) {
         check_admin_referer( 'ez2_gate_preflight', 'ez2_gate_nonce' );
-        $report = ( $_POST['ez2_gate_action'] === 'snapshot' )
-            ? ez2_gate_local_snapshot() : ez2_gate_preflight();
+        if ( $_POST['ez2_gate_action'] === 'snapshot' ) {
+            $report = ez2_gate_local_snapshot();
+        } else {
+            $report = ez2_gate_preflight();
+            if ( $_POST['ez2_gate_action'] === 'candidate' && ! is_wp_error( $report ) ) {
+                $report = ez2_gate_fetch_public_candidate( $report );
+            }
+        }
     }
     echo '<div class="wrap"><h1>EZ2 — Verified Delivery Gate</h1>';
     echo '<p><strong>SAFE PREVIEW ONLY.</strong> No button here installs plugins, imports pages, touches media, updates the database, or downloads release packages.</p>';
@@ -260,13 +267,22 @@ function ez2_gate_render_admin() {
         wp_nonce_field( 'ez2_gate_preflight', 'ez2_gate_nonce' );
         echo '<input type="hidden" name="ez2_gate_action" value="snapshot">';
         submit_button( 'Inspect protected local page and plugin state (read-only)', 'secondary', 'submit', false );
+        echo '</form><form method="post">';
+        wp_nonce_field( 'ez2_gate_preflight', 'ez2_gate_nonce' );
+        echo '<input type="hidden" name="ez2_gate_action" value="candidate">';
+        submit_button( 'Fetch verified GitHub public design candidate (read-only)', 'secondary', 'submit', false );
         echo '</form>';
     }
     if ( is_wp_error( $report ) ) {
         echo '<div class="notice notice-error"><p>' . esc_html( $report->get_error_message() ) . '</p></div>';
     } elseif ( is_array( $report ) && isset( $report['source_sha'] ) ) {
         echo '<div class="notice notice-info"><p>Source CI: verified at <code>'
-             . esc_html( $report['source_sha'] ) . '</code>. <strong>Full LocalWP delivery: NOT READY.</strong></p></div>';
+             . esc_html( $report['source_sha'] ) . '</code>.';
+        if ( ( $report['status'] ?? '' ) === 'VERIFIED_PUBLIC_CANDIDATE_READ_ONLY' ) {
+            echo ' Public Elementor design source: verified ('
+                . (int) $report['symbolic_photo_slots'] . ' symbolic photos).';
+        }
+        echo ' <strong>Full LocalWP delivery: NOT READY.</strong></p></div>';
     } elseif ( is_array( $report ) ) {
         echo '<div class="notice notice-info"><p>Local Elementor installed: '
              . ( $report['elementor_installed'] ? 'yes' : 'no' )
