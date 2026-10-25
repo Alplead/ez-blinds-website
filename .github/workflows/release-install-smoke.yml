@@ -240,7 +240,9 @@ jobs:
           # This is the release ZIP-installed WordPress, not the source-mounted Elementor CI stack.
           # Match the committed candidate version; never install into LocalWP or production.
           test "$(python3 -c 'import json; print(json.load(open("design/ez2-home-hero-candidate.json"))["version"])')" = '4.3.4'
-          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap plugin install elementor --version=4.3.4 --activate --allow-root
+          EZ2_CI_PINNED_PLUGIN_INSTALL=YES_DISPOSABLE_RELEASE_ONLY \
+            python3 scripts/ez2_ci_pinned_plugin_install.py "${{ github.event.pull_request.head.sha || github.sha }}" | tee /tmp/ez2-ci-pinned-plugin-install.log
+          grep -Fq 'EZ2_CI_PINNED_ELEMENTOR_INSTALL_PASS version=4.3.4' /tmp/ez2-ci-pinned-plugin-install.log
           docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap plugin is-active elementor --allow-root
           docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
             if (wp_get_environment_type() !== "staging" ||

@@ -367,6 +367,12 @@ jobs:
           python3 scripts/test_ez2_plugin_official_fetch.py | tee /tmp/ez2-official-plugin-fetch.log
           grep -q 'EZ2_OFFICIAL_PLUGIN_FETCH_PASS cases=14' /tmp/ez2-official-plugin-fetch.log
 
+      - name: Test checksum-pinned disposable Elementor installation (offline fixtures only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_pinned_plugin_install.py scripts/test_ez2_ci_pinned_plugin_install.py
+          python3 scripts/test_ez2_ci_pinned_plugin_install.py | tee /tmp/ez2-ci-pinned-plugin-test.log
+          grep -Fq 'EZ2_CI_PINNED_ELEMENTOR_INSTALL_GUARD_PASS cases=13' /tmp/ez2-ci-pinned-plugin-test.log
+
       - name: Observe plugin checksum candidates safely (offline fixtures only)
         run: |
           python3 -m py_compile scripts/ez2_plugin_checksum_probe.py scripts/test_ez2_plugin_checksum_probe.py

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "target_site": "ez2-isolated-only",
+  "plugins": [
+    {
+      "slug": "elementor",
+      "version": "4.3.4",
+      "entrypoint": "elementor/elementor.php",
+      "source": "wordpress.org",
+      "archive_sha256": "1b67ddd3acca7b245ac0b7e42e4f8ef958e01602d629e8919874b90607cdc12e",
+      "activate": true
+    }
+  ]
+}
