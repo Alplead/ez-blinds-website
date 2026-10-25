@@ -11,6 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+require_once __DIR__ . '/includes/content-plan.php';
+
 const EZ2_GATE_REPO = 'Alplead/ez-blinds-website';
 const EZ2_GATE_PR = 1;
 const EZ2_GATE_BRANCH = 'feature/vertical-slice-v1';
