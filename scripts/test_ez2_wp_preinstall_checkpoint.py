@@ -162,7 +162,7 @@ with tempfile.TemporaryDirectory() as temp:
 
 for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
                  "invalid-release", "tampered-installed-release", "installed-code-drift",
-                 "candidate-inside-wp",
+                 "candidate-inside-wp", "private-git-root", "private-git-ancestor",
                  "wrong-host", "gate-failure", "export-failure", "overlap",
                  "binding-failure"):
     with tempfile.TemporaryDirectory() as temp:
@@ -181,6 +181,12 @@ for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
             nested = wp / "candidate-release"
             shutil.copytree(release, nested)
             action = lambda: run(nested, installed_release, wp, private, fake)
+        elif scenario == "private-git-root":
+            (private / ".git").mkdir()
+            action = lambda: run(release, installed_release, wp, private, fake)
+        elif scenario == "private-git-ancestor":
+            (private.parent / ".git").write_text("gitdir: /synthetic/worktree")
+            action = lambda: run(release, installed_release, wp, private, fake)
         elif scenario == "installed-code-drift":
             (wp / "wp-content/themes/ezb-theme/style.css").write_text("owner changed")
             action = lambda: run(release, installed_release, wp, private, fake)
@@ -230,5 +236,5 @@ for scenario in ("installed-code-changed-during-capture",
             reject(lambda: run(release, installed_release, wp, private, fake), destination)
         assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
 
-assert CASES == 17, CASES
+assert CASES == 19, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")
