@@ -6,6 +6,7 @@
  * Requires PHP: 8.1
  */
 require_once __DIR__ . '/includes/ez2-release-evidence.php';
+require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -101,6 +102,15 @@ final class EZ2_Isolated_Delivery_Agent {
         if ($remote['issues']) {
             echo '<ul>';
             foreach ($remote['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
+            echo '</ul>';
+        }
+        $backup = EZ2_Backup_Readiness::observe($report['status'], $remote['source_sha'] ?? null);
+        echo '<h2>Isolated rollback backup preparation (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($backup['status']) . '</p>';
+        echo '<p>Destination and component prerequisites only. No backup was created or verified.</p>';
+        if ($backup['issues']) {
+            echo '<ul>';
+            foreach ($backup['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
             echo '</ul>';
         }
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
