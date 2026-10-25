@@ -15,7 +15,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ez2_backup_snapshot_pack import _files, pack
+from ez2_backup_snapshot_pack import _files, _regular, pack
 from ez2_backup_scratch_replay import replay
 
 HOST = re.compile(r"ez2(?:-[a-z0-9]+)*\.local\Z")
@@ -94,8 +94,13 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     destination = parent / backup_name
     if destination.exists() or destination.is_symlink():
         raise ValueError("Backup destination already exists")
-    if not (root / "wp-load.php").is_file() or not (root / "wp-admin").is_dir():
-        raise ValueError("Expected WordPress installation not found")
+    # Never follow linked WordPress bootstrap files or administration roots.
+    # A linked entrypoint can redirect WP-CLI outside the authorised site.
+    try:
+        _regular(root / "wp-load.php")
+        _real_directory(root / "wp-admin")
+    except (ValueError, OSError) as exc:
+        raise ValueError("Expected regular WordPress bootstrap files not found") from exc
     content = _real_directory(root / "wp-content")
     components = {
         "uploads": _real_directory(content / "uploads"),
@@ -128,8 +133,12 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         _wp(wp_executable, root, ["db", "export", str(staged / "database.sql"),
                                     "--add-drop-table", "--skip-plugins", "--skip-themes"], env)
         sql = staged / "database.sql"
-        if sql.is_symlink() or not sql.is_file() or sql.stat().st_size <= 0:
-            raise ValueError("WP-CLI SQL export missing or empty")
+        # WP-CLI output is untrusted until its file type, link count and
+        # bounded size are checked. Never package a linked SQL export.
+        try:
+            _regular(sql)
+        except (ValueError, OSError) as exc:
+            raise ValueError("WP-CLI SQL export missing or unsafe") from exc
         for role, source in components.items():
             _copy_component(source, staged / role, role)
         result = pack(staged, destination, exact_sha)

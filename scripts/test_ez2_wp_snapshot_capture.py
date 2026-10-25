@@ -32,6 +32,10 @@ elif "db" in args and "export" in args:
     path = pathlib.Path(args[args.index("export") + 1])
     if mode == "empty_sql": path.write_bytes(b"")
     elif mode == "missing_sql": pass
+    elif mode == "symlink_sql":
+        path.symlink_to(pathlib.Path(args[0].split("=", 1)[1]) / "wp-load.php")
+    elif mode == "hardlink_sql":
+        os.link(pathlib.Path(args[0].split("=", 1)[1]) / "wp-load.php", path)
     else: path.write_bytes(b"-- synthetic only\\nCREATE TABLE dummy(id INT);\\n")
 else: sys.exit(3)
 '''
@@ -100,7 +104,8 @@ with tempfile.TemporaryDirectory() as temp:
     else: raise AssertionError("Existing backup overwritten")
 
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
-             "gate_missing_issues", "db_error", "empty_sql", "missing_sql"):
+             "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
+             "symlink_sql", "hardlink_sql"):
     reject(mode=mode)
 for host in ("ezbns.com.au", "t2-ez-blinds-shutters.local", "ez-bns-new-dev.local",
              "ez2.local.evil", "ez2.local:8080", "EZ2-review.local", ""):
@@ -112,6 +117,14 @@ for sha in ("", "A" * 40, "a" * 39, "g" * 40):
 for name in ("", "backup", "../ez2-backup-test", "ez2-backup-..", "ez2-backup-TEST"):
     reject(name=name)
 reject(lambda root, parent, fake: (root / "wp-load.php").unlink())
+reject(lambda root, parent, fake: (
+    (root / "wp-load.php").unlink(),
+    (root / "wp-load.php").symlink_to(fake),
+))
+reject(lambda root, parent, fake: (
+    (root / "wp-admin").rename(root / "wp-admin-original"),
+    (root / "wp-admin").symlink_to(root / "wp-admin-original", target_is_directory=True),
+))
 reject(lambda root, parent, fake: (root / "wp-content" / "uploads" / "synthetic.txt").unlink())
 reject(lambda root, parent, fake: (
     (root / "wp-content" / "plugins" / "synthetic.txt").unlink(),
@@ -126,5 +139,5 @@ reject(lambda root, parent, fake: (root / "wp-content" / "uploads" / "bad?.txt")
 reject(lambda root, parent, fake: (root / "wp-content" / "plugins" / "nested").symlink_to(
     root / "wp-content" / "uploads", target_is_directory=True))
 
-assert CASES == 1 + 1 + 8 + 7 + 5 + 4 + 5 + 7, CASES
+assert CASES == 1 + 1 + 10 + 7 + 5 + 4 + 7 + 7, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
