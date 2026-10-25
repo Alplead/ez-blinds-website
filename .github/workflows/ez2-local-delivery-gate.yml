@@ -1,0 +1,42 @@
+name: EZ2 Local Delivery Gate (No Deployment)
+
+on:
+  pull_request:
+    branches:
+      - feature/vertical-slice-v1
+    paths:
+      - 'wp-content/plugins/ez2-local-delivery-gate/**'
+      - 'scripts/test_ez2_local_delivery_gate.php'
+      - '.github/workflows/ez2-local-delivery-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Validate exact read-only agent PHP
+        run: |
+          set -euo pipefail
+          php -l wp-content/plugins/ez2-local-delivery-gate/ez2-local-delivery-gate.php
+          php -l scripts/test_ez2_local_delivery_gate.php
+          php scripts/test_ez2_local_delivery_gate.php | tee /tmp/ez2-agent-test.log
+          grep -Eq '^EZ2_LP_DELIVERY_GATE_PASS cases=[2-9][0-9]$' /tmp/ez2-agent-test.log
+      - name: Enforce no installation or site writes in stage one
+        run: |
+          set -euo pipefail
+          agent=wp-content/plugins/ez2-local-delivery-gate/ez2-local-delivery-gate.php
+          grep -Fq "ez2-isolated-only" "$agent"
+          grep -Fq "one_click_ready' => false" "$agent"
+          grep -Fq "site_modified' => false" "$agent"
+          ! grep -Eiq '(^|[[:space:]])(update_option|wp_insert_post|wp_update_post|wp_delete_post|activate_plugin|install_plugin|download_url|unzip_file|rename|file_put_contents|copy)[[:space:]]*\\(' "$agent"
+          echo EZ2_LP_GATE_NO_DEPLOYMENT_PASS
