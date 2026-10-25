@@ -280,6 +280,12 @@ jobs:
           php scripts/test_ez2_wp_delivery_runtime_gate.php | tee /tmp/ez2-delivery-runtime-gate.log
           grep -Fq 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=57' /tmp/ez2-delivery-runtime-gate.log
 
+      - name: Bind exact-head public release to verified private backup (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_release_binding.py scripts/test_ez2_backup_release_binding.py
+          python3 scripts/test_ez2_backup_release_binding.py | tee /tmp/ez2-backup-release-binding.log
+          grep -Fq 'EZ2_BACKUP_RELEASE_BINDING_PASS cases=17 release_and_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-backup-release-binding.log
+
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
