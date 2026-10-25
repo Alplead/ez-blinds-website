@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once __DIR__ . '/includes/content-plan.php';
+require_once __DIR__ . '/includes/release-evidence.php';
 
 const EZ2_GATE_REPO = 'Alplead/ez-blinds-website';
 const EZ2_GATE_PR = 1;
