@@ -22,6 +22,21 @@ final class EZ2_Backup_Readiness {
         return $child === $parent || str_starts_with($child, rtrim($parent, '/') . '/');
     }
 
+    /** Detect a Git checkout or linked worktree without running git or shell commands. */
+    public static function gitCheckoutAncestor(string $directory): bool {
+        $real = realpath($directory);
+        if (!is_string($real) || !is_dir($real)) return true; // Unknown means unsafe.
+        $current = $real;
+        while (true) {
+            $marker = rtrim($current, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '.git';
+            if (file_exists($marker) || is_link($marker)) return true;
+            $parent = dirname($current);
+            if ($parent === $current) break;
+            $current = $parent;
+        }
+        return false;
+    }
+
     /** Pure, deterministic guard: all facts are untrusted until checked. */
     public static function evaluate(array $facts): array {
         $issues = [];
@@ -50,6 +65,9 @@ final class EZ2_Backup_Readiness {
             || ($facts['backup_is_link'] ?? null) !== false
             || ($facts['backup_writable'] ?? null) !== true) {
             $issues[] = 'BACKUP_DESTINATION_UNSAFE';
+        }
+        if (($facts['backup_under_git_checkout'] ?? null) !== false) {
+            $issues[] = 'BACKUP_INSIDE_GIT_CHECKOUT';
         }
         if (($facts['db_connected'] ?? null) !== true) $issues[] = 'DATABASE_NOT_READY';
         $free = $facts['free_bytes'] ?? null;
@@ -84,6 +102,8 @@ final class EZ2_Backup_Readiness {
             'backup_exists' => $backupReal !== false && is_dir($backupReal),
             'backup_is_link' => is_string($backup) && is_link($backup),
             'backup_writable' => $backupReal !== false && is_writable($backupReal),
+            'backup_under_git_checkout' => $backupReal === false
+                ? true : self::gitCheckoutAncestor($backupReal),
             'db_connected' => is_object($dbh) || is_resource($dbh),
             'free_bytes' => $backupReal !== false ? disk_free_space($backupReal) : null,
         ];
