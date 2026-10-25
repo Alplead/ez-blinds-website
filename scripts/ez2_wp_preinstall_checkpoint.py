@@ -4,7 +4,8 @@
 Order matters: verify separate installed/candidate releases, attest installed
 first-party bytes, then capture private files/SQL labelled with INSTALLED_SHA.
 Never label the installed rollback backup with the incoming candidate SHA.
-No WordPress installation, activation, migration or restore is performed.
+Only a disposable scratch candidate file-swap and rollback is rehearsed.
+No WordPress installation, activation, migration or database restore is performed.
 Never send backup paths, SQL, media or customer details to CI or GitHub.
 """
 import json
@@ -13,6 +14,7 @@ import sys
 from pathlib import Path
 
 from ez2_backup_release_binding import _directory, bind as bind_release
+from ez2_checkpoint_upgrade_rehearsal import rehearse as rehearse_candidate
 from ez2_installed_code_parity import check as check_installed_parity
 from ez2_release_set import run as verify_release
 from ez2_wp_snapshot_capture import capture
@@ -81,6 +83,13 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
                 or linked.get("deployment_authorized") is not False
                 or linked.get("can_apply") is not False):
             raise ValueError("Public release and private archive binding rejected")
+        rehearsal = rehearse_candidate(candidate, installed, destination,
+                                       installed_sha, candidate_sha)
+        if (rehearsal.get("status") != "PRIVATE_BACKUP_CANDIDATE_SCRATCH_UPGRADE_ROLLBACK_VERIFIED_ONLY"
+                or rehearsal.get("scratch_original_bytes_restored") is not True
+                or rehearsal.get("private_backup_unchanged") is not True
+                or rehearsal.get("can_apply") is not False):
+            raise ValueError("Private backup candidate scratch upgrade failed")
     except BaseException:
         # This path is created by capture() only after it has rejected pre-existing
         # names. Refuse to traverse a swapped link or an unexpected ancestor.
@@ -101,6 +110,7 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
         "private_backup_byte_integrity_verified": True,
         "private_file_replay_verified": True,
         "database_export_generated": True,
+        "scratch_candidate_upgrade_and_rollback_verified": True,
         "database_restore_rehearsed": False,
         "consistent_database_and_files_snapshot_verified": False,
         "localwp_installed": False,
