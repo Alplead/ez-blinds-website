@@ -1,0 +1,79 @@
+name: EZ2 Local Delivery Gate (No Deployment)
+on:
+  pull_request:
+    branches:
+      - feature/vertical-slice-v1
+    paths:
+      - 'wp-content/plugins/ez2-local-delivery-gate/**'
+      - 'scripts/test_ez2_local_delivery_gate.php'
+      - 'scripts/test_ez2_disposable_file_transaction.php'
+      - '.github/workflows/ez2-local-delivery-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Validate read-only agent and synthetic gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/plugins/ez2-local-delivery-gate/ez2-local-delivery-gate.php
+          php -l scripts/test_ez2_local_delivery_gate.php
+          php scripts/test_ez2_local_delivery_gate.php | tee /tmp/ez2-agent-test.log
+          grep -Eq '^EZ2_LP_DELIVERY_GATE_PASS cases=[2-9][0-9]$' /tmp/ez2-agent-test.log
+
+      - name: Test real disposable three-component swaps and fault recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/plugins/ez2-local-delivery-gate/includes/disposable-file-transaction.php
+          php -l scripts/test_ez2_disposable_file_transaction.php
+          php scripts/test_ez2_disposable_file_transaction.php | tee /tmp/ez2-file-transaction.log
+          grep -Eq '^EZ2_CI_FILE_TRANSACTION_PASS cases=[2-9][0-9]$' /tmp/ez2-file-transaction.log
+
+      - name: Enforce code-only safety and CI isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          agent=wp-content/plugins/ez2-local-delivery-gate/ez2-local-delivery-gate.php
+          transaction=wp-content/plugins/ez2-local-delivery-gate/includes/disposable-file-transaction.php
+          grep -Fq "ez2-isolated-only" "$agent"
+          grep -Fq "one_click_ready' => false" "$agent"
+          grep -Fq "site_modified' => false" "$agent"
+          ! grep -Fq "includes/disposable-file-transaction.php" "$agent"
+          grep -Fq 'EZ2_DISPOSABLE_FS_SWAP' "$transaction"
+          grep -Fq 'EZ2_CI_DISPOSABLE_ONLY' "$transaction"
+          ! grep -Eiq '(^|[[:space:]])(update_option|wp_insert_post|wp_update_post|wp_delete_post|activate_plugin|install_plugin|download_url|unzip_file|rename|file_put_contents|copy)[[:space:]]*\\(' "$agent"
+          echo EZ2_LP_GATE_NO_DEPLOYMENT_PASS
+          echo EZ2_CI_FILE_TRANSACTION_ISOLATION_PASS
+
+      - name: Package one-time read-only bootstrap plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          (cd wp-content/plugins && zip -qr ../../build/ez2-local-delivery-gate.zip ez2-local-delivery-gate)
+          test -s build/ez2-local-delivery-gate.zip
+          unzip -t build/ez2-local-delivery-gate.zip | grep -q 'No errors detected'
+          sha256sum build/ez2-local-delivery-gate.zip | tee build/SHA256SUMS
+          echo EZ2_LP_GATE_BOOTSTRAP_ZIP_PASS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EZ2_LocalWP_Readonly_Bootstrap_PR_${{ github.event.pull_request.number || github.sha }}
+          path: |
+            build/ez2-local-delivery-gate.zip
+            build/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error
