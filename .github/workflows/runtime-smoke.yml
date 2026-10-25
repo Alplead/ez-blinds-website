@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'wp-content/**'
+      - 'tools/ez2-delivery-agent/**'
       - '.devcontainer/**'
       - 'scripts/bootstrap*.sh'
       - 'scripts/link-check.mjs'
