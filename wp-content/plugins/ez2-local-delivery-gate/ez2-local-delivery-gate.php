@@ -199,14 +199,21 @@ function ez2_gate_local_snapshot() {
             || isset( $digest_by_key[ $key ] ) ) {
             return new WP_Error( 'ez2_managed_key', 'Invalid or duplicated managed page ownership.' );
         }
+        // Elementor page settings can be an ARRAY, not just a string.
+        // Preserve the raw stored structure before hashing; casting arrays to
+        // "Array" would conceal Owner edits and cause false non-conflicts.
         $parts = array(
-            (string) get_post_field( 'post_title', $id ),
-            (string) get_post_field( 'post_content', $id ),
-            (string) get_post_meta( $id, '_elementor_data', true ),
-            (string) get_post_meta( $id, '_elementor_page_settings', true ),
-            (string) get_post_meta( $id, '_thumbnail_id', true ),
+            get_post_field( 'post_title', $id ),
+            get_post_field( 'post_content', $id ),
+            get_post_meta( $id, '_elementor_data', true ),
+            get_post_meta( $id, '_elementor_page_settings', true ),
+            get_post_meta( $id, '_thumbnail_id', true ),
         );
-        $digest_by_key[ $key ] = hash( 'sha256', wp_json_encode( $parts ) );
+        $serialized = wp_json_encode( $parts );
+        if ( ! is_string( $serialized ) || strlen( $serialized ) > 8 * 1024 * 1024 ) {
+            return new WP_Error( 'ez2_page_digest', 'Managed page data cannot be safely fingerprinted.' );
+        }
+        $digest_by_key[ $key ] = hash( 'sha256', $serialized );
     }
     ksort( $digest_by_key, SORT_STRING );
     return array(
