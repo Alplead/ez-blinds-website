@@ -17,7 +17,7 @@ from ez2_backup_release_binding import _directory, bind as bind_release
 from ez2_checkpoint_upgrade_rehearsal import rehearse as rehearse_candidate
 from ez2_installed_code_parity import check as check_installed_parity
 from ez2_release_set import run as verify_release
-from ez2_wp_snapshot_capture import capture
+from ez2_wp_snapshot_capture import _private_parent_outside_git, capture
 
 EXPECTED_SITE = "ez2-isolated-only"
 
@@ -41,6 +41,9 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
            for index, a in enumerate(directories)
            for b in directories[index + 1:]):
         raise ValueError("Candidate, installed release and backup paths must be disjoint")
+    # Fail before any expensive verification or WP-CLI: private backups cannot
+    # be stored under a public Git checkout, including linked worktrees.
+    _private_parent_outside_git(parent)
     # The release and installed code may change while a private capture runs.
     # Re-attest both immediately before accepting the backup as a checkpoint.
     def verify_baseline():
