@@ -5,6 +5,7 @@
  * Version: 0.1.0
  * Requires PHP: 8.1
  */
+require_once __DIR__ . '/includes/ez2-release-evidence.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -89,6 +90,17 @@ final class EZ2_Isolated_Delivery_Agent {
             foreach ($report['issues'] as $issue) {
                 echo '<li>' . esc_html($issue) . '</li>';
             }
+            echo '</ul>';
+        }
+        $remote = EZ2_Release_Evidence::live();
+        echo '<h2>Public GitHub exact-head evidence (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($remote['status']) . '</p>';
+        echo '<p><strong>Source SHA:</strong> ' . esc_html($remote['source_sha'] ?? 'unavailable') . '</p>';
+        echo '<p>Checked workflows: ' . esc_html((string) $remote['workflow_count'])
+            . '; matching release artifacts: ' . esc_html((string) $remote['artifact_count']) . ' / 6.</p>';
+        if ($remote['issues']) {
+            echo '<ul>';
+            foreach ($remote['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
             echo '</ul>';
         }
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
