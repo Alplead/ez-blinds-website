@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import tempfile
 import zipfile
 from pathlib import Path
@@ -160,6 +161,7 @@ with tempfile.TemporaryDirectory() as temp:
 
 for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
                  "invalid-release", "tampered-installed-release", "installed-code-drift",
+                 "candidate-inside-wp",
                  "wrong-host", "gate-failure", "export-failure", "overlap",
                  "binding-failure"):
     with tempfile.TemporaryDirectory() as temp:
@@ -174,6 +176,10 @@ for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
         elif scenario == "tampered-installed-release":
             (installed_release / "ezb-theme.zip").write_bytes(b"tampered")
             action = lambda: run(release, installed_release, wp, private, fake)
+        elif scenario == "candidate-inside-wp":
+            nested = wp / "candidate-release"
+            shutil.copytree(release, nested)
+            action = lambda: run(nested, installed_release, wp, private, fake)
         elif scenario == "installed-code-drift":
             (wp / "wp-content/themes/ezb-theme/style.css").write_text("owner changed")
             action = lambda: run(release, installed_release, wp, private, fake)
@@ -186,7 +192,7 @@ for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
             os.environ["FAKE_WP_FAIL"] = "gate" if scenario == "gate-failure" else "export"
             action = lambda: run(release, installed_release, wp, private, fake)
         elif scenario == "overlap":
-            action = lambda: run(release, wp, release, fake)
+            action = lambda: run(release, installed_release, wp, release, fake)
         else:
             action = lambda: run(release, installed_release, wp, private, fake)
         try:
@@ -200,5 +206,5 @@ for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
             os.environ.pop("FAKE_WP_FAIL", None)
         assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
 
-assert CASES == 13, CASES
+assert CASES == 14, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")

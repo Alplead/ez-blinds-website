@@ -30,6 +30,10 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
     candidate = _directory(candidate_release_dir)
     installed = _directory(installed_release_dir)
     parent = _directory(private_parent)
+    root = _directory(wp_root)
+    if any(root == release or root in release.parents or release in root.parents
+           for release in (candidate, installed)):
+        raise ValueError("Release directories must be outside WordPress root")
     directories = (candidate, installed, parent)
     if any(a == b or a in b.parents or b in a.parents
            for index, a in enumerate(directories)
@@ -45,7 +49,7 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
             raise ValueError("Exact-head isolated release rejected")
     # Byte parity is not proof of who originally installed the site.
     parity = check_installed_parity(installed, installed_sha,
-                                    _directory(wp_root) / "wp-content")
+                                    root / "wp-content")
     if (parity.get("status") != "CODE_BYTES_MATCH_RELEASE_ONLY"
             or parity.get("source_sha") != installed_sha
             or parity.get("theme_core_byte_parity") is not True
