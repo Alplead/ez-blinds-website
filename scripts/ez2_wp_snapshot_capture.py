@@ -98,6 +98,7 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     # A linked entrypoint can redirect WP-CLI outside the authorised site.
     try:
         _regular(root / "wp-load.php")
+        config_before = _regular(root / "wp-config.php")
         _real_directory(root / "wp-admin")
     except (ValueError, OSError) as exc:
         raise ValueError("Expected regular WordPress bootstrap files not found") from exc
@@ -141,6 +142,15 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
             raise ValueError("WP-CLI SQL export missing or unsafe") from exc
         for role, source in components.items():
             _copy_component(source, staged / role, role)
+        # Recheck config and runtime identity after WP-CLI export and file copy.
+        config_after = _regular(root / "wp-config.php")
+        def config_identity(info):
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        if config_identity(config_after) != config_identity(config_before):
+            raise ValueError("WordPress configuration changed during capture")
+        post_gate = json.loads(_wp(wp_executable, root, ["eval-file", str(gate_file)], env))
+        if post_gate != gate:
+            raise ValueError("WordPress runtime identity changed during capture")
         result = pack(staged, destination, exact_sha)
         try:
             replay_result = replay(destination, exact_sha)

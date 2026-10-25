@@ -26,10 +26,18 @@ if "eval-file" in args:
     if mode == "gate_wrong_sha": gate["expected_release_sha"] = "b" * 40
     if mode == "gate_apply": gate["can_apply"] = True
     if mode == "gate_missing_issues": del gate["issues"]
+    if mode == "gate_drift_after_export" and (
+            pathlib.Path(args[0].split("=", 1)[1]) / "wp-content" / ".exported").exists():
+        gate["expected_release_sha"] = "b" * 40
     print(json.dumps(gate))
 elif "db" in args and "export" in args:
     if mode == "db_error": sys.exit(1)
     path = pathlib.Path(args[args.index("export") + 1])
+    root = pathlib.Path(args[0].split("=", 1)[1])
+    if mode == "gate_drift_after_export":
+        (root / "wp-content" / ".exported").write_text("synthetic")
+    if mode == "config_modified":
+        (root / "wp-config.php").write_text("<?php // changed synthetic configuration")
     if mode == "empty_sql": path.write_bytes(b"")
     elif mode == "missing_sql": pass
     elif mode == "symlink_sql":
@@ -45,6 +53,7 @@ def fixture(base):
     root = base / "wp"
     root.mkdir()
     (root / "wp-load.php").write_text("<?php // synthetic")
+    (root / "wp-config.php").write_text("<?php // isolated synthetic configuration")
     (root / "wp-admin").mkdir()
     content = root / "wp-content"
     content.mkdir()
@@ -105,7 +114,8 @@ with tempfile.TemporaryDirectory() as temp:
 
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
              "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
-             "symlink_sql", "hardlink_sql"):
+             "symlink_sql", "hardlink_sql", "gate_drift_after_export",
+             "config_modified"):
     reject(mode=mode)
 for host in ("ezbns.com.au", "t2-ez-blinds-shutters.local", "ez-bns-new-dev.local",
              "ez2.local.evil", "ez2.local:8080", "EZ2-review.local", ""):
@@ -116,6 +126,19 @@ for sha in ("", "A" * 40, "a" * 39, "g" * 40):
     reject(sha=sha)
 for name in ("", "backup", "../ez2-backup-test", "ez2-backup-..", "ez2-backup-TEST"):
     reject(name=name)
+reject(lambda root, parent, fake: (root / "wp-config.php").unlink())
+reject(lambda root, parent, fake: (
+    (root / "wp-config.php").unlink(),
+    (root / "wp-config.php").symlink_to(root / "wp-load.php"),
+))
+reject(lambda root, parent, fake: (
+    (root / "wp-config.php").unlink(),
+    os.link(root / "wp-load.php", root / "wp-config.php"),
+))
+reject(lambda root, parent, fake: (
+    (root / "wp-config.php").unlink(),
+    (root / "wp-config.php").mkdir(),
+))
 reject(lambda root, parent, fake: (root / "wp-load.php").unlink())
 reject(lambda root, parent, fake: (
     (root / "wp-load.php").unlink(),
@@ -139,5 +162,5 @@ reject(lambda root, parent, fake: (root / "wp-content" / "uploads" / "bad?.txt")
 reject(lambda root, parent, fake: (root / "wp-content" / "plugins" / "nested").symlink_to(
     root / "wp-content" / "uploads", target_is_directory=True))
 
-assert CASES == 1 + 1 + 10 + 7 + 5 + 4 + 7 + 7, CASES
+assert CASES == 1 + 1 + 12 + 7 + 5 + 4 + 11 + 7, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
