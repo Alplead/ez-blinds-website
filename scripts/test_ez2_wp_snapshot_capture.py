@@ -17,6 +17,17 @@ mode = os.environ.get("FAKE_WP_MODE", "ok")
 args = sys.argv[1:]
 if "eval-file" in args:
     if mode == "gate_error": sys.exit(2)
+    if mode.startswith("file_drift_"):
+        root = pathlib.Path(args[0].split("=", 1)[1])
+        marker = root / "wp-content" / ".gate-first-seen"
+        upload = root / "wp-content" / "uploads" / "synthetic.txt"
+        if marker.exists():
+            if mode == "file_drift_modify": upload.write_text("changed synthetic upload")
+            elif mode == "file_drift_add":
+                (upload.parent / "late-synthetic.txt").write_text("new synthetic file")
+            elif mode == "file_drift_delete": upload.unlink()
+        else:
+            marker.write_text("first synthetic gate")
     gate = {"status": "READY_FOR_BACKUP_REHEARSAL_ONLY",
             "target_site": "ez2-isolated-only",
             "expected_release_sha": os.environ["EZ2_EXPECTED_RELEASE_SHA"],
@@ -102,6 +113,7 @@ with tempfile.TemporaryDirectory() as temp:
     result = run(root, parent, fake)
     assert result["status"] == "EZ2_PRIVATE_CAPTURE_ARCHIVED_AND_SCRATCH_FILE_REPLAYED_ONLY"
     assert result["backup_created"] and result["file_replay_verified"]
+    assert result["source_file_inventory_stable"] is True
     assert result["database_export_generated"] and not result["database_restore_rehearsed"]
     assert not result["consistent_snapshot_verified"] and not result["deployment_authorized"]
     assert (parent / "ez2-backup-test" / "backup-manifest.json").is_file()
@@ -115,7 +127,8 @@ with tempfile.TemporaryDirectory() as temp:
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
              "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
              "symlink_sql", "hardlink_sql", "gate_drift_after_export",
-             "config_modified"):
+             "config_modified", "file_drift_modify", "file_drift_add",
+             "file_drift_delete"):
     reject(mode=mode)
 for host in ("ezbns.com.au", "t2-ez-blinds-shutters.local", "ez-bns-new-dev.local",
              "ez2.local.evil", "ez2.local:8080", "EZ2-review.local", ""):
@@ -162,5 +175,5 @@ reject(lambda root, parent, fake: (root / "wp-content" / "uploads" / "bad?.txt")
 reject(lambda root, parent, fake: (root / "wp-content" / "plugins" / "nested").symlink_to(
     root / "wp-content" / "uploads", target_is_directory=True))
 
-assert CASES == 1 + 1 + 12 + 7 + 5 + 4 + 11 + 7, CASES
+assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

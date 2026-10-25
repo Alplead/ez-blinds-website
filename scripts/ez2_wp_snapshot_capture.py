@@ -39,6 +39,18 @@ def _real_directory(path):
     return real
 
 
+def _inventory(source, role):
+    """Read-only inventory of source files, not a database-consistency proof.
+
+    Detect additions, removals and metadata changes across WP-CLI export/copy.
+    """
+    return tuple(
+        (member, info.st_dev, info.st_ino, info.st_size,
+         info.st_mtime_ns, info.st_ctime_ns)
+        for _, member, info in _files(source, role)
+    )
+
+
 def _copy_component(source, destination, role):
     entries = _files(source, role)
     destination.mkdir(mode=0o700)
@@ -127,6 +139,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
             or gate.get("site_modified") is not False
             or gate.get("deployment_authorized") is not False):
         raise ValueError("Isolated EZ2 runtime identity gate rejected capture")
+    # Observe all component files before exporting SQL. A second inventory
+    # after the post-capture runtime gate prevents silent file-set drift.
+    initial_inventory = {role: _inventory(source, role)
+                         for role, source in components.items()}
     # All writes remain in a private directory outside the WordPress root.
     with tempfile.TemporaryDirectory(prefix="ez2-capture-", dir=parent) as scratch:
         staged = Path(scratch) / "snapshot"
@@ -151,6 +167,9 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         post_gate = json.loads(_wp(wp_executable, root, ["eval-file", str(gate_file)], env))
         if post_gate != gate:
             raise ValueError("WordPress runtime identity changed during capture")
+        if any(_inventory(source, role) != initial_inventory[role]
+               for role, source in components.items()):
+            raise ValueError("WordPress source file inventory changed during capture")
         result = pack(staged, destination, exact_sha)
         try:
             replay_result = replay(destination, exact_sha)
@@ -166,6 +185,7 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         "backup_created": result["byte_integrity_verified"],
         "database_export_generated": True,
         "file_replay_verified": True,
+        "source_file_inventory_stable": True,
         "database_restore_rehearsed": False,
         "consistent_snapshot_verified": False,
         "wordpress_files_modified": False,
