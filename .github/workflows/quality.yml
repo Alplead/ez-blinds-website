@@ -543,7 +543,7 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-backup-readiness.php
           php -l scripts/test_ez2_backup_readiness.php
           php scripts/test_ez2_backup_readiness.php | tee /tmp/ez2-backup-readiness.log
-          grep -Fq 'EZ2_BACKUP_READINESS_GUARD_PASS cases=24 backup_created=false apply_disabled=true' /tmp/ez2-backup-readiness.log
+          grep -Fq 'EZ2_BACKUP_READINESS_GUARD_PASS cases=30 backup_created=false apply_disabled=true' /tmp/ez2-backup-readiness.log
 
       - name: Package and verify isolated synthetic EZ2 backup archives
         run: |
