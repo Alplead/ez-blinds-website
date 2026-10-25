@@ -514,6 +514,12 @@ jobs:
           php scripts/test_ez2_backup_readiness.php | tee /tmp/ez2-backup-readiness.log
           grep -Fq 'EZ2_BACKUP_READINESS_GUARD_PASS cases=24 backup_created=false apply_disabled=true' /tmp/ez2-backup-readiness.log
 
+      - name: Package and verify isolated synthetic EZ2 backup archives
+        run: |
+          python3 -m py_compile scripts/ez2_backup_snapshot_pack.py scripts/test_ez2_backup_snapshot_pack.py
+          python3 scripts/test_ez2_backup_snapshot_pack.py | tee /tmp/ez2-backup-snapshot-pack.log
+          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=18 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
+
       - name: Guard isolated EZ2 delivery agent preview (no installation)
         run: |
           php -l tools/ez2-delivery-agent/ez2-delivery-agent.php
