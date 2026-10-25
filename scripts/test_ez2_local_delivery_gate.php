@@ -29,6 +29,13 @@ function wp_remote_get( $url, $options ) {
 function wp_remote_retrieve_response_code( $r ) { return $r['code']; }
 function wp_remote_retrieve_body( $r ) { return $r['body']; }
 
+function get_plugins() { return $GLOBALS['installed_plugins']; }
+function is_plugin_active( $slug ) { return in_array( $slug, $GLOBALS['active_plugins'], true ); }
+function get_posts( $args ) { return $GLOBALS['page_ids']; }
+function get_post_meta( $id, $key, $single ) { return $GLOBALS['page_meta'][$id][$key] ?? ''; }
+function get_post_field( $key, $id ) { return $GLOBALS['page_fields'][$id][$key] ?? ''; }
+function wp_json_encode( $value ) { return json_encode( $value ); }
+
 require dirname( __DIR__ ) . '/wp-content/plugins/ez2-local-delivery-gate/ez2-local-delivery-gate.php';
 $GLOBALS['home'] = 'http://ez2-review.local/';
 $GLOBALS['site'] = 'http://ez2-review.local/';
@@ -136,4 +143,53 @@ $GLOBALS['site_identity'] = '';
 $GLOBALS['responses'] = array();
 reject( ez2_gate_preflight(), 'ez2_wrong_site', 'site failure before network' );
 accept( count( $GLOBALS['responses'] ) === 0, 'no queued network work on wrong site' );
+$GLOBALS['installed_plugins'] = array();
+$GLOBALS['active_plugins'] = array();
+$GLOBALS['page_ids'] = array();
+$GLOBALS['page_meta'] = array();
+$GLOBALS['page_fields'] = array();
+$GLOBALS['site_identity'] = 'ez2-isolated-only';
+$inventory = ez2_gate_local_snapshot();
+accept( is_array( $inventory ) && $inventory['isolated_site'] === true
+    && $inventory['elementor_installed'] === false
+    && $inventory['managed_page_count'] === 0 && $inventory['one_click_ready'] === false,
+    'empty isolated site still not approved for delivery' );
+$GLOBALS['installed_plugins'] = array( 'elementor/elementor.php' => array( 'Version' => '4.3.4' ) );
+$GLOBALS['active_plugins'] = array( 'elementor/elementor.php' );
+$GLOBALS['page_ids'] = array( 123 );
+$GLOBALS['page_meta'][123] = array(
+    '_ez2_managed_key' => 'ez2-home-hero',
+    '_elementor_data' => 'PRIVATE_IMAGE_INTERNAL_PATH',
+    '_elementor_page_settings' => 'private settings',
+    '_thumbnail_id' => '19',
+);
+$GLOBALS['page_fields'][123] = array( 'post_title' => 'MY PRIVATE TITLE', 'post_content' => 'MY PRIVATE PAGE' );
+$inventory = ez2_gate_local_snapshot();
+accept( $inventory['elementor_installed'] === true && $inventory['elementor_active'] === true
+    && $inventory['elementor_version'] === '4.3.4'
+    && $inventory['managed_page_count'] === 1
+    && strlen( $inventory['managed_page_digests']['ez2-home-hero'] ) === 64,
+    'local content fingerprint and plugin status collected' );
+$public = json_encode( $inventory );
+accept( strpos( $public, 'MY PRIVATE' ) === false && strpos( $public, 'PRIVATE_IMAGE' ) === false,
+    'private page text and URLs never leave local snapshot' );
+$first = $inventory['managed_page_digests']['ez2-home-hero'];
+$GLOBALS['page_fields'][123]['post_content'] = 'EDITED PRIVATE PAGE';
+$changed = ez2_gate_local_snapshot();
+accept( $changed['managed_page_digests']['ez2-home-hero'] !== $first,
+    'Owner manual edit visibly changes digest' );
+$GLOBALS['page_fields'][123]['post_content'] = 'MY PRIVATE PAGE';
+$GLOBALS['page_ids'] = array( 123, 124 );
+$GLOBALS['page_meta'][124] = $GLOBALS['page_meta'][123];
+reject( ez2_gate_local_snapshot(), 'ez2_managed_key', 'duplicated managed key blocked' );
+$GLOBALS['page_ids'] = array( 123 );
+$GLOBALS['page_meta'][123]['_ez2_managed_key'] = 'path/unsafe';
+reject( ez2_gate_local_snapshot(), 'ez2_managed_key', 'unsafe managed key blocked' );
+$GLOBALS['page_meta'][123]['_ez2_managed_key'] = 'ez2-home-hero';
+$GLOBALS['page_ids'] = array_fill( 0, 101, 123 );
+reject( ez2_gate_local_snapshot(), 'ez2_managed_pages_limit', 'oversized managed set blocked' );
+$GLOBALS['page_ids'] = array( 123 );
+$GLOBALS['site_identity'] = '';
+reject( ez2_gate_local_snapshot(), 'ez2_wrong_site', 'inventory blocked for wrong site' );
+
 echo 'EZ2_LP_DELIVERY_GATE_PASS cases=' . $count . "\n";
