@@ -175,5 +175,12 @@ reject(lambda root, parent, fake: (root / "wp-content" / "uploads" / "bad?.txt")
 reject(lambda root, parent, fake: (root / "wp-content" / "plugins" / "nested").symlink_to(
     root / "wp-content" / "uploads", target_is_directory=True))
 
-assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7, CASES
+# Never allow private SQL/media backups to be created under a Git checkout.
+# Ordinary checkouts use a .git directory; linked worktrees use a .git file.
+reject(lambda root, parent, fake: (parent / ".git").mkdir())
+reject(lambda root, parent, fake: (parent.parent / ".git").mkdir())
+reject(lambda root, parent, fake: (parent.parent / ".git").write_text("gitdir: /synthetic/worktree"))
+reject(lambda root, parent, fake: (parent.parent / ".git").symlink_to("missing-gitdir"))
+
+assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7 + 4, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
