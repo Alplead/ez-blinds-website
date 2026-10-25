@@ -495,9 +495,9 @@ jobs:
 
       - name: Test read-only installed first-party code parity (synthetic only)
         run: |
-          python3 -m py_compile scripts/ez2_installed_code_parity.py scripts/test_ez2_installed_code_parity.py
+          python3 -m py_compile scripts/ez2_installed_code_parity.py scripts/ez2_ci_live_installed_parity.py scripts/test_ez2_installed_code_parity.py
           python3 scripts/test_ez2_installed_code_parity.py | tee /tmp/ez2-code-parity.log
-          grep -Fq 'EZ2_INSTALLED_CODE_PARITY_PASS cases=13' /tmp/ez2-code-parity.log
+          grep -Fq 'EZ2_INSTALLED_CODE_PARITY_PASS cases=21' /tmp/ez2-code-parity.log
 
       - name: Test isolated EZ2 managed-content digest snapshot (offline only)
         run: |
