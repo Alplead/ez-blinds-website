@@ -420,6 +420,12 @@ jobs:
           python3 scripts/test_ez2_elementor_media_compile.py | tee /tmp/ez2-elementor-media-compile.log
           grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=28' /tmp/ez2-elementor-media-compile.log
 
+      - name: Test isolated EZ2 WP-CLI private snapshot capture (fake WP only)
+        run: |
+          python3 -m py_compile scripts/ez2_wp_snapshot_capture.py scripts/test_ez2_wp_snapshot_capture.py
+          python3 scripts/test_ez2_wp_snapshot_capture.py | tee /tmp/ez2-wp-private-capture.log
+          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=38 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
+
       - name: Validate isolated EZ2 rollback backup manifest and bytes (synthetic only)
         run: |
           python3 -m py_compile scripts/ez2_backup_preflight.py scripts/test_ez2_backup_preflight.py
