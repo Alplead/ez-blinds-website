@@ -505,3 +505,10 @@ jobs:
           node --check scripts/test_ez2_elementor_browser_smoke.mjs
           node scripts/test_ez2_elementor_browser_smoke.mjs | tee /tmp/ez2-browser-guard.log
           grep -q 'EZ2_SYNTHETIC_BROWSER_GUARD_PASS cases=26' /tmp/ez2-browser-guard.log
+
+      - name: Guard isolated EZ2 delivery agent preview (no installation)
+        run: |
+          php -l tools/ez2-delivery-agent/ez2-delivery-agent.php
+          php -l scripts/test_ez2_delivery_agent.php
+          php scripts/test_ez2_delivery_agent.php | tee /tmp/ez2-delivery-agent.log
+          grep -Fq 'EZ2_DELIVERY_AGENT_GUARD_PASS cases=18 apply_disabled=true' /tmp/ez2-delivery-agent.log
