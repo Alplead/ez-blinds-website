@@ -378,6 +378,20 @@ jobs:
             | tee /tmp/ez2-release-candidate-roundtrip.log
           grep -Fq 'EZ2_RELEASE_ELEMENTOR_ROUNDTRIP_PASS exact_head=true gallery=4 draft_cleaned=true uploads_cleaned=true publication=false localwp_touched=false one_click_complete=false' /tmp/ez2-release-candidate-roundtrip.log
 
+      - name: Verify real WordPress post-install state and synthetic candidate cleanup
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_POSTINSTALL=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZB_EXPECTED_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_ci_postinstall_integrity.php --allow-root \
+            | tee /tmp/ez2-ci-postinstall-integrity.log
+          grep -Fq 'EZ2_CI_POSTINSTALL_INTEGRITY_PASS runtime=real_wordpress candidate_cleanup=true' /tmp/ez2-ci-postinstall-integrity.log
+
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
         with:

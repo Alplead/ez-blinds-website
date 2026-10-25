@@ -298,6 +298,13 @@ jobs:
           python3 scripts/test_ez2_checkpoint_upgrade_rehearsal.py | tee /tmp/ez2-checkpoint-upgrade.log
           grep -Fq 'EZ2_CHECKPOINT_CANDIDATE_SCRATCH_ROLLBACK_PASS cases=13 private_backup_unchanged=true localwp_touched=false can_apply=false' /tmp/ez2-checkpoint-upgrade.log
 
+      - name: Guard real WordPress post-install integrity (offline fixtures)
+        run: |
+          php -l scripts/ez2_ci_postinstall_integrity.php
+          php -l scripts/test_ez2_ci_postinstall_integrity.php
+          php scripts/test_ez2_ci_postinstall_integrity.php | tee /tmp/ez2-postinstall-integrity-guard.log
+          grep -Fq 'EZ2_CI_POSTINSTALL_GUARD_PASS cases=27' /tmp/ez2-postinstall-integrity-guard.log
+
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
