@@ -83,6 +83,10 @@ python3 scripts/ez2_backup_snapshot_pack.py "$snapshot" "$scratch/verified-backu
 python3 scripts/ez2_backup_archive_guard.py "$scratch/verified-backup" "$exact_head" > /dev/null
 python3 scripts/ez2_backup_scratch_replay.py "$scratch/verified-backup" "$exact_head" \
   | grep -Fq '"scratch_deleted": true'
+# Bind the real exact-head public release set to this verified synthetic
+# rollback archive. The bridge cannot grant installation or LocalWP authority.
+python3 scripts/ez2_backup_release_binding.py .release "$scratch/verified-backup" "$exact_head" \
+  | grep -Fq '"status": "EXACT_HEAD_RELEASE_AND_PRIVATE_BACKUP_VERIFIED_ONLY"'
 backup_sql="$scratch/verified-backup/database.sql.gz"
 gzip -t "$backup_sql"
 
