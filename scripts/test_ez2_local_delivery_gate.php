@@ -308,4 +308,81 @@ $GLOBALS['site_identity'] = '';
 reject( ez2_gate_content_plan( $candidate, $local, $source ), 'ez2_wrong_site',
     'content planning blocked for wrong site' );
 
+
+/** PHP-side integrity contract: no install and no trusted-publisher claim. */
+$release_files = array(
+    'ezb-theme.zip' => 'synthetic first-party theme archive',
+    'ezb-core.zip' => 'synthetic first-party core archive',
+    'RELEASE_METADATA.txt' => 'synthetic metadata',
+    'RELEASE_CONTENTS.json' => 'synthetic release contents',
+    'SHA256SUMS' => 'synthetic checksums',
+    'ez2-content-candidate.zip' => 'synthetic public design candidate',
+);
+$catalog = array(
+    'schema' => 1,
+    'source_sha' => $sha,
+    'scope' => 'engineering-evidence-only',
+    'target_site' => 'ez2-isolated-only',
+    'files' => array(),
+    'one_click_complete' => false,
+    'elementor_candidate_installable' => false,
+    'third_party_plugins_included' => false,
+    'private_media_included' => false,
+    'localwp_installed' => false,
+    'deployment_authorized' => false,
+);
+foreach ( $release_files as $name => $bytes ) {
+    $catalog['files'][] = array( 'name' => $name, 'sha256' => hash( 'sha256', $bytes ) );
+}
+$verified = ez2_gate_release_evidence( $catalog, $release_files, $sha );
+accept( is_array( $verified ) && $verified['status'] === 'INTEGRITY_ONLY'
+    && $verified['components_verified'] === 6
+    && $verified['publisher_authenticated'] === false
+    && $verified['one_click_ready'] === false && $verified['site_modified'] === false,
+    'all six exact-SHA components match with truthful untrusted result' );
+$bad = $release_files;
+$bad['ezb-theme.zip'] .= '-changed';
+reject( ez2_gate_release_evidence( $catalog, $bad, $sha ), 'ez2_release_digest',
+    'tampered theme archive blocked' );
+$bad = $release_files;
+$bad['ez2-content-candidate.zip'] .= '-tamper';
+reject( ez2_gate_release_evidence( $catalog, $bad, $sha ), 'ez2_release_digest',
+    'tampered Elementor candidate blocked' );
+$bad = $release_files;
+$bad['additional-private.sql'] = 'forbidden';
+reject( ez2_gate_release_evidence( $catalog, $bad, $sha ), 'ez2_release_schema',
+    'unexpected private database member blocked' );
+$bad = $release_files;
+unset( $bad['ezb-core.zip'] );
+reject( ez2_gate_release_evidence( $catalog, $bad, $sha ), 'ez2_release_schema',
+    'incomplete package blocked' );
+$bad = $catalog;
+$bad['source_sha'] = str_repeat( 'b', 40 );
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_schema',
+    'old or substituted release SHA blocked' );
+$bad = $catalog;
+$bad['target_site'] = 'ez-bns-new-dev.local';
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_schema',
+    'wrong target site blocked' );
+$bad = $catalog;
+$bad['one_click_complete'] = true;
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_claim',
+    'premature one-click promise blocked' );
+$bad = $catalog;
+$bad['deployment_authorized'] = true;
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_claim',
+    'forged deployment permission blocked' );
+$bad = $catalog;
+$bad['files'][0]['sha256'] = str_repeat( 'z', 64 );
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_member',
+    'invalid digest encoding blocked' );
+$bad = $catalog;
+$bad['files'][0]['name'] = '../wp-config.php';
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_member',
+    'traversal filename blocked' );
+$bad = $catalog;
+$bad['files'][0]['private_url'] = 'hidden';
+reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_member',
+    'catalog record containing unexpected private content blocked' );
+
 echo 'EZ2_LP_DELIVERY_GATE_PASS cases=' . $count . "\n";
