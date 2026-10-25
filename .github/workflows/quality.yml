@@ -272,6 +272,13 @@ jobs:
           php scripts/test_ez2_ci_disposable_content_upgrade.php | tee /tmp/ez2-ci-content-upgrade.log
           grep -Fq 'EZ2_CI_CONTENT_UPGRADE_GUARD_PASS cases=22' /tmp/ez2-ci-content-upgrade.log
 
+      - name: Check isolated EZ2 WordPress delivery runtime safety (no install)
+        run: |
+          php -l scripts/ez2_wp_delivery_runtime_gate.php
+          php -l scripts/test_ez2_wp_delivery_runtime_gate.php
+          php scripts/test_ez2_wp_delivery_runtime_gate.php | tee /tmp/ez2-delivery-runtime-gate.log
+          grep -Fq 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=28' /tmp/ez2-delivery-runtime-gate.log
+
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
