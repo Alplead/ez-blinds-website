@@ -373,6 +373,12 @@ jobs:
           python3 scripts/test_ez2_ci_pinned_plugin_install.py | tee /tmp/ez2-ci-pinned-plugin-test.log
           grep -Fq 'EZ2_CI_PINNED_ELEMENTOR_INSTALL_GUARD_PASS cases=13' /tmp/ez2-ci-pinned-plugin-test.log
 
+      - name: Rehearse pinned third-party plugin rollback (offline scratch only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_pinned_plugin_recovery.py scripts/test_ez2_ci_pinned_plugin_recovery.py
+          python3 scripts/test_ez2_ci_pinned_plugin_recovery.py | tee /tmp/ez2-ci-plugin-recovery-guard.log
+          grep -Fq 'EZ2_CI_PINNED_PLUGIN_RECOVERY_GUARD_PASS cases=14' /tmp/ez2-ci-plugin-recovery-guard.log
+
       - name: Observe plugin checksum candidates safely (offline fixtures only)
         run: |
           python3 -m py_compile scripts/ez2_plugin_checksum_probe.py scripts/test_ez2_plugin_checksum_probe.py
