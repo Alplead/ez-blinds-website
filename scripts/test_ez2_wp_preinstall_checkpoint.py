@@ -15,6 +15,7 @@ from unittest.mock import patch
 from ez2_content_candidate_bundle import package
 from ez2_release_set import run as release_set
 from ez2_wp_preinstall_checkpoint import prepare
+from ez2_wp_snapshot_capture import capture as real_capture
 
 SHA = "a" * 40
 INSTALLED_SHA = "b" * 40
@@ -206,5 +207,28 @@ for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
             os.environ.pop("FAKE_WP_FAIL", None)
         assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
 
-assert CASES == 14, CASES
+# A capture can succeed yet its release or installed code change before the
+# checkpoint is accepted. The newly created private archive must be removed.
+for scenario in ("installed-code-changed-during-capture",
+                 "candidate-release-changed-during-capture",
+                 "installed-release-changed-during-capture"):
+    with tempfile.TemporaryDirectory() as temp:
+        release, installed_release, wp, private, fake = fixture(Path(temp))
+        destination = private / "ez2-backup-checkpoint"
+
+        def capture_then_drift(*args, **kwargs):
+            result = real_capture(*args, **kwargs)
+            if scenario == "installed-code-changed-during-capture":
+                (wp / "wp-content/themes/ezb-theme/style.css").write_text("post-capture drift")
+            elif scenario == "candidate-release-changed-during-capture":
+                (release / "ezb-theme.zip").write_bytes(b"post-capture tamper")
+            else:
+                (installed_release / "ezb-core.zip").write_bytes(b"post-capture tamper")
+            return result
+
+        with patch("ez2_wp_preinstall_checkpoint.capture", side_effect=capture_then_drift):
+            reject(lambda: run(release, installed_release, wp, private, fake), destination)
+        assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
+
+assert CASES == 17, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")

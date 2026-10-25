@@ -39,30 +39,35 @@ def prepare(candidate_release_dir, installed_release_dir, wp_root, private_paren
            for index, a in enumerate(directories)
            for b in directories[index + 1:]):
         raise ValueError("Candidate, installed release and backup paths must be disjoint")
-    for directory, sha in ((candidate, candidate_sha), (installed, installed_sha)):
-        catalog = verify_release("verify", directory, sha)
-        if (catalog.get("source_sha") != sha
-                or catalog.get("target_site") != EXPECTED_SITE
-                or catalog.get("scope") != "engineering-evidence-only"
-                or catalog.get("deployment_authorized") is not False
-                or catalog.get("one_click_complete") is not False):
-            raise ValueError("Exact-head isolated release rejected")
-    # Byte parity is not proof of who originally installed the site.
-    parity = check_installed_parity(installed, installed_sha,
-                                    root / "wp-content")
-    if (parity.get("status") != "CODE_BYTES_MATCH_RELEASE_ONLY"
-            or parity.get("source_sha") != installed_sha
-            or parity.get("theme_core_byte_parity") is not True
-            or parity.get("mismatch_count") != 0
-            or type(parity.get("checked_release_files")) is not int
-            or parity["checked_release_files"] < 1
-            or parity.get("deployment_authorized") is not False):
-        raise ValueError("Installed first-party bytes do not match baseline release")
+    # The release and installed code may change while a private capture runs.
+    # Re-attest both immediately before accepting the backup as a checkpoint.
+    def verify_baseline():
+        for directory, sha in ((candidate, candidate_sha), (installed, installed_sha)):
+            catalog = verify_release("verify", directory, sha)
+            if (catalog.get("source_sha") != sha
+                    or catalog.get("target_site") != EXPECTED_SITE
+                    or catalog.get("scope") != "engineering-evidence-only"
+                    or catalog.get("deployment_authorized") is not False
+                    or catalog.get("one_click_complete") is not False):
+                raise ValueError("Exact-head isolated release rejected")
+        # Byte parity is not proof of who originally installed the site.
+        parity = check_installed_parity(installed, installed_sha,
+                                        root / "wp-content")
+        if (parity.get("status") != "CODE_BYTES_MATCH_RELEASE_ONLY"
+                or parity.get("source_sha") != installed_sha
+                or parity.get("theme_core_byte_parity") is not True
+                or parity.get("mismatch_count") != 0
+                or type(parity.get("checked_release_files")) is not int
+                or parity["checked_release_files"] < 1
+                or parity.get("deployment_authorized") is not False):
+            raise ValueError("Installed first-party bytes do not match baseline release")
+    verify_baseline()
     # Capture only the verified installed baseline; no candidate is applied.
     result = capture(wp_root, parent, backup_name, host, elementor_version,
                      installed_sha, wp_executable=wp_executable)
     destination = parent / backup_name
     try:
+        verify_baseline()  # Fail closed if release or installed bytes drifted during capture.
         if (result.get("status") != "EZ2_PRIVATE_CAPTURE_ARCHIVED_AND_SCRATCH_FILE_REPLAYED_ONLY"
                 or result.get("source_sha") != installed_sha
                 or result.get("database_export_generated") is not True
