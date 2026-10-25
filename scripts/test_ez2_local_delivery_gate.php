@@ -178,6 +178,19 @@ $GLOBALS['page_fields'][123]['post_content'] = 'EDITED PRIVATE PAGE';
 $changed = ez2_gate_local_snapshot();
 accept( $changed['managed_page_digests']['ez2-home-hero'] !== $first,
     'Owner manual edit visibly changes digest' );
+
+$GLOBALS['page_meta'][123]['_elementor_page_settings'] = array( 'slideshow' => array( 'seconds' => 5 ) );
+$settings_before = ez2_gate_local_snapshot();
+$GLOBALS['page_meta'][123]['_elementor_page_settings']['slideshow']['seconds'] = 7;
+$settings_after = ez2_gate_local_snapshot();
+accept( $settings_before['managed_page_digests']['ez2-home-hero']
+    !== $settings_after['managed_page_digests']['ez2-home-hero'],
+    'Elementor nested settings edits cannot be hidden by array-to-string cast' );
+$GLOBALS['page_meta'][123]['_elementor_page_settings'] = 'private settings';
+$GLOBALS['page_fields'][123]['post_content'] = "\\xB1";
+reject( ez2_gate_local_snapshot(), 'ez2_page_digest',
+    'unencodable private post content fails closed' );
+$GLOBALS['page_fields'][123]['post_content'] = 'MY PRIVATE PAGE';
 $GLOBALS['page_fields'][123]['post_content'] = 'MY PRIVATE PAGE';
 $GLOBALS['page_ids'] = array( 123, 124 );
 $GLOBALS['page_meta'][124] = $GLOBALS['page_meta'][123];
