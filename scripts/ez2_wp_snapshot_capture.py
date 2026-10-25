@@ -39,6 +39,19 @@ def _real_directory(path):
     return real
 
 
+def _private_parent_outside_git(parent):
+    """Reject private backup destinations inside any Git worktree.
+
+    A public repository must never contain SQL, media, or customer backups,
+    even as untracked files. Worktrees use a .git *file*, not a directory.
+    This guard is intentionally independent of gitignore configuration.
+    """
+    for directory in (parent, *parent.parents):
+        marker = directory / ".git"
+        if marker.exists() or marker.is_symlink():
+            raise ValueError("Private backup destination is inside a Git worktree")
+
+
 def _inventory(source, role):
     """Read-only inventory of source files, not a database-consistency proof.
 
@@ -103,6 +116,7 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     parent = _real_directory(backup_parent)
     if _inside(root, parent) or _inside(parent, root):
         raise ValueError("Private backup parent must be outside WordPress root")
+    _private_parent_outside_git(parent)
     destination = parent / backup_name
     if destination.exists() or destination.is_symlink():
         raise ValueError("Backup destination already exists")
