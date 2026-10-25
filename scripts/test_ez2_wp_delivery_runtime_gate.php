@@ -14,6 +14,8 @@ $base = [
     'theme_entrypoint_regular' => true, 'core_entrypoint_regular' => true,
     'elementor_entrypoint_regular' => true, 'maintenance_mode' => false,
     'uploads_dir_regular' => true,
+    'theme_dir_exists' => true, 'core_dir_exists' => true,
+    'elementor_dir_exists' => true, 'elementor_pro_dir_exists' => false,
 ];
 $cases = 0;
 function assertGate(array $facts, string $status, ?string $issue = null): void {
@@ -64,6 +66,7 @@ $bad = [
     ['elementor_entrypoint_regular', false, 'ELEMENTOR_ENTRYPOINT_UNSAFE'],
     ['maintenance_mode', true, 'MAINTENANCE_MODE_UNKNOWN_OR_ACTIVE'],
     ['uploads_dir_regular', false, 'UPLOADS_DIRECTORY_UNSAFE'],
+    ['elementor_pro_dir_exists', true, 'ELEMENTOR_PRO_PRESENT'],
 ];
 foreach ($bad as [$key, $value, $issue]) {
     $facts = $base;
@@ -71,5 +74,55 @@ foreach ($bad as [$key, $value, $issue]) {
     assertGate($facts, 'BLOCKED_DELIVERY_RUNTIME_GATE', $issue);
 }
 assertGate([], 'BLOCKED_DELIVERY_RUNTIME_GATE', 'INVALID_EXPECTED_RELEASE_SHA');
-if ($cases !== 28) throw new RuntimeException('Unexpected test count: ' . $cases);
-echo 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=' . $cases . "\n";
+
+$bootstrap = $base;
+$bootstrap['delivery_mode'] = 'bootstrap';
+$bootstrap['active_theme'] = 'twentytwentysix';
+$bootstrap['ezb_core_active'] = false;
+$bootstrap['elementor_active'] = false;
+$bootstrap['elementor_loaded'] = false;
+$bootstrap['elementor_version'] = null;
+foreach (['theme_dir_exists','core_dir_exists','elementor_dir_exists',
+          'theme_entrypoint_regular','core_entrypoint_regular',
+          'elementor_entrypoint_regular'] as $key) $bootstrap[$key] = false;
+assertGate($bootstrap, 'READY_FOR_BACKUP_REHEARSAL_ONLY');
+$https = $bootstrap;
+$https['home'] = 'https://ez2-review.local/';
+$https['siteurl'] = 'https://ez2-review.local/';
+assertGate($https, 'READY_FOR_BACKUP_REHEARSAL_ONLY');
+$bootstrapBad = [
+    ['delivery_mode', 'install', 'INVALID_DELIVERY_MODE'],
+    ['theme_dir_exists', true, 'THEME_ALREADY_PRESENT'],
+    ['core_dir_exists', true, 'CORE_ALREADY_PRESENT'],
+    ['elementor_dir_exists', true, 'ELEMENTOR_ALREADY_PRESENT'],
+    ['theme_entrypoint_regular', true, 'BOOTSTRAP_THEME_ENTRYPOINT_PRESENT'],
+    ['core_entrypoint_regular', true, 'BOOTSTRAP_CORE_ENTRYPOINT_PRESENT'],
+    ['elementor_entrypoint_regular', true, 'BOOTSTRAP_ELEMENTOR_ENTRYPOINT_PRESENT'],
+    ['ezb_core_active', true, 'CORE_ALREADY_ACTIVE'],
+    ['elementor_active', true, 'ELEMENTOR_ALREADY_ACTIVE'],
+    ['elementor_loaded', true, 'ELEMENTOR_ALREADY_LOADED'],
+    ['elementor_version', '4.3.4', 'BOOTSTRAP_ELEMENTOR_ALREADY_LOADED'],
+    ['active_theme', 'ezb-theme', 'BOOTSTRAP_THEME_NOT_CLEAN'],
+    ['active_theme', '', 'BOOTSTRAP_THEME_NOT_CLEAN'],
+    ['elementor_pro_dir_exists', true, 'ELEMENTOR_PRO_PRESENT'],
+    ['expected_host', 'ez-bns-new-dev.local', 'INVALID_ISOLATED_EXPECTED_HOST'],
+    ['home', 'https://ezbns.com.au', 'UNSAFE_HOME'],
+    ['identity', null, 'MISSING_EZ2_SITE_IDENTITY'],
+    ['wp_cli', false, 'WP_CLI_REQUIRED'],
+    ['environment', 'staging', 'NON_DEVELOPMENT_ENVIRONMENT'],
+    ['expected_elementor_version', 'unlocked', 'INVALID_EXACT_ELEMENTOR_VERSION'],
+    ['expected_release_sha', str_repeat('0', 39), 'INVALID_EXPECTED_RELEASE_SHA'],
+    ['maintenance_mode', true, 'MAINTENANCE_MODE_UNKNOWN_OR_ACTIVE'],
+    ['uploads_dir_regular', false, 'UPLOADS_DIRECTORY_UNSAFE'],
+];
+foreach ($bootstrapBad as [$key, $value, $issue]) {
+    $facts = $bootstrap;
+    $facts[$key] = $value;
+    assertGate($facts, 'BLOCKED_DELIVERY_RUNTIME_GATE', $issue);
+}
+assertGate(['delivery_mode' => 'bootstrap'], 'BLOCKED_DELIVERY_RUNTIME_GATE', 'MISSING_EZ2_SITE_IDENTITY');
+assertGate(['delivery_mode' => 'upgrade'], 'BLOCKED_DELIVERY_RUNTIME_GATE', 'EZB_CORE_NOT_ACTIVE');
+assertGate(['delivery_mode' => null] + $bootstrap, 'BLOCKED_DELIVERY_RUNTIME_GATE', 'INVALID_DELIVERY_MODE');
+
+if ($cases !== 57) throw new RuntimeException('Unexpected test count: ' . $cases);
+echo 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=' . $cases . ' modes=bootstrap,upgrade' . "\n";

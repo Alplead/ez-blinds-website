@@ -277,7 +277,7 @@ jobs:
           php -l scripts/ez2_wp_delivery_runtime_gate.php
           php -l scripts/test_ez2_wp_delivery_runtime_gate.php
           php scripts/test_ez2_wp_delivery_runtime_gate.php | tee /tmp/ez2-delivery-runtime-gate.log
-          grep -Fq 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=28' /tmp/ez2-delivery-runtime-gate.log
+          grep -Fq 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=57' /tmp/ez2-delivery-runtime-gate.log
 
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
