@@ -50,7 +50,7 @@ final class Ez2CiPostinstallIntegrity {
         if (!is_string($raw) || !preg_match('/^commit=([0-9a-f]{40})$/m', $raw, $m))
             throw new RuntimeException('RELEASE_METADATA_SHA_MISSING');
         $statuses = ['publish','future','draft','pending','private','trash'];
-        $find = static function (array $query): int {
+        $find = static function (array $query) use ($statuses): int {
             $ids = get_posts(array_merge([
                 'post_type' => 'page', 'post_status' => $statuses,
                 'posts_per_page' => 1, 'fields' => 'ids',
