@@ -192,4 +192,108 @@ $GLOBALS['page_ids'] = array( 123 );
 $GLOBALS['site_identity'] = '';
 reject( ez2_gate_local_snapshot(), 'ez2_wrong_site', 'inventory blocked for wrong site' );
 
+
+/** Digest-only protected content planning; never touches real WordPress. */
+$GLOBALS['site_identity'] = 'ez2-isolated-only';
+$GLOBALS['page_ids'] = array( 123 );
+$GLOBALS['page_meta'][123]['_ez2_managed_key'] = 'ez2-home-hero';
+$local = ez2_gate_local_snapshot();
+$baseline = $local['managed_page_digests']['ez2-home-hero'];
+$desired = str_repeat( 'b', 64 );
+$source = array( 'source_sha' => $sha, 'source_ci_pass' => true,
+    'site_modified' => false, 'one_click_ready' => false );
+$candidate = array(
+    'schema_version' => 1, 'target_site' => 'ez2-isolated-only',
+    'source_sha' => $sha, 'snapshot_schema' => 'wp-fields-v1',
+    'pages' => array(
+        array( 'key' => 'ez2-home-hero', 'baseline_sha256' => $baseline,
+            'desired_sha256' => $desired ),
+        array( 'key' => 'ez2-products', 'baseline_sha256' => null,
+            'desired_sha256' => str_repeat( 'c', 64 ) ),
+    ),
+);
+$plan = ez2_gate_content_plan( $candidate, $local, $source );
+accept( is_array( $plan ) && $plan['status'] === 'PREVIEW_ONLY'
+    && $plan['actions']['update'] === array( 'ez2-home-hero' )
+    && $plan['actions']['create'] === array( 'ez2-products' )
+    && $plan['site_modified'] === false && $plan['one_click_ready'] === false,
+    'safe create/update preview without installation' );
+$exposed = json_encode( $plan );
+accept( strpos( $exposed, 'PRIVATE' ) === false && strpos( $exposed, 'EDITED' ) === false,
+    'planned actions never leak Owner page text' );
+$edited = $local;
+$edited['managed_page_digests']['ez2-home-hero'] = str_repeat( 'f', 64 );
+$blocked = ez2_gate_content_plan( $candidate, $edited, $source );
+accept( $blocked['status'] === 'BLOCKED_OWNER_CONFLICT'
+    && $blocked['actions']['blocked_owner_conflict'] === array( 'ez2-home-hero' ),
+    'Owner edits block overwrite' );
+$same = $candidate;
+$same['pages'][0]['desired_sha256'] = $baseline;
+$unchanged = ez2_gate_content_plan( $same, $local, $source );
+accept( $unchanged['actions']['unchanged'] === array( 'ez2-home-hero' )
+    && $unchanged['actions']['update'] === array(),
+    'identical managed content remains untouched' );
+$extra = $local;
+$extra['managed_page_digests']['ez2-owner-note'] = str_repeat( 'd', 64 );
+$preserved = ez2_gate_content_plan( $candidate, $extra, $source );
+accept( $preserved['actions']['preserved_existing'] === array( 'ez2-owner-note' ),
+    'unmentioned Owner pages preserved' );
+$malformed = $candidate;
+$malformed['source_sha'] = str_repeat( 'e', 40 );
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_source_drift',
+    'candidate SHA drift blocked' );
+$malformed = $source;
+$malformed['source_ci_pass'] = false;
+reject( ez2_gate_content_plan( $candidate, $local, $malformed ), 'ez2_source_drift',
+    'unverified CI source blocked' );
+$malformed = $candidate;
+$malformed['snapshot_schema'] = 'elementor-raw-json';
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_schema',
+    'incompatible snapshot format blocked' );
+$malformed = $candidate;
+$malformed['pages'][0]['baseline_sha256'] = null;
+$unowned = ez2_gate_content_plan( $malformed, $local, $source );
+accept( $unowned['status'] === 'BLOCKED_OWNER_CONFLICT',
+    'existing page without prior baseline blocked' );
+$malformed = $candidate;
+$malformed['pages'][1]['baseline_sha256'] = str_repeat( 'd', 64 );
+$missing = ez2_gate_content_plan( $malformed, $local, $source );
+accept( $missing['actions']['blocked_owner_conflict'] === array( 'ez2-products' ),
+    'missing expected page blocked' );
+$malformed = $candidate;
+$malformed['pages'] = array_reverse( $candidate['pages'] );
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_page',
+    'unsorted page list blocked' );
+$malformed = $candidate;
+$malformed['pages'][1] = $malformed['pages'][0];
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_page',
+    'duplicate managed page blocked' );
+$malformed = $candidate;
+$malformed['pages'][0]['extra_raw_content'] = 'LEAK';
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_page',
+    'unexpected raw content field blocked' );
+$malformed = $candidate;
+$malformed['pages'][0]['desired_sha256'] = 'invalid';
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_page',
+    'malformed desired hash blocked' );
+$malformed = $candidate;
+$malformed['pages'] = array_fill( 0, 101, $candidate['pages'][0] );
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_schema',
+    'oversized import list blocked' );
+$malformed = $candidate;
+$malformed['pages'] = array();
+reject( ez2_gate_content_plan( $malformed, $local, $source ), 'ez2_candidate_schema',
+    'zero-page release blocked' );
+$malformed = $local;
+$malformed['managed_page_digests']['ez2-home-hero'] = 'bad-hash';
+reject( ez2_gate_content_plan( $candidate, $malformed, $source ), 'ez2_local_digest',
+    'malformed local digest blocked' );
+$malformed = $local;
+$malformed['installed_release_attested'] = true;
+reject( ez2_gate_content_plan( $candidate, $malformed, $source ), 'ez2_local_snapshot',
+    'unexpected attestation claims blocked' );
+$GLOBALS['site_identity'] = '';
+reject( ez2_gate_content_plan( $candidate, $local, $source ), 'ez2_wrong_site',
+    'content planning blocked for wrong site' );
+
 echo 'EZ2_LP_DELIVERY_GATE_PASS cases=' . $count . "\n";
