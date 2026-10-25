@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'design/ez2-home-hero-candidate.json'
+      - 'tools/ez2-delivery-agent/**'
       - 'scripts/ez2_ci_candidate_from_release.py'
       - 'scripts/test_ez2_ci_candidate_from_release.py'
       - 'scripts/ez2_content_candidate_bundle.py'
