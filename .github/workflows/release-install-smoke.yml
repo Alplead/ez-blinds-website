@@ -289,6 +289,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
           python3 scripts/ez2_ci_pinned_plugin_recovery.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-pinned-plugin-recovery.log
           grep -Fq 'EZ2_CI_PINNED_PLUGIN_RECOVERY_PASS scenarios=6 faults=4' /tmp/ez2-ci-pinned-plugin-recovery.log
+          grep -Fq 'EZ2_CI_THREE_COMPONENT_RECOVERY_PASS scenarios=9 faults=7 components=3' /tmp/ez2-ci-pinned-plugin-recovery.log
 
       - name: Rehearse combined theme/core and Elementor-active SQL clone rollback after injected fault
         env:

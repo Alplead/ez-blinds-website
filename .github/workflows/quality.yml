@@ -378,6 +378,8 @@ jobs:
           python3 -m py_compile scripts/ez2_ci_pinned_plugin_recovery.py scripts/test_ez2_ci_pinned_plugin_recovery.py
           python3 scripts/test_ez2_ci_pinned_plugin_recovery.py | tee /tmp/ez2-ci-plugin-recovery-guard.log
           grep -Fq 'EZ2_CI_PINNED_PLUGIN_RECOVERY_GUARD_PASS cases=14' /tmp/ez2-ci-plugin-recovery-guard.log
+          python3 scripts/test_ez2_ci_three_component_recovery.py | tee /tmp/ez2-three-component-guard.log
+          grep -Fq 'EZ2_CI_THREE_COMPONENT_GUARD_PASS cases=19 scenarios=14 faults=12' /tmp/ez2-three-component-guard.log
 
       - name: Observe plugin checksum candidates safely (offline fixtures only)
         run: |
