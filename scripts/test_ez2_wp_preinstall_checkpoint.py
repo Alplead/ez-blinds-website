@@ -16,6 +16,7 @@ from ez2_release_set import run as release_set
 from ez2_wp_preinstall_checkpoint import prepare
 
 SHA = "a" * 40
+INSTALLED_SHA = "b" * 40
 HOST = "ez2-checkpoint.local"
 CASES = 0
 
@@ -49,17 +50,16 @@ def archive(files):
     return buffer.getvalue()
 
 
-def fixture(root):
-    release = root / "release"
+def build_release(release, sha):
     release.mkdir()
     theme = archive([("ezb-theme/style.css", b"Theme Name: EZB Theme"),
                      ("ezb-theme/theme.json", b"{}")])
     core = archive([("ezb-core/ezb-core.php", b"<?php // synthetic")])
     (release / "ezb-theme.zip").write_bytes(theme)
     (release / "ezb-core.zip").write_bytes(core)
-    (release / "RELEASE_METADATA.txt").write_text("commit=" + SHA + "\nmedia_included=no\n")
+    (release / "RELEASE_METADATA.txt").write_text("commit=" + sha + "\nmedia_included=no\n")
     contents = {
-        "schema_version": 1, "commit": SHA, "delivery_scope": "theme-and-core-only",
+        "schema_version": 1, "commit": sha, "delivery_scope": "theme-and-core-only",
         "archives": [
             {"name": "ezb-theme.zip", "install_path": "wp-content/themes/ezb-theme",
              "sha256": hashlib.sha256(theme).hexdigest()},
@@ -85,9 +85,15 @@ def fixture(root):
                      "elements": []}],
     }
     (release / "ez2-content-candidate.zip").write_bytes(
-        package(SHA, json.dumps(candidate).encode()))
-    release_set("build", release, SHA)
+        package(sha, json.dumps(candidate).encode()))
+    release_set("build", release, sha)
 
+    return release
+
+
+def fixture(root):
+    release = build_release(root / "release", SHA)
+    installed_release = build_release(root / "installed-release", INSTALLED_SHA)
     wp = root / "wp"
     wp.mkdir()
     (wp / "wp-load.php").write_text("<?php // synthetic")
@@ -96,19 +102,24 @@ def fixture(root):
     for role in ("uploads", "plugins", "themes"):
         folder = wp / "wp-content" / role
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / "synthetic.txt").write_text("synthetic " + role)
+        if role == "uploads":
+            (folder / "synthetic.txt").write_text("synthetic uploads")
+    for filename, role in (("ezb-theme.zip", "themes"), ("ezb-core.zip", "plugins")):
+        with zipfile.ZipFile(installed_release / filename) as zipped:
+            zipped.extractall(wp / "wp-content" / role)
     private = root / "private"
     private.mkdir()
     fake = root / "fake-wp"
     fake.write_text(FAKE_WP)
     fake.chmod(0o700)
-    return release, wp, private, fake
+    return release, installed_release, wp, private, fake
 
 
-def run(release, wp, private, fake, *, sha=SHA, host=HOST, version="4.3.4",
+def run(release, installed_release, wp, private, fake, *, sha=SHA,
+        installed_sha=INSTALLED_SHA, host=HOST, version="4.3.4",
         name="ez2-backup-checkpoint"):
-    return prepare(release, wp, private, name, host, version, sha,
-                   wp_executable=fake)
+    return prepare(release, installed_release, wp, private, name, host, version,
+                   installed_sha, sha, wp_executable=fake)
 
 
 def reject(action, destination=None):
@@ -124,9 +135,15 @@ def reject(action, destination=None):
 
 
 with tempfile.TemporaryDirectory() as temp:
-    release, wp, private, fake = fixture(Path(temp))
-    result = run(release, wp, private, fake)
+    release, installed_release, wp, private, fake = fixture(Path(temp))
+    result = run(release, installed_release, wp, private, fake)
     assert result["status"] == "PRIVATE_PREINSTALL_CHECKPOINT_VERIFIED_ONLY"
+    assert result["installed_source_sha"] == INSTALLED_SHA
+    assert result["candidate_source_sha"] == SHA
+    assert result["installed_code_byte_parity_verified"] is True
+    assert result["installed_source_attested"] is False
+    assert result["candidate_release_verified"] is True
+    assert json.loads((private / "ez2-backup-checkpoint" / "backup-manifest.json").read_text())["source_sha"] == INSTALLED_SHA
     for key in ("public_release_verified", "private_backup_created",
                 "private_backup_byte_integrity_verified", "private_file_replay_verified",
                 "database_export_generated"):
@@ -138,28 +155,40 @@ with tempfile.TemporaryDirectory() as temp:
         assert result[key] is False
     assert (private / "ez2-backup-checkpoint" / "backup-manifest.json").exists()
     CASES += 1
-    reject(lambda: run(release, wp, private, fake))  # Never overwrite.
+    reject(lambda: run(release, installed_release, wp, private, fake))  # Never overwrite.
     assert CASES == 2
 
-for scenario in ("wrong-sha", "invalid-release", "wrong-host", "gate-failure",
-                 "export-failure", "overlap", "binding-failure"):
+for scenario in ("wrong-sha", "same-sha", "wrong-installed-sha",
+                 "invalid-release", "tampered-installed-release", "installed-code-drift",
+                 "wrong-host", "gate-failure", "export-failure", "overlap",
+                 "binding-failure"):
     with tempfile.TemporaryDirectory() as temp:
-        release, wp, private, fake = fixture(Path(temp))
+        release, installed_release, wp, private, fake = fixture(Path(temp))
         destination = private / "ez2-backup-checkpoint"
         if scenario == "wrong-sha":
-            action = lambda: run(release, wp, private, fake, sha="b" * 40)
+            action = lambda: run(release, installed_release, wp, private, fake, sha="c" * 40)
+        elif scenario == "same-sha":
+            action = lambda: run(release, installed_release, wp, private, fake, sha=INSTALLED_SHA)
+        elif scenario == "wrong-installed-sha":
+            action = lambda: run(release, installed_release, wp, private, fake, installed_sha="c" * 40)
+        elif scenario == "tampered-installed-release":
+            (installed_release / "ezb-theme.zip").write_bytes(b"tampered")
+            action = lambda: run(release, installed_release, wp, private, fake)
+        elif scenario == "installed-code-drift":
+            (wp / "wp-content/themes/ezb-theme/style.css").write_text("owner changed")
+            action = lambda: run(release, installed_release, wp, private, fake)
         elif scenario == "invalid-release":
             (release / "ezb-theme.zip").write_bytes(b"tampered")
-            action = lambda: run(release, wp, private, fake)
+            action = lambda: run(release, installed_release, wp, private, fake)
         elif scenario == "wrong-host":
-            action = lambda: run(release, wp, private, fake, host="ez-bns-new-dev.local")
+            action = lambda: run(release, installed_release, wp, private, fake, host="ez-bns-new-dev.local")
         elif scenario in ("gate-failure", "export-failure"):
             os.environ["FAKE_WP_FAIL"] = "gate" if scenario == "gate-failure" else "export"
-            action = lambda: run(release, wp, private, fake)
+            action = lambda: run(release, installed_release, wp, private, fake)
         elif scenario == "overlap":
             action = lambda: run(release, wp, release, fake)
         else:
-            action = lambda: run(release, wp, private, fake)
+            action = lambda: run(release, installed_release, wp, private, fake)
         try:
             if scenario == "binding-failure":
                 with patch("ez2_wp_preinstall_checkpoint.bind_release",
@@ -171,5 +200,5 @@ for scenario in ("wrong-sha", "invalid-release", "wrong-host", "gate-failure",
             os.environ.pop("FAKE_WP_FAIL", None)
         assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
 
-assert CASES == 9, CASES
+assert CASES == 13, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")
