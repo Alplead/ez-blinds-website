@@ -67,8 +67,27 @@ with tempfile.TemporaryDirectory(prefix='ez2-three-component-tests-') as temp:
     plugin_link = root / 'elementor.4.3.4.zip.link'
     plugin_link.symlink_to(plugin)
     blocked(lambda: rehearse_bundle(plugin_link, lock, release, preexisting=False))
+    observations = []
+    def inspect(live, before):
+        assert (live / 'themes/ezb-theme/style.css').is_file()
+        assert (live / 'plugins/ezb-core/ezb-core.php').is_file()
+        assert (live / 'plugins/elementor/elementor.php').is_file()
+        assert (live / 'uploads/2026/owner-media.txt').read_bytes() == b'synthetic upload preserved'
+        assert before['uploads/2026/owner-media.txt']
+        observations.append(True)
+    for injected in (False, True):
+        result = rehearse_bundle(plugin, lock, release, preexisting=True,
+                                 on_installed=inspect, inject_callback_fault=injected)
+        assert result['restored'] and result['callback_executed']
+        assert result['fault'] == ('after_content_apply' if injected else 'none')
+        CASES += 1
+    assert len(observations) == 2
+    blocked(lambda: rehearse_bundle(plugin, lock, release, preexisting=True,
+                                   on_installed='invalid'))
+    blocked(lambda: rehearse_bundle(plugin, lock, release, preexisting=True,
+                                   inject_callback_fault=True))
     (release / 'ezb-theme.zip').write_bytes(b'not a release ZIP')
     blocked(lambda: rehearse_bundle(plugin, lock, release, preexisting=False))
 
-assert CASES == 19, CASES
-print('EZ2_CI_THREE_COMPONENT_GUARD_PASS cases=19 scenarios=14 faults=12')
+assert CASES == 23, CASES
+print('EZ2_CI_THREE_COMPONENT_GUARD_PASS cases=23 scenarios=16 faults=13')

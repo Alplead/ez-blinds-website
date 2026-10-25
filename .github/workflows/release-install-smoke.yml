@@ -301,6 +301,7 @@ jobs:
           python3 scripts/ez2_ci_combined_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-combined-recovery.log
           grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=4 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false' /tmp/ez2-ci-combined-recovery.log
           grep -Fq 'elementor_active=true' /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'EZ2_CI_THREE_DOMAIN_ROLLBACK_PASS components=3 sql_clone_recovered=true after_content_fault_recovered=true pinned_elementor_verified=true' /tmp/ez2-ci-combined-recovery.log
 
       - name: Exercise exact-head Elementor candidate in release-installed WordPress (CI only)
         env:

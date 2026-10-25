@@ -21,6 +21,9 @@ from ez2_elementor_export_check import check as check_elementor, unique, reject_
 from ez2_release_set import safe_read
 
 from ez2_ci_file_upgrade import COMPONENTS, snapshot, unpack
+from ez2_ci_pinned_plugin_install import LOCK_PATH, download_verified
+from ez2_ci_pinned_plugin_recovery import rehearse_bundle
+from ez2_plugin_dependency_check import read as read_plugin_lock
 from ez2_release_set import run as verify_release
 
 REPO = Path(__file__).resolve().parents[1]
@@ -379,6 +382,38 @@ def main(release, sha):
             if (snapshot(success_live) != success_before or
                     digest(CLONE) != source_digest or digest('wordpress') != source_digest):
                 raise ValueError('Successful transaction recovery failed to restore both domains')
+            # The official checksum-pinned Elementor ZIP remains outside public Git.
+            # Apply three file trees and exact-head content to a disposable SQL clone.
+            with tempfile.TemporaryDirectory(prefix='ez2-ci-three-domain-zip-', dir='/tmp') as cache:
+                plugin_lock = read_plugin_lock(LOCK_PATH)
+                plugin_zip = download_verified(plugin_lock, cache)
+
+                def inspect_three_domains(installed, original_files):
+                    if not (installed / 'plugins/elementor/elementor.php').is_file():
+                        raise ValueError('Missing pinned Elementor scratch tree')
+                    candidate_id = inject_content_fault(CLONE, payload)
+                    verify_applied_transaction(installed, original_files, source_digest,
+                                               payload, candidate_id)
+
+                for injected in (False, True):
+                    outcome = rehearse_bundle(plugin_zip, plugin_lock, release,
+                                              preexisting=True,
+                                              on_installed=inspect_three_domains,
+                                              inject_callback_fault=injected)
+                    if (not outcome['restored'] or not outcome['uploads_preserved']
+                            or not outcome['callback_executed'] or outcome['components'] != 3
+                            or outcome['fault'] != ('after_content_apply' if injected else 'none')):
+                        raise ValueError('Three-domain recovery matrix incomplete')
+                    if digest(CLONE) == source_digest or digest('wordpress') != source_digest:
+                        raise ValueError('Three-domain clone mutation or source isolation failed')
+                    sql(('-e', f'DROP DATABASE `{CLONE}`'))
+                    created = False
+                    sql(('-e', f'CREATE DATABASE `{CLONE}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'))
+                    created = True
+                    sql((CLONE,), data=original_sql)
+                    if digest(CLONE) != source_digest or digest('wordpress') != source_digest:
+                        raise ValueError('Three-domain SQL rollback failed')
+            print('EZ2_CI_THREE_DOMAIN_ROLLBACK_PASS components=3 sql_clone_recovered=true after_content_fault_recovered=true pinned_elementor_verified=true uploads_preserved=true source_db_untouched=true localwp_touched=false one_click_complete=false')
             print('EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=' + str(file_faults) + ' sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false exact_head_candidate_rows_recovered=true successful_cross_domain_apply_verified=true second_recovery_verified=true first_party_release_byte_parity=true elementor_active=true checked_release_files=' + str(checked_release_files))
     finally:
         if created:

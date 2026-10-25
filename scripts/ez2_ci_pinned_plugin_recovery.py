@@ -111,14 +111,18 @@ BUNDLE_FAULTS = tuple(
 )
 
 
-def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_root=None):
+def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_root=None,
+                    on_installed=None, inject_callback_fault=False):
     """Rehearse a single three-component file transaction in disposable scratch.
 
     Theme, EZB Core and checksum-pinned Elementor are staged together. Every
     interruption must restore all original files, including an absent plugin.
     This is not a WordPress/LocalWP updater and never accepts a write target.
     """
-    if type(preexisting) is not bool or fault not in (None, *BUNDLE_FAULTS):
+    if (type(preexisting) is not bool or fault not in (None, *BUNDLE_FAULTS)
+            or (on_installed is not None and not callable(on_installed))
+            or type(inject_callback_fault) is not bool
+            or (inject_callback_fault and (on_installed is None or fault is not None))):
         raise ValueError('Invalid three-component scratch scenario')
     plugin = validate_lock(lock)
     archive = Path(archive)
@@ -149,6 +153,8 @@ def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_roo
         upload = live / 'uploads' / '2026' / 'owner-private-placeholder.webp'
         upload.parent.mkdir(parents=True)
         upload.write_bytes(SENTINEL)
+        sql_upload = live / 'uploads' / '2026' / 'owner-media.txt'
+        sql_upload.write_bytes(b'synthetic upload preserved')
         unrelated = live / 'plugins' / 'unrelated' / 'unrelated.php'
         unrelated.parent.mkdir(parents=True)
         unrelated.write_bytes(SENTINEL)
@@ -171,7 +177,7 @@ def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_roo
         if any(not files for files in expected.values()):
             raise ValueError('Empty three-component stage')
 
-        operations, fault_seen = [], False
+        operations, fault_seen, callback_executed = [], False, False
         try:
             for index, (_, category, name, _) in enumerate(entries):
                 current = live / category / name
@@ -192,10 +198,16 @@ def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_roo
             for _, category, name, _ in entries:
                 if snapshot(live / category / name) != expected[(category, name)]:
                     raise ValueError('Installed component bytes differ from verified stage')
-            if upload.read_bytes() != SENTINEL or unrelated.read_bytes() != SENTINEL:
+            if (upload.read_bytes() != SENTINEL or unrelated.read_bytes() != SENTINEL
+                    or sql_upload.read_bytes() != b'synthetic upload preserved'):
                 raise ValueError('Unrelated scratch content changed')
+            if on_installed is not None:
+                on_installed(live, before)
+                callback_executed = True
+                if inject_callback_fault:
+                    raise RuntimeError('INJECTED_THREE_DOMAIN_FAULT')
         except RuntimeError as exc:
-            if str(exc) != 'INJECTED_THREE_COMPONENT_FAULT':
+            if str(exc) not in ('INJECTED_THREE_COMPONENT_FAULT', 'INJECTED_THREE_DOMAIN_FAULT'):
                 raise
             fault_seen = True
         finally:
@@ -208,9 +220,13 @@ def rehearse_bundle(archive, lock, release, *, preexisting, fault=None, repo_roo
                     os.replace(saved, current)
         if (snapshot(live) != before or upload.read_bytes() != SENTINEL
                 or unrelated.read_bytes() != SENTINEL
-                or fault_seen != (fault is not None)):
+                or sql_upload.read_bytes() != b'synthetic upload preserved'
+                or fault_seen != (fault is not None or inject_callback_fault)
+                or callback_executed != (on_installed is not None and fault is None)):
             raise ValueError('Three-component scratch rollback mismatch')
-        return {'preexisting': preexisting, 'fault': fault or 'none',
+        return {'preexisting': preexisting,
+                'fault': fault or ('after_content_apply' if inject_callback_fault else 'none'),
+                'callback_executed': callback_executed,
                 'components': 3, 'files_verified': sum(map(len, expected.values())),
                 'restored': True, 'uploads_preserved': True,
                 'localwp_touched': False, 'one_click_complete': False}
