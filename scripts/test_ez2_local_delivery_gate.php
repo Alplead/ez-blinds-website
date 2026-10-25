@@ -385,4 +385,71 @@ $bad['files'][0]['private_url'] = 'hidden';
 reject( ez2_gate_release_evidence( $bad, $release_files, $sha ), 'ez2_release_member',
     'catalog record containing unexpected private content blocked' );
 
+
+/** Immutable GitHub public candidate transport, still no LP mutation. */
+function ez2_candidate_reply( $bytes ) {
+    return array(
+        'type' => 'file', 'name' => 'ez2-home-hero-candidate.json',
+        'path' => 'design/ez2-home-hero-candidate.json', 'encoding' => 'base64',
+        'size' => strlen( $bytes ),
+        'sha' => sha1( 'blob ' . strlen( $bytes ) . chr( 0 ) . $bytes ),
+        'content' => base64_encode( $bytes ),
+    );
+}
+$design = file_get_contents( __DIR__ . '/../design/ez2-home-hero-candidate.json' );
+accept( is_string( $design ) && strlen( $design ) > 500,
+    'public-safe candidate is present in checkout' );
+$GLOBALS['site_identity'] = 'ez2-isolated-only';
+$GLOBALS['urls'] = array();
+$GLOBALS['responses'] = array( ez2_candidate_reply( $design ) );
+$fetched = ez2_gate_fetch_public_candidate( $source );
+accept( is_array( $fetched ) && $fetched['status'] === 'VERIFIED_PUBLIC_CANDIDATE_READ_ONLY'
+    && $fetched['source_sha'] === $sha
+    && $fetched['symbolic_photo_slots'] === 4
+    && $fetched['one_click_ready'] === false && $fetched['site_modified'] === false,
+    'authenticated immutable public design is inspection-only' );
+accept( count( $GLOBALS['urls'] ) === 1
+    && $GLOBALS['urls'][0] === EZ2_GATE_API
+        . '/contents/design/ez2-home-hero-candidate.json?ref=' . $sha,
+    'only pinned official GitHub contents endpoint used' );
+$bad = ez2_candidate_reply( $design );
+$bad['sha'] = str_repeat( 'f', 40 );
+$GLOBALS['responses'] = array( $bad );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_source_hash',
+    'forged Git blob object ID blocked' );
+$bad = ez2_candidate_reply( $design );
+$bad['size'] += 1;
+$GLOBALS['responses'] = array( $bad );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_source_bytes',
+    'truncated public design blocked' );
+$bad = ez2_candidate_reply( $design );
+$bad['path'] = '../wp-config.php';
+$GLOBALS['responses'] = array( $bad );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_source_metadata',
+    'unexpected repository path blocked' );
+$doc = json_decode( $design, true );
+$doc['content'][0]['settings']['background_slideshow_slide_duration'] = 900;
+$GLOBALS['responses'] = array( ez2_candidate_reply( json_encode( $doc ) ) );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_motion',
+    'modified slideshow timings blocked' );
+$doc = json_decode( $design, true );
+$doc['content'][0]['settings']['background_slideshow_gallery'][0]['url'] = 'ez2-media://outside';
+$GLOBALS['responses'] = array( ez2_candidate_reply( json_encode( $doc ) ) );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_media',
+    'unapproved private media slot blocked' );
+$doc = json_decode( $design, true );
+$doc['content'][0]['settings']['untrusted_external'] = 'https://images.unsplash.com/fiction';
+$GLOBALS['responses'] = array( ez2_candidate_reply( json_encode( $doc ) ) );
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_design_external_media',
+    'stock photos rejected even if source bytes match their Git blob SHA' );
+$bad = $source;
+$bad['source_ci_pass'] = false;
+$GLOBALS['responses'] = array();
+reject( ez2_gate_fetch_public_candidate( $bad ), 'ez2_source_unverified',
+    'source without exact-SHA CI refused before network request' );
+$GLOBALS['site_identity'] = '';
+$GLOBALS['responses'] = array();
+reject( ez2_gate_fetch_public_candidate( $source ), 'ez2_wrong_site',
+    'public design preflight prohibited on other sites' );
+
 echo 'EZ2_LP_DELIVERY_GATE_PASS cases=' . $count . "\n";
