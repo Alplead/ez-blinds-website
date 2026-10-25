@@ -11,6 +11,7 @@ $good = [
     'backup' => '/srv/ez2-private-backup', 'backup_exists' => true,
     'backup_is_link' => false, 'backup_writable' => true,
     'db_connected' => true, 'free_bytes' => 1024 * 1024 * 1024,
+    'backup_under_git_checkout' => false,
 ];
 $cases = 0;
 $check = static function(array $data, ?string $issue) use (&$cases): void {
@@ -42,6 +43,8 @@ foreach ([
     ['backup_exists', false, 'BACKUP_DESTINATION_UNSAFE'],
     ['backup_is_link', true, 'BACKUP_DESTINATION_UNSAFE'],
     ['backup_writable', false, 'BACKUP_DESTINATION_UNSAFE'],
+    ['backup_under_git_checkout', true, 'BACKUP_INSIDE_GIT_CHECKOUT'],
+    ['backup_under_git_checkout', null, 'BACKUP_INSIDE_GIT_CHECKOUT'],
     ['db_connected', false, 'DATABASE_NOT_READY'],
     ['free_bytes', 100, 'BACKUP_FREE_SPACE_INSUFFICIENT'],
     ['free_bytes', NAN, 'BACKUP_FREE_SPACE_INSUFFICIENT'],
@@ -62,4 +65,36 @@ $win['backup'] = 'D:\\Private EZ2 Backups';
 $check($win, null);
 $win['backup'] = 'C:\\Local Sites\\EZ2\\app\\public\\backups';
 $check($win, 'BACKUP_OVERLAPS_WORDPRESS_ROOT');
+// Exercise actual ancestor traversal, including Git linked worktree marker files.
+$temp = sys_get_temp_dir() . '/ez2-backup-git-' . bin2hex(random_bytes(8));
+if (!mkdir($temp, 0700) || !mkdir($temp . '/repo', 0700)
+    || !mkdir($temp . '/repo/backups', 0700)
+    || !mkdir($temp . '/outside', 0700)) throw new RuntimeException('Fixture setup failed');
+try {
+    if (EZ2_Backup_Readiness::gitCheckoutAncestor($temp . '/outside')) {
+        throw new RuntimeException('Clean private directory incorrectly flagged');
+    }
+    $cases++;
+    mkdir($temp . '/repo/.git', 0700);
+    if (!EZ2_Backup_Readiness::gitCheckoutAncestor($temp . '/repo/backups')) {
+        throw new RuntimeException('Git checkout ancestor not detected');
+    }
+    $cases++;
+    rmdir($temp . '/repo/.git');
+    file_put_contents($temp . '/repo/.git', 'gitdir: /synthetic/worktrees/ez2');
+    if (!EZ2_Backup_Readiness::gitCheckoutAncestor($temp . '/repo/backups')) {
+        throw new RuntimeException('Linked worktree ancestor not detected');
+    }
+    $cases++;
+    if (!EZ2_Backup_Readiness::gitCheckoutAncestor($temp . '/missing')) {
+        throw new RuntimeException('Nonexistent backup directory accepted');
+    }
+    $cases++;
+} finally {
+    if (is_file($temp . '/repo/.git')) unlink($temp . '/repo/.git');
+    rmdir($temp . '/repo/backups');
+    rmdir($temp . '/repo');
+    rmdir($temp . '/outside');
+    rmdir($temp);
+}
 echo "EZ2_BACKUP_READINESS_GUARD_PASS cases={$cases} backup_created=false apply_disabled=true\n";
