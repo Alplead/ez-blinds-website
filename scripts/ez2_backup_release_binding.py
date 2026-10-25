@@ -14,7 +14,7 @@ from ez2_backup_archive_guard import inspect
 from ez2_backup_scratch_replay import replay
 from ez2_release_set import run as verify_release
 
-SHA = re.compile(r"[0-9a-f]{40}\\Z")
+SHA = re.compile(r"[0-9a-f]{40}\Z")
 
 
 def _directory(value):
