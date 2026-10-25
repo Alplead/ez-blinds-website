@@ -29,7 +29,9 @@ concurrency:
 jobs:
   clean-install:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Cold image pulls plus pinned Elementor/rollback smoke can exceed 10 minutes.
+    # Preserve full fail-closed tests instead of cancelling before artifacts upload.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
