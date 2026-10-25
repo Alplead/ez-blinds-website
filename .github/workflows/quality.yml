@@ -286,6 +286,12 @@ jobs:
           python3 scripts/test_ez2_backup_release_binding.py | tee /tmp/ez2-backup-release-binding.log
           grep -Fq 'EZ2_BACKUP_RELEASE_BINDING_PASS cases=17 release_and_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-backup-release-binding.log
 
+      - name: Verify release-before-private-capture checkpoint (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_wp_preinstall_checkpoint.py scripts/test_ez2_wp_preinstall_checkpoint.py
+          python3 scripts/test_ez2_wp_preinstall_checkpoint.py | tee /tmp/ez2-private-checkpoint.log
+          grep -Fq 'EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases=9 private_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-private-checkpoint.log
+
       - name: Guard disposable combined files-and-SQL rollback rehearsal
         run: |
           python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
