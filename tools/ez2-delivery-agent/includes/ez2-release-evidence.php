@@ -126,13 +126,22 @@ final class EZ2_Release_Evidence {
     }
 
     public static function live(): array {
+        return self::live_with_reader([self::class, 'api']);
+    }
+
+    /**
+     * Recheck the mutable PR and branch after fetching workflow/artifact evidence.
+     * Reader injection permits offline regression tests; production uses api().
+     * This remains strictly read-only and is not an installation authorisation.
+     */
+    public static function live_with_reader(callable $read): array {
         try {
-            $pr = self::api('/pulls/1');
+            $pr = $read('/pulls/1');
             $sha = $pr['head']['sha'] ?? null;
             if (!is_string($sha) || !preg_match('/^[0-9a-f]{40}$/D', $sha)) {
                 throw new RuntimeException('INVALID_PR_HEAD');
             }
-            $runs = self::api('/actions/runs?head_sha=' . $sha . '&per_page=100');
+            $runs = $read('/actions/runs?head_sha=' . $sha . '&per_page=100');
             if (!is_array($runs['workflow_runs'] ?? null)
                 || ($runs['total_count'] ?? 0) > 100) {
                 throw new RuntimeException('WORKFLOW_RESULTS_INCOMPLETE');
@@ -147,14 +156,24 @@ final class EZ2_Release_Evidence {
             foreach (array_keys(self::ARTIFACT_PREFIXES) as $name) {
                 $id = $selected[$name]['id'] ?? null;
                 if (!is_int($id) || $id < 1) continue;
-                $page = self::api('/actions/runs/' . $id . '/artifacts?per_page=100');
+                $page = $read('/actions/runs/' . $id . '/artifacts?per_page=100');
                 if (!is_array($page['artifacts'] ?? null)
                     || ($page['total_count'] ?? 0) > 100) {
                     throw new RuntimeException('ARTIFACT_RESULTS_INCOMPLETE');
                 }
                 $sets[$name] = $page['artifacts'];
             }
-            return self::evaluate($pr, $runs['workflow_runs'], $sets);
+            // CI/artifact reads are not an atomic GitHub snapshot. Refuse a
+            // release if the branch or PR moved while the evidence was fetched.
+            $branch = $read('/branches/feature/vertical-slice-v1');
+            if (($branch['commit']['sha'] ?? null) !== $sha) {
+                throw new RuntimeException('BRANCH_HEAD_CHANGED_DURING_CHECK');
+            }
+            $freshPr = $read('/pulls/1');
+            if (($freshPr['head']['sha'] ?? null) !== $sha) {
+                throw new RuntimeException('PR_HEAD_CHANGED_DURING_CHECK');
+            }
+            return self::evaluate($freshPr, $runs['workflow_runs'], $sets);
         } catch (Throwable $e) {
             return [
                 'status' => 'BLOCKED_REMOTE_EVIDENCE',

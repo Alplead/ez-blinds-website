@@ -58,5 +58,65 @@ $s = $sets; unset($s['Release Install Smoke'][1]); expect_evidence($pr, $runs, $
 $s = $sets; $s['EZ2 Hero Candidate (No Deployment)'][0]['workflow_run']['id'] = 99; expect_evidence($pr, $runs, $s, false);
 $s = $sets; $s['EZ2 Elementor Ephemeral Runtime (No Deployment)'][0]['workflow_run']['head_sha'] = str_repeat('b', 40); expect_evidence($pr, $runs, $s, false);
 $r = $runs; $r[] = array_merge($r[0], ['id' => 999, 'conclusion' => 'failure']); expect_evidence($pr, $r, $sets, false);
-if ($cases !== 13) throw new RuntimeException('Unexpected case count');
+/**
+ * Offline mutable-PR race tests: no network, no WordPress and no writes.
+ * GitHub can change the PR or branch between the first PR read and artifacts.
+ */
+function check_live_evidence(array $initial, array $runs, array $sets,
+                             array $options, bool $expectedPass): void {
+    global $cases, $sha;
+    $calls = [];
+    $reader = function (string $path) use ($initial, $runs, $sets, $options, &$calls, $sha): array {
+        $calls[] = $path;
+        if (($options['fail_path'] ?? null) === $path) {
+            throw new RuntimeException('SIMULATED_GITHUB_UNAVAILABLE');
+        }
+        if ($path === '/pulls/1') {
+            $count = count(array_filter($calls, fn($x) => $x === '/pulls/1'));
+            return $count === 1 ? $initial : ($options['final_pr'] ?? $initial);
+        }
+        if ($path === '/actions/runs?head_sha=' . $sha . '&per_page=100') {
+            return ['workflow_runs' => $runs, 'total_count' => $options['run_total'] ?? count($runs)];
+        }
+        if ($path === '/branches/feature/vertical-slice-v1') {
+            return ['commit' => ['sha' => $options['branch_sha'] ?? $sha]];
+        }
+        if (preg_match('~^/actions/runs/([0-9]+)/artifacts\?per_page=100$~D', $path, $match)) {
+            foreach ($runs as $run) {
+                if ($run['id'] === (int) $match[1]) {
+                    $items = $sets[$run['name']] ?? [];
+                    if (($options['drop_artifact'] ?? null) === $run['name']) $items = [];
+                    return ['artifacts' => $items, 'total_count' => count($items)];
+                }
+            }
+        }
+        throw new RuntimeException('UNEXPECTED_TEST_API_PATH');
+    };
+    $out = EZ2_Release_Evidence::live_with_reader($reader);
+    if (($out['status'] === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') !== $expectedPass
+        || $out['can_apply'] !== false || $out['one_click_complete'] !== false
+        || $out['site_modified'] !== false) {
+        throw new RuntimeException('Mutable PR evidence race accepted: ' . json_encode($out));
+    }
+    if ($expectedPass && (!in_array('/branches/feature/vertical-slice-v1', $calls, true)
+        || count(array_filter($calls, fn($x) => $x === '/pulls/1')) !== 2
+        || $out['artifact_count'] !== 6)) {
+        throw new RuntimeException('Missing final branch/PR consistency check');
+    }
+    $cases++;
+}
+check_live_evidence($pr, $runs, $sets, [], true);
+check_live_evidence($pr, $runs, $sets, ['branch_sha' => str_repeat('b', 40)], false);
+$p = $pr; $p['head']['sha'] = str_repeat('c', 40);
+check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
+$p = $pr; $p['draft'] = false;
+check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
+check_live_evidence($pr, $runs, $sets, ['drop_artifact' => 'Release Install Smoke'], false);
+check_live_evidence($pr, $runs, $sets, ['fail_path' => '/pulls/1'], false);
+check_live_evidence($pr, $runs, $sets, ['run_total' => 101], false);
+$p = $pr; $p['base']['ref'] = 'release';
+check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
+check_live_evidence($pr, $runs, $sets, ['final_pr' => []], false);
+
+if ($cases !== 22) throw new RuntimeException('Unexpected case count');
 echo "EZ2_RELEASE_EVIDENCE_GUARD_PASS cases={$cases} apply_disabled=true\n";
