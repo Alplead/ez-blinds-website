@@ -454,7 +454,7 @@ jobs:
         run: |
           bash -n scripts/ez2_ci_wordpress_db_restore.sh
           bash scripts/test_ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-sql-restore-guard.log
-          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=13' /tmp/ez2-ci-sql-restore-guard.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=17' /tmp/ez2-ci-sql-restore-guard.log
 
       - name: Link installed backup and candidate delivery without applying (synthetic only)
         run: |

@@ -65,13 +65,30 @@ data_fingerprint() {
 }
 source_data_sha="$(data_fingerprint "$source_db")"
 
-dump "$source_db" | gzip -n > "$scratch/wordpress.sql.gz"
-test -s "$scratch/wordpress.sql.gz"
-gzip -t "$scratch/wordpress.sql.gz"
+# Exercise the same four-component private rollback archive format used by
+# EZ2 capture, but ONLY with synthetic release-stack data and public release ZIPs.
+# This is not a live WordPress capture, LocalWP restore or deployment.
+exact_head="$(git rev-parse HEAD)"
+[[ "$exact_head" =~ ^[0-9a-f]{40}$ ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_BLOCKED: exact Git HEAD required' >&2; exit 2; }
+snapshot="$scratch/synthetic-snapshot"
+mkdir -m 700 -p "$snapshot"/{uploads,plugins,theme}
+dump "$source_db" > "$snapshot/database.sql"
+test -s "$snapshot/database.sql"
+printf 'EZ2 disposable synthetic upload fixture\\n' > "$snapshot/uploads/synthetic-ci.txt"
+test -s .release/ezb-core.zip && test -s .release/ezb-theme.zip
+cp .release/ezb-core.zip "$snapshot/plugins/ezb-core.zip"
+cp .release/ezb-theme.zip "$snapshot/theme/ezb-theme.zip"
+python3 scripts/ez2_backup_snapshot_pack.py "$snapshot" "$scratch/verified-backup" "$exact_head" > /dev/null
+python3 scripts/ez2_backup_archive_guard.py "$scratch/verified-backup" "$exact_head" > /dev/null
+python3 scripts/ez2_backup_scratch_replay.py "$scratch/verified-backup" "$exact_head" \
+  | grep -Fq '"scratch_deleted": true'
+backup_sql="$scratch/verified-backup/database.sql.gz"
+gzip -t "$backup_sql"
 
 db -e "CREATE DATABASE \`${restore_db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null
 created=1
-gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db" >/dev/null
+gzip -dc "$backup_sql" | db "$restore_db" >/dev/null
 
 restored_tables="$(db -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${restore_db}' AND TABLE_TYPE='BASE TABLE'")"
 restored_posts="$(db -e "SELECT COUNT(*) FROM \`${restore_db}\`.wp_posts")"
@@ -105,7 +122,7 @@ db -e "UPDATE \`${restore_db}\`.wp_options SET option_value='http://ez2-ci-fault
 
 db -e "DROP DATABASE \`${restore_db}\`" >/dev/null
 db -e "CREATE DATABASE \`${restore_db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null
-gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db" >/dev/null
+gzip -dc "$backup_sql" | db "$restore_db" >/dev/null
 [[ "$(db -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${restore_db}' AND TABLE_TYPE='BASE TABLE'")" == "$source_tables" \
    && "$(db -e "SELECT COUNT(*) FROM \`${restore_db}\`.wp_posts")" == "$source_posts" \
    && "$(db -e "SELECT COUNT(*) FROM \`${restore_db}\`.wp_posts WHERE post_type='page'")" == "$source_pages" \
@@ -116,4 +133,4 @@ gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db" >/dev/null
 [[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]] \
   || { echo 'EZ2_CI_SQL_RESTORE_FAIL: recovery changed source' >&2; exit 1; }
 
-echo "EZ2_CI_WORDPRESS_DB_RESTORE_PASS tables=${restored_tables} posts=${restored_posts} pages=${restored_pages} fault_recovered=true synthetic_ci_only=true localwp_touched=false"
+echo "EZ2_CI_WORDPRESS_DB_RESTORE_PASS tables=${restored_tables} posts=${restored_posts} pages=${restored_pages} fault_recovered=true packaged_backup_verified=true synthetic_ci_only=true localwp_touched=false"

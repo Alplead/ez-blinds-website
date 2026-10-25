@@ -20,7 +20,13 @@ grep -Fq '[[ "$(data_fingerprint "$source_db")" == "$source_data_sha" ]]' ez2_ci
 # Require an actual disposable data fault, a second import and full recovery checks.
 grep -Fq "EZ2_CI_SQL_RESTORE_FAIL: fault injection did not alter clone" ez2_ci_wordpress_db_restore.sh
 grep -Fq "EZ2_CI_SQL_RESTORE_FAIL: faulted clone not fully recovered" ez2_ci_wordpress_db_restore.sh
-[[ "$(grep -Fc 'gzip -dc "$scratch/wordpress.sql.gz" | db "$restore_db"' ez2_ci_wordpress_db_restore.sh)" == 2 ]]
+[[ "$(grep -Fc 'gzip -dc "$backup_sql" | db "$restore_db"' ez2_ci_wordpress_db_restore.sh)" == 2 ]]
+# The restore MUST consume the verified four-component backup, never a raw dump.
+grep -Fq 'python3 scripts/ez2_backup_snapshot_pack.py' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'python3 scripts/ez2_backup_archive_guard.py' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'python3 scripts/ez2_backup_scratch_replay.py' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'backup_sql="$scratch/verified-backup/database.sql.gz"' ez2_ci_wordpress_db_restore.sh
+! grep -Fq 'gzip -dc "$scratch/wordpress.sql.gz"' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'UPDATE \`${restore_db}\`.wp_options' ez2_ci_wordpress_db_restore.sh
-grep -Fq 'fault_recovered=true synthetic_ci_only=true localwp_touched=false' ez2_ci_wordpress_db_restore.sh
-printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=13'
+grep -Fq 'fault_recovered=true packaged_backup_verified=true synthetic_ci_only=true localwp_touched=false' ez2_ci_wordpress_db_restore.sh
+printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=17'
