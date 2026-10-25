@@ -117,5 +117,28 @@ with tempfile.TemporaryDirectory() as temp:
     rejected(lambda: check(release, SHA, content.parent))
     (release / "ezb-theme.zip").write_bytes(b"tampered")
     rejected(lambda: check(release, SHA, content))
-    assert CASES == 13, CASES
+    # The same guard used by real disposable WordPress byte-copy CI is fail-closed.
+from ez2_ci_live_installed_parity import validate_ci_scope, verify_copied
+
+assert validate_ci_scope(SHA, SHA, "true", "YES_DISPOSABLE_RELEASE_ONLY")
+CASES += 1
+for actions, opt, head, requested in [
+    ("false", "YES_DISPOSABLE_RELEASE_ONLY", SHA, SHA),
+    ("true", "NO", SHA, SHA),
+    ("true", "YES_DISPOSABLE_RELEASE_ONLY", "b" * 40, SHA),
+    ("true", "YES_DISPOSABLE_RELEASE_ONLY", SHA, "invalid"),
+    ("true", "YES_DISPOSABLE_RELEASE_ONLY", SHA, " " + SHA),
+]:
+    rejected(lambda a=actions, o=opt, h=head, s=requested:
+             validate_ci_scope(s, h, a, o))
+
+with tempfile.TemporaryDirectory() as temp:
+    release, content = fixture(Path(temp))
+    assert verify_copied(release, SHA, content) == 3
+    CASES += 1
+    # Tampering only the copied scratch tree must fail; source release stays intact.
+    (content / "plugins/ezb-core/ezb-core.php").write_text("tampered scratch")
+    rejected(lambda: verify_copied(release, SHA, content))
+
+assert CASES == 21, CASES
 print(f"EZ2_INSTALLED_CODE_PARITY_PASS cases={CASES}")

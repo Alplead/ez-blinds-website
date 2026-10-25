@@ -150,6 +150,15 @@ jobs:
           docker compose -f .github/release-install/docker-compose.yml run --rm release-bootstrap | tee /tmp/release-install.log
           grep -q 'EZB_RELEASE_INSTALL_PASS' /tmp/release-install.log
 
+      - name: Verify exact-head bytes copied from running disposable WordPress
+        env:
+          EZ2_CI_LIVE_PARITY: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_live_installed_parity.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-live-parity-before.log
+          grep -Fq 'EZ2_CI_LIVE_INSTALLED_PARITY_PASS' /tmp/ez2-ci-live-parity-before.log
+
       - name: Rehearse isolated SQL restore of synthetic installed WordPress database
         env:
           EZ2_CI_SQL_RESTORE: YES_SYNTHETIC_RELEASE_STACK
@@ -391,6 +400,15 @@ jobs:
             eval-file /opt/ezb-ci-scripts/ez2_ci_postinstall_integrity.php --allow-root \
             | tee /tmp/ez2-ci-postinstall-integrity.log
           grep -Fq 'EZ2_CI_POSTINSTALL_INTEGRITY_PASS runtime=real_wordpress candidate_cleanup=true' /tmp/ez2-ci-postinstall-integrity.log
+
+      - name: Recheck exact-head installed bytes after Elementor candidate roundtrip
+        env:
+          EZ2_CI_LIVE_PARITY: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_live_installed_parity.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-live-parity-after.log
+          grep -Fq 'EZ2_CI_LIVE_INSTALLED_PARITY_PASS' /tmp/ez2-ci-live-parity-after.log
 
       - name: Publish verified release bundle
         uses: actions/upload-artifact@v4
