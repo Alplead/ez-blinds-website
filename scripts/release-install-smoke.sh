@@ -29,16 +29,18 @@ if ! wp core is-installed --allow-root >/dev/null 2>&1; then
     --skip-email
 fi
 
-test -s /release/ezb-theme.zip
-test -s /release/ezb-core.zip
-test -s /release/SHA256SUMS
+# Install from the *verified delivery envelope*, not loose release ZIPs.
+# This exercises the actual combined handoff package in disposable WordPress.
+test -s /release/ez2-envelope-install-input/ezb-theme.zip
+test -s /release/ez2-envelope-install-input/ezb-core.zip
+test -s /release/ez2-envelope-install-input/SHA256SUMS
 
-cd /release
+cd /release/ez2-envelope-install-input
 sha256sum -c SHA256SUMS
 cd /var/www/html
 
-wp theme install /release/ezb-theme.zip --activate --force --allow-root
-wp plugin install /release/ezb-core.zip --activate --force --allow-root
+wp theme install /release/ez2-envelope-install-input/ezb-theme.zip --activate --force --allow-root
+wp plugin install /release/ez2-envelope-install-input/ezb-core.zip --activate --force --allow-root
 
 HOME_ID="$(wp post create --allow-root \
   --post_type=page \

@@ -286,6 +286,12 @@ jobs:
           python3 scripts/test_ez2_backup_release_binding.py | tee /tmp/ez2-backup-release-binding.log
           grep -Fq 'EZ2_BACKUP_RELEASE_BINDING_PASS cases=17 release_and_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-backup-release-binding.log
 
+      - name: Guard verified envelope consumption as disposable WordPress install input
+        run: |
+          python3 -m py_compile scripts/ez2_ci_delivery_envelope_install_input.py scripts/test_ez2_ci_delivery_envelope_install_input.py
+          python3 scripts/test_ez2_ci_delivery_envelope_install_input.py | tee /tmp/ez2-envelope-consumer.log
+          grep -Fq 'EZ2_ENVELOPE_CONSUMER_GUARD_PASS cases=10 disposable_only=true localwp_touched=false' /tmp/ez2-envelope-consumer.log
+
       - name: Verify release-before-private-capture checkpoint (synthetic only)
         run: |
           python3 -m py_compile scripts/ez2_wp_preinstall_checkpoint.py scripts/test_ez2_wp_preinstall_checkpoint.py

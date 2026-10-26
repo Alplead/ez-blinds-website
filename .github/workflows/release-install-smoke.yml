@@ -65,6 +65,16 @@ jobs:
           python3 scripts/ez2_delivery_envelope.py build .release "${{ github.event.pull_request.head.sha || github.sha }}" design/ez2-elementor-pinned-plugin.json .release/EZ2_DELIVERY_ENVELOPE.zip
           python3 scripts/ez2_delivery_envelope.py verify .release/EZ2_DELIVERY_ENVELOPE.zip "${{ github.event.pull_request.head.sha || github.sha }}"
 
+      - name: Consume verified delivery envelope as disposable WordPress install inputs
+        env:
+          EZ2_CI_ENVELOPE_INSTALL: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_delivery_envelope_install_input.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-envelope-install-input.log
+          grep -Fq 'DISPOSABLE_ENVELOPE_INSTALL_INPUT_VERIFIED' /tmp/ez2-envelope-install-input.log
+          (cd .release/ez2-envelope-install-input && sha256sum -c SHA256SUMS)
+
       - name: Link exact-head release candidate to pinned Elementor delivery plan (no install)
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
