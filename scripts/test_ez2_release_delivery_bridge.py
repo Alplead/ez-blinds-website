@@ -111,6 +111,20 @@ with tempfile.TemporaryDirectory() as temp:
     assert baseline == {p.name: p.read_bytes() for p in release.iterdir()}
     CASES += 1
 
+    # Bind the real committed plugin dependency to the same synthetic
+    # release/content plan that the install workflow now exercises.
+    pinned_lock = Path(__file__).resolve().parents[1] / "design/ez2-elementor-pinned-plugin.json"
+    pinned = plan(release, SHA, pinned_lock, installed)
+    assert pinned["status"] == "READY_FOR_RUNTIME_TEST_ONLY"
+    assert pinned["missing_plugin_checksums"] == []
+    assert pinned["plugin_status"] == "METADATA_ONLY"
+    assert pinned["elementor_version_pinned"] == "4.3.4"
+    assert pinned["content"]["actions"][0]["action"] == "create"
+    assert pinned["transaction_preview"]["can_apply"] is False
+    assert pinned["plugin_archive_verified"] is False
+    assert pinned["localwp_installed"] is False
+    CASES += 1
+
     previous = digest(template())
     installed.write_text(json.dumps({"schema_version": 1, "items": [
         {"key": "ez2-home-hero", "current_sha256": previous}]}))
@@ -267,5 +281,5 @@ with tempfile.TemporaryDirectory() as temp:
     installed.write_text(json.dumps({"schema_version": 1, "items": []}))
     (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
     reject(lambda: plan(release, SHA, lock, installed))
-    assert CASES == 36, CASES
+    assert CASES == 37, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")

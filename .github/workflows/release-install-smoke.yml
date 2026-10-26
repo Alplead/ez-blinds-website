@@ -58,7 +58,7 @@ jobs:
           python3 scripts/ez2_release_set.py build .release "${{ github.event.pull_request.head.sha || github.sha }}"
           python3 scripts/ez2_release_set.py verify .release "${{ github.event.pull_request.head.sha || github.sha }}"
 
-      - name: Link exact-head release candidate to safe delivery plan (no install)
+      - name: Link exact-head release candidate to pinned Elementor delivery plan (no install)
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -70,23 +70,27 @@ jobs:
           version = json.loads(Path('design/ez2-home-hero-candidate.json').read_text())['version']
           with tempfile.TemporaryDirectory(prefix='ez2-release-plan-') as tmp:
               root = Path(tmp)
-              lock = root / 'plugins.json'
-              lock.write_text(json.dumps({
-                  'schema_version': 1, 'target_site': 'ez2-isolated-only',
-                  'plugins': [{
-                      'slug': 'elementor', 'version': version,
-                      'entrypoint': 'elementor/elementor.php', 'source': 'wordpress.org',
-                      'archive_sha256': None, 'activate': True,
-                  }],
-              }))
+              # Reuse the checksum-pinned dependency that the later disposable
+              # WordPress install actually downloads and verifies. Do not test
+              # an intentionally unpinned dummy manifest in the release path.
+              lock = Path('design/ez2-elementor-pinned-plugin.json')
+              pinned = json.loads(lock.read_text())
+              assert len(pinned['plugins']) == 1
+              assert pinned['plugins'][0]['version'] == version
+              assert len(pinned['plugins'][0]['archive_sha256']) == 64
               installed = root / 'installed.json'
               installed.write_text(json.dumps({'schema_version': 1, 'items': []}))
               result = plan(Path('.release'), os.environ['EZB_EXPECTED_SHA'], lock, installed)
-              assert result['status'] == 'BLOCKED_PREFLIGHT'
-              assert result['missing_plugin_checksums'] == ['elementor']
+              assert result['status'] == 'READY_FOR_RUNTIME_TEST_ONLY'
+              assert result['missing_plugin_checksums'] == []
+              assert result['plugin_status'] == 'METADATA_ONLY'
+              assert result['elementor_version_pinned'] == version
               assert result['release_catalog_verified'] and result['candidate_archive_verified']
+              assert result['content']['actions'][0]['action'] == 'create'
+              assert not result['plugin_archive_verified'] and not result['localwp_installed']
+              assert not result['transaction_preview']['can_apply']
               assert not result['applied'] and not result['one_click_complete']
-              print('EZ2_EXACT_HEAD_DELIVERY_BRIDGE_PASS blocked_missing_checksum=true installed=false')
+              print('EZ2_EXACT_HEAD_DELIVERY_BRIDGE_PASS pinned_manifest=true runtime_test_only=true installed=false')
           PY
 
       - name: Rehearse exact-head theme/core file upgrade and injected rollback in private scratch
