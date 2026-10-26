@@ -21,8 +21,25 @@ from ez2_backup_archive_guard import (
 from ez2_backup_preflight import ROLES
 
 CHUNK = 1024 * 1024
+MIN_FREE_RESERVE = 128 * 1024 * 1024  # Do not consume the backup volume's last 128 MiB.
 SOURCE_FILES = {"database": "database.sql", "uploads": "uploads",
                 "plugins": "plugins", "theme": "theme"}
+
+
+def _git_checkout_ancestor(path):
+    """Refuse private backups in a normal Git checkout or linked worktree.
+
+    Inspect resolved ancestors so a symlinked destination cannot hide a
+    checkout. A .git *file* is also a worktree marker, not just a directory.
+    """
+    current = Path(path).resolve(strict=True)
+    while True:
+        marker = current / ".git"
+        if marker.exists() or marker.is_symlink():
+            return True
+        if current.parent == current:
+            return False
+        current = current.parent
 
 
 def _regular(path):
@@ -134,13 +151,22 @@ def pack(snapshot_dir, destination_dir, exact_sha):
     if (source_real == destination_real or source_real in destination_real.parents
             or destination_real in source_real.parents):
         raise ValueError("Backup must be outside the snapshot tree")
+    if _git_checkout_ancestor(source_real) or _git_checkout_ancestor(parent_real):
+        raise ValueError("Private snapshot and backup must stay outside Git checkouts")
     if (source_real / "wp-config.php").exists() or (source_real / "wp-admin").exists():
         raise ValueError("Live WordPress roots are not accepted as snapshots")
     if {p.name for p in source.iterdir()} != set(SOURCE_FILES.values()):
         raise ValueError("Snapshot must contain only database.sql, uploads, plugins and theme")
     inventory = {role: _files(source / role, role)
                  for role in ("uploads", "plugins", "theme")}
-    _regular(source / "database.sql")
+    sql_info = _regular(source / "database.sql")
+    # Conservative upper bound: compressed output should never need more than
+    # raw input plus this reserve. Refuse before creating any private output.
+    required = sql_info.st_size + sum(
+        info.st_size for entries in inventory.values() for _, _, info in entries
+    ) + MIN_FREE_RESERVE
+    if shutil.disk_usage(parent_real).free < required:
+        raise ValueError("Insufficient free space for isolated private backup")
     created = False
     try:
         destination.mkdir(mode=0o700)
