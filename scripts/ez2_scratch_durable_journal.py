@@ -199,8 +199,17 @@ def apply(root, *, interrupt_after=None):
             'components': 3, 'wordpress_touched': False, 'can_apply': False}
 
 
-def recover(root):
+def recover(root, *, interrupt_after=None):
+    """Restore synthetic components; injected recovery crashes are resumable.
+
+    Faults occur only after a component has reached its original byte state.
+    The committed journal remains in its prior state until every component is
+    restored. No WordPress root or deployment path is accepted.
+    """
     root = _safe_root(root)
+    if interrupt_after is not None and (type(interrupt_after) is not int
+                                        or interrupt_after not in range(1, len(COMPONENTS) + 1)):
+        raise ValueError('Invalid synthetic recovery interruption point')
     doc = _read_journal(root)
     _clear_stale_journal_temp(root)
     if doc['status'] == 'RECOVERED':
@@ -220,6 +229,7 @@ def recover(root):
                 raise ValueError('Rollback evidence mismatched or live files drifted')
         elif live not in (row['original'], row['candidate'] if row['original'] is None else row['original']):
             raise ValueError('Unknown live component cannot be safely recovered')
+    completed = 0
     for row in reversed(doc['components']):
         name = row['name']
         current = root / 'live' / name
@@ -232,6 +242,9 @@ def recover(root):
             shutil.rmtree(current)
         if _tree(root / 'live', name, allow_missing=True) != row['original']:
             raise ValueError('Original synthetic component not restored')
+        completed += 1
+        if interrupt_after == completed:
+            raise RuntimeError('SYNTHETIC_RECOVERY_POWER_LOSS')
     doc['status'] = 'RECOVERED'
     _write_journal(root, doc)
     return {'status': 'SYNTHETIC_RECOVERY_VERIFIED', 'idempotent': False,
