@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ez2_ci_delivery_envelope_install_input as consumer
 
 SHA = "a" * 40
+LOCK_BYTES = b'{"plugins":[{"slug":"elementor","version":"4.3.4"}]}'
 CATALOG = {
     "source_sha": SHA, "target_site": "ez2-isolated-only",
     "scope": "engineering-evidence-only",
@@ -26,7 +27,12 @@ class ConsumerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name) / ".release"
+        self.root.mkdir()
+        design = self.root.parent / "design"
+        design.mkdir()
+        self.source_lock = design / "ez2-elementor-pinned-plugin.json"
+        self.source_lock.write_bytes(LOCK_BYTES)
         self.payloads = {}
         for name in consumer.RELEASE_NAMES:
             data = ("synthetic-" + name).encode()
@@ -44,6 +50,7 @@ class ConsumerTests(unittest.TestCase):
         with zipfile.ZipFile(self.root / consumer.OUT_NAME, "w") as zipped:
             for name, data in self.payloads.items():
                 zipped.writestr("release/" + name, data)
+            zipped.writestr(consumer.DEPENDENCY, LOCK_BYTES)
 
     def test_staged_release_is_byte_identical(self):
         receipt = consumer.stage(self.root, SHA)
@@ -51,9 +58,44 @@ class ConsumerTests(unittest.TestCase):
         self.assertFalse(receipt["deployment_authorized"])
         self.assertFalse(receipt["localwp_installed"])
         self.assertEqual({p.name for p in (self.root / consumer.OUTPUT).iterdir()},
-                         set(consumer.RELEASE_NAMES))
+                         set(consumer.RELEASE_NAMES) | {"dependency"})
+        self.assertTrue(receipt["pinned_plugin_manifest_from_envelope"])
+        self.assertEqual((self.root / consumer.OUTPUT / consumer.DEPENDENCY).read_bytes(),
+                         LOCK_BYTES)
         for name, data in self.payloads.items():
             self.assertEqual((self.root / consumer.OUTPUT / name).read_bytes(), data)
+
+    def test_missing_pinned_dependency_refused(self):
+        (self.root / consumer.OUT_NAME).unlink()
+        with zipfile.ZipFile(self.root / consumer.OUT_NAME, "w") as zipped:
+            for name, data in self.payloads.items():
+                zipped.writestr("release/" + name, data)
+        with self.assertRaises(ValueError):
+            consumer.stage(self.root, SHA)
+        self.assertFalse((self.root / consumer.OUTPUT).exists())
+
+    def test_modified_pinned_dependency_refused(self):
+        (self.root / consumer.OUT_NAME).unlink()
+        with zipfile.ZipFile(self.root / consumer.OUT_NAME, "w") as zipped:
+            for name, data in self.payloads.items():
+                zipped.writestr("release/" + name, data)
+            zipped.writestr(consumer.DEPENDENCY, b"changed lock")
+        with self.assertRaises(ValueError):
+            consumer.stage(self.root, SHA)
+        self.assertFalse((self.root / consumer.OUTPUT).exists())
+
+    def test_source_pinned_dependency_drift_refused(self):
+        self.source_lock.write_bytes(b"changed source lock")
+        with self.assertRaises(ValueError):
+            consumer.stage(self.root, SHA)
+        self.assertFalse((self.root / consumer.OUTPUT).exists())
+
+    def test_source_pinned_dependency_symlink_refused(self):
+        self.source_lock.unlink()
+        self.source_lock.symlink_to(self.root / consumer.RELEASE_NAMES[0])
+        with self.assertRaises(ValueError):
+            consumer.stage(self.root, SHA)
+        self.assertFalse((self.root / consumer.OUTPUT).exists())
 
     def test_repeat_refused(self):
         consumer.stage(self.root, SHA)

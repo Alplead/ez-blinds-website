@@ -290,7 +290,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_ci_delivery_envelope_install_input.py scripts/test_ez2_ci_delivery_envelope_install_input.py
           python3 scripts/test_ez2_ci_delivery_envelope_install_input.py | tee /tmp/ez2-envelope-consumer.log
-          grep -Fq 'EZ2_ENVELOPE_CONSUMER_GUARD_PASS cases=10 disposable_only=true localwp_touched=false' /tmp/ez2-envelope-consumer.log
+          grep -Fq 'EZ2_ENVELOPE_CONSUMER_GUARD_PASS cases=14 disposable_only=true localwp_touched=false' /tmp/ez2-envelope-consumer.log
 
       - name: Verify release-before-private-capture checkpoint (synthetic only)
         run: |

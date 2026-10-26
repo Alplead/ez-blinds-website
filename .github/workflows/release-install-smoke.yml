@@ -90,7 +90,7 @@ jobs:
               # Reuse the checksum-pinned dependency that the later disposable
               # WordPress install actually downloads and verifies. Do not test
               # an intentionally unpinned dummy manifest in the release path.
-              lock = Path('design/ez2-elementor-pinned-plugin.json')
+              lock = Path('.release/ez2-envelope-install-input/dependency/elementor-pinned.json')
               pinned = json.loads(lock.read_text())
               assert len(pinned['plugins']) == 1
               assert pinned['plugins'][0]['version'] == version

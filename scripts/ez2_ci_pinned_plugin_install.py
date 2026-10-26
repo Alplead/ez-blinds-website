@@ -19,7 +19,10 @@ from ez2_plugin_official_fetch import CHUNK, MAX_ARCHIVE, official_url, open_off
 from ez2_release_set import run as verify_release
 
 REPO = Path(__file__).resolve().parents[1]
-LOCK_PATH = REPO / "design/ez2-elementor-pinned-plugin.json"
+# The CI installer consumes the pinned dependency staged from the same
+# verified exact-head envelope as the theme/core WordPress installation.
+LOCK_PATH = REPO / ".release/ez2-envelope-install-input/dependency/elementor-pinned.json"
+SOURCE_LOCK_PATH = REPO / "design/ez2-elementor-pinned-plugin.json"
 COMPOSE = ("docker", "compose", "-f", ".github/release-install/docker-compose.yml")
 VERSION = "4.3.4"
 
@@ -93,6 +96,10 @@ def main(exact_sha):
     if actual != exact_sha:
         raise ValueError("CI checkout is not exact expected HEAD")
     verify_release("verify", REPO / ".release", exact_sha)
+    if (LOCK_PATH.is_symlink() or not LOCK_PATH.is_file()
+            or LOCK_PATH.stat().st_nlink != 1
+            or LOCK_PATH.read_bytes() != SOURCE_LOCK_PATH.read_bytes()):
+        raise ValueError("Staged envelope plugin lock missing or source mismatch")
     lock = read_lock(LOCK_PATH)
     validate_lock(lock)
     if json.loads((REPO / "design/ez2-home-hero-candidate.json").read_text())["version"] != VERSION:

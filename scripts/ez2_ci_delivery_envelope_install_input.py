@@ -13,7 +13,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from ez2_delivery_envelope import FILES, MAX_BYTES, OUT_NAME, verify_bytes
+from ez2_delivery_envelope import DEPENDENCY, FILES, MAX_BYTES, OUT_NAME, verify_bytes
 from ez2_release_set import run as verify_release, safe_read
 
 OUTPUT = "ez2-envelope-install-input"
@@ -50,10 +50,25 @@ def stage(release_dir, exact_sha):
             if data != safe_read(root, name):
                 raise ValueError("Envelope differs from exact-head release bytes")
             payloads[name] = data
+        # The official Elementor dependency must come from the SAME verified
+        # envelope as the installed first-party ZIPs, never a separate lock.
+        source_lock = root.parent / "design" / "ez2-elementor-pinned-plugin.json"
+        if (source_lock.is_symlink() or not source_lock.is_file()
+                or source_lock.stat().st_nlink != 1
+                or not 0 < source_lock.stat().st_size <= 32768):
+            raise ValueError("Unsafe source plugin lock")
+        if DEPENDENCY not in zipped.namelist():
+            raise ValueError("Missing pinned plugin dependency")
+        dependency = zipped.read(DEPENDENCY)
+        if dependency != source_lock.read_bytes():
+            raise ValueError("Envelope plugin dependency differs from exact source")
+        payloads[DEPENDENCY] = dependency
     with tempfile.TemporaryDirectory(prefix=".ez2-envelope-stage-", dir=root) as tmp:
         scratch = Path(tmp)
         for name, data in payloads.items():
-            (scratch / name).write_bytes(data)
+            destination_file = scratch / name
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            destination_file.write_bytes(data)
         catalog = verify_release("verify", scratch, exact_sha)
         if (catalog.get("source_sha") != exact_sha
                 or catalog.get("target_site") != "ez2-isolated-only"
@@ -67,7 +82,8 @@ def stage(release_dir, exact_sha):
     return {
         "status": "DISPOSABLE_ENVELOPE_INSTALL_INPUT_VERIFIED",
         "source_sha": exact_sha,
-        "component_count": len(RELEASE_NAMES),
+        "component_count": len(RELEASE_NAMES) + 1,
+        "pinned_plugin_manifest_from_envelope": True,
         "wordpress_install_input": True,
         "localwp_installed": False,
         "one_click_complete": False,
