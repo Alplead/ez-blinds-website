@@ -37,7 +37,7 @@ jobs:
       - name: Exercise synthetic crash recovery journal (no WordPress writes)
         run: |
           python3 scripts/test_ez2_scratch_durable_journal.py | tee /tmp/ez2-scratch-journal.log
-          grep -Fq 'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios=38 power_loss=12 localwp_touched=false can_apply=false' /tmp/ez2-scratch-journal.log
+          grep -Fq 'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios=44 power_loss=12 localwp_touched=false can_apply=false' /tmp/ez2-scratch-journal.log
 
       - name: Check isolated Elementor runtime dependency (read-only)
         run: |

@@ -101,6 +101,28 @@ def _write_journal(root, doc):
         finally: os.close(fd)
 
 
+def _clear_stale_journal_temp(root):
+    """Permit recovery after a crash before the atomic journal rename.
+
+    The committed journal remains authoritative; never trust partial next-state
+    bytes. Refuse links, special entries and oversized scratch artifacts.
+    This only runs under _safe_root's synthetic-only isolation.
+    """
+    tmp = root / '.ez2-journal-next'
+    if not tmp.exists() and not tmp.is_symlink():
+        return
+    info = tmp.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 8192:
+        raise ValueError('Unsafe interrupted scratch journal')
+    tmp.unlink()
+    if hasattr(os, 'O_DIRECTORY'):
+        fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
 def _read_journal(root):
     path = _journal_path(root)
     if (path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
@@ -180,6 +202,7 @@ def apply(root, *, interrupt_after=None):
 def recover(root):
     root = _safe_root(root)
     doc = _read_journal(root)
+    _clear_stale_journal_temp(root)
     if doc['status'] == 'RECOVERED':
         if any(_tree(root / 'live', r['name'], allow_missing=True) != r['original']
                for r in doc['components']):

@@ -1,4 +1,5 @@
 """Power-loss regression cases; writes only inside auto-deleted synthetic fixtures."""
+import os
 import tempfile
 from pathlib import Path
 from ez2_scratch_durable_journal import MARKER, MAGIC, COMPONENTS, initialise, apply, recover
@@ -88,5 +89,49 @@ with tempfile.TemporaryDirectory(prefix='ez2-journal-safety-') as tmp:
     (root / MARKER).write_text('not a valid synthetic marker')
     rejected(lambda: initialise(root))
     CASES += 1
+
+# A crash during journal rewrite can leave a partial .ez2-journal-next.
+# Recovery must use the last committed journal plus observed file state.
+for fault, partial in ((1, b''), (2, b'{"schema":'), (6, b'{"schema":1}')):
+    with tempfile.TemporaryDirectory(prefix='ez2-journal-partial-') as tmp:
+        root = Path(tmp) / 'fixture'
+        owner = fixture(root)
+        initialise(root)
+        try:
+            apply(root, interrupt_after=fault)
+        except RuntimeError as exc:
+            assert str(exc) == 'SYNTHETIC_POWER_LOSS'
+        else:
+            raise AssertionError('Expected injected interruption')
+        (root / '.ez2-journal-next').write_bytes(partial)
+        assert recover(root)['status'] == 'SYNTHETIC_RECOVERY_VERIFIED'
+        assert not (root / '.ez2-journal-next').exists()
+        assert owner.read_bytes() == b'synthetic owner fixture unchanged'
+        assert recover(root)['idempotent']
+        CASES += 1
+
+# Do not unlink an attacker-supplied symlink, hardlink or oversized journal.
+for unsafe in ('symlink', 'hardlink', 'oversize'):
+    with tempfile.TemporaryDirectory(prefix='ez2-journal-unsafe-') as tmp:
+        root = Path(tmp) / 'fixture'
+        fixture(root)
+        initialise(root)
+        try:
+            apply(root, interrupt_after=1)
+        except RuntimeError as exc:
+            assert str(exc) == 'SYNTHETIC_POWER_LOSS'
+        else:
+            raise AssertionError('Expected injected interruption')
+        scratch = root / '.ez2-journal-next'
+        if unsafe == 'symlink':
+            scratch.symlink_to(root / MARKER)
+        elif unsafe == 'hardlink':
+            os.link(root / MARKER, scratch)
+        else:
+            scratch.write_bytes(b'x' * 8193)
+        rejected(lambda: recover(root))
+        assert scratch.exists() or scratch.is_symlink()
+        scratch.unlink()
+        assert recover(root)['status'] == 'SYNTHETIC_RECOVERY_VERIFIED'
 
 print(f'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios={CASES} power_loss=12 localwp_touched=false can_apply=false')
