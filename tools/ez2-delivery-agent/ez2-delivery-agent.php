@@ -180,7 +180,7 @@ final class EZ2_Isolated_Delivery_Agent {
         foreach ($baseline['issues'] as $issue)
             echo '<p>' . esc_html($issue) . '</p>';
         $transaction = EZ2_Transaction_Readiness::evaluate(
-            $report, $remote, $backup, $inventory, $baseline, $media);
+            $report, $remote, $backup, $inventory, $baseline, $media, $plugin);
         echo '<h2>Single-update transaction readiness (read-only)</h2>';
         echo '<p><strong>Status:</strong> ' . esc_html($transaction['status']) . '</p>';
         echo '<p>Isolated site: ' . ($transaction['isolated_site_observed'] ? 'observed' : 'blocked')
@@ -188,6 +188,7 @@ final class EZ2_Isolated_Delivery_Agent {
             . '; backup destination: ' . ($transaction['backup_location_observed'] ? 'observed' : 'blocked')
             . '; managed pages: ' . ($transaction['managed_pages_observed'] ? 'observed' : 'blocked')
             . '; private media: ' . ($transaction['private_media_observed'] ? 'observed' : 'blocked')
+            . '; local Elementor: ' . ($transaction['local_plugin_observed'] ? 'observed (unattested)' : 'blocked')
             . '; receipt integrity: ' . ($transaction['receipt_integrity_observed'] ? 'observed' : 'unavailable')
             . '.</p>';
         echo '<p>No installer, private backup, restore rehearsal, media reconciliation, or trusted installed-release attestation is available. No update action is enabled.</p>';

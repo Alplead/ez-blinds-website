@@ -48,9 +48,15 @@ $media = [
     'byte_integrity_verified' => true,
     'can_apply' => false, 'site_modified' => false,
 ];
-$plan = static fn($s = null, $r = null, $b = null, $i = null, $l = null, $m = null) =>
+$plugin = [
+    'status' => 'LOCAL_PLUGIN_MATCH_UNATTESTED', 'issues' => [],
+    'checked_count' => 1, 'matching_count' => 1,
+    'mode' => 'read-only', 'candidate_lock_attested' => false,
+    'can_apply' => false, 'site_modified' => false,
+];
+$plan = static fn($s = null, $r = null, $b = null, $i = null, $l = null, $m = null, $p = null) =>
     EZ2_Transaction_Readiness::evaluate($s ?? $site, $r ?? $release,
-        $b ?? $backup, $i ?? $inventory, $l ?? $baseline, $m ?? $media);
+        $b ?? $backup, $i ?? $inventory, $l ?? $baseline, $m ?? $media, $p ?? $plugin);
 $ok = $plan();
 $check($ok['status'] === 'BLOCKED_TRANSACTION_NOT_IMPLEMENTED', 'always blocked');
 $check($ok['isolated_site_observed'] && $ok['exact_head_release_observed']
@@ -63,6 +69,8 @@ $check(in_array('INSTALLED_RELEASE_NOT_ATTESTED', $ok['issues'], true), 'receipt
 $check(in_array('DEPENDENCY_CONTENT_MEDIA_TRANSACTION_NOT_IMPLEMENTED', $ok['issues'], true), 'no fake migration');
 $check(!str_contains(json_encode($ok), 'PRIVATE_SYNTHETIC_TEXT'), 'no private content');
 $check($ok['source_sha'] === $sha && $ok['local_changes_observed'] === 0, 'public SHA and count only');
+$check($ok['local_plugin_observed'] && !in_array('LOCAL_ELEMENTOR_RUNTIME_NOT_MATCHED', $ok['issues'], true),
+    'local Elementor match is observed, not installation authority');
 foreach (['status' => 'BLOCKED_PRIVATE_MEDIA_READINESS', 'verified_count' => 0,
           'unresolved_count' => 1, 'can_apply' => true,
           'private_content_emitted' => true, 'byte_integrity_verified' => false] as $key => $value) {
@@ -118,5 +126,18 @@ $bad = $baseline; $bad['local_drift_count'] = 1;
 $check(!$plan(null, null, null, null, $bad)['receipt_integrity_observed'], 'drift count mismatch');
 $check(!$plan(null, null, null, null, [])['receipt_integrity_observed'], 'missing receipt');
 $check(!$plan(null, null, null, null, ['issues' => ['BAD']])['receipt_integrity_observed'], 'blocked receipt');
-$check($cases === 43, 'regression case count');
+foreach (['status' => 'BLOCKED_PLUGIN_RUNTIME', 'issues' => ['BAD'],
+          'checked_count' => 0, 'matching_count' => 0,
+          'mode' => 'write', 'candidate_lock_attested' => true,
+          'can_apply' => true, 'site_modified' => true] as $key => $value) {
+    $bad = $plugin; $bad[$key] = $value;
+    $result = $plan(null, null, null, null, null, null, $bad);
+    $check(!$result['local_plugin_observed']
+        && in_array('LOCAL_ELEMENTOR_RUNTIME_NOT_MATCHED', $result['issues'], true)
+        && !$result['can_apply'] && !$result['site_modified'], 'plugin ' . $key);
+}
+$missing = $plan(null, null, null, null, null, null, []);
+$check(!$missing['local_plugin_observed']
+    && in_array('LOCAL_ELEMENTOR_RUNTIME_NOT_MATCHED', $missing['issues'], true), 'missing plugin report');
+$check($cases === 53, 'regression case count');
 echo "EZ2_TRANSACTION_READINESS_PASS cases={$cases} read_only=true can_apply=false localwp_touched=false\n";

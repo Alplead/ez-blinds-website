@@ -46,7 +46,7 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-transaction-readiness.php
           php -l scripts/test_ez2_transaction_readiness.php
           php scripts/test_ez2_transaction_readiness.php | tee /tmp/ez2-transaction-readiness.log
-          grep -Fq 'EZ2_TRANSACTION_READINESS_PASS cases=44 read_only=true can_apply=false localwp_touched=false' /tmp/ez2-transaction-readiness.log
+          grep -Fq 'EZ2_TRANSACTION_READINESS_PASS cases=54 read_only=true can_apply=false localwp_touched=false' /tmp/ez2-transaction-readiness.log
 
       - name: Verify isolated private WordPress attachment integrity without exporting media
         run: |

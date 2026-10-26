@@ -16,7 +16,7 @@ final class EZ2_Transaction_Readiness {
     }
 
     /** All inputs are read-only reports, never authorization tokens. */
-    public static function evaluate($site, $release, $backup, $inventory, $baseline, $media = null): array {
+    public static function evaluate($site, $release, $backup, $inventory, $baseline, $media = null, $plugin = null): array {
         $issues = [];
         $siteReady = is_array($site)
             && ($site['status'] ?? null) === 'READ_ONLY_PREVIEW_READY'
@@ -80,6 +80,19 @@ final class EZ2_Transaction_Readiness {
             && ($media['site_modified'] ?? null) === false;
         if (!$mediaReady) $issues[] = 'PRIVATE_MEDIA_SLOTS_NOT_VERIFIED';
 
+        // A local Elementor match is observable but NOT authenticated release
+        // provenance. Never treat a WordPress option lock as an install permit.
+        $pluginReady = is_array($plugin)
+            && ($plugin['status'] ?? null) === 'LOCAL_PLUGIN_MATCH_UNATTESTED'
+            && ($plugin['issues'] ?? null) === []
+            && ($plugin['checked_count'] ?? null) === 1
+            && ($plugin['matching_count'] ?? null) === 1
+            && ($plugin['mode'] ?? null) === 'read-only'
+            && ($plugin['candidate_lock_attested'] ?? null) === false
+            && ($plugin['can_apply'] ?? null) === false
+            && ($plugin['site_modified'] ?? null) === false;
+        if (!$pluginReady) $issues[] = 'LOCAL_ELEMENTOR_RUNTIME_NOT_MATCHED';
+
         $receiptAuthenticated = is_array($baseline)
             && ($baseline['receipt_authenticated'] ?? null) === true
             && ($baseline['issues'] ?? null) === []
@@ -114,6 +127,7 @@ final class EZ2_Transaction_Readiness {
             'backup_location_observed' => $backupLocation,
             'managed_pages_observed' => $inventoryReady,
             'private_media_observed' => $mediaReady,
+            'local_plugin_observed' => $pluginReady,
             'receipt_integrity_observed' => $receiptAuthenticated,
             'local_changes_observed' => $receiptAuthenticated
                 ? $baseline['local_drift_count'] : null,
