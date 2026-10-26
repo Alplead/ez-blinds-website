@@ -134,4 +134,47 @@ for unsafe in ('symlink', 'hardlink', 'oversize'):
         scratch.unlink()
         assert recover(root)['status'] == 'SYNTHETIC_RECOVERY_VERIFIED'
 
-print(f'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios={CASES} power_loss=12 localwp_touched=false can_apply=false')
+# Recovery itself can lose power after any of the three component restores.
+# The next invocation must finish from observed original/rollback bytes rather
+# than assuming the previous recover() call reached its final journal write.
+for missing in (False, True):
+    for apply_fault in (None, *range(1, 7)):
+        for recovery_fault in range(1, len(COMPONENTS) + 1):
+            with tempfile.TemporaryDirectory(prefix='ez2-journal-recover-crash-') as tmp:
+                root = Path(tmp) / 'fixture'
+                owner = fixture(root, missing)
+                initialise(root)
+                if apply_fault is None:
+                    apply(root)
+                else:
+                    try:
+                        apply(root, interrupt_after=apply_fault)
+                    except RuntimeError as exc:
+                        assert str(exc) == 'SYNTHETIC_POWER_LOSS'
+                    else:
+                        raise AssertionError('Expected synthetic apply interruption')
+                try:
+                    recover(root, interrupt_after=recovery_fault)
+                except RuntimeError as exc:
+                    assert str(exc) == 'SYNTHETIC_RECOVERY_POWER_LOSS'
+                else:
+                    raise AssertionError('Expected synthetic recovery interruption')
+                assert owner.read_bytes() == b'synthetic owner fixture unchanged'
+                assert recover(root)['status'] == 'SYNTHETIC_RECOVERY_VERIFIED'
+                assert recover(root)['idempotent']
+                assert owner.read_bytes() == b'synthetic owner fixture unchanged'
+                for name in COMPONENTS:
+                    old = root / 'live' / name / 'old.txt'
+                    assert old.is_file() == (not missing or name != 'plugins/elementor')
+                    assert not (root / 'live' / name / 'new.txt').exists()
+                    assert not (root / 'rollback' / name).exists()
+                CASES += 1
+
+with tempfile.TemporaryDirectory(prefix='ez2-journal-recover-args-') as tmp:
+    root = Path(tmp) / 'fixture'
+    fixture(root)
+    initialise(root)
+    for invalid in (0, 4, -1, True, 1.0, '1'):
+        rejected(lambda value=invalid: recover(root, interrupt_after=value))
+
+print(f'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios={CASES} power_loss=54 localwp_touched=false can_apply=false')
