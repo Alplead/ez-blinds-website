@@ -19,14 +19,17 @@ from ez2_scratch_durable_journal import (
 )
 
 FAULTS = (None, 1, 2, 3, 4, 5, 6)
+RECOVERY_FAULTS = (None, 1, 2, 3)
 
 
-def exercise(archives, *, fault=None):
+def exercise(archives, *, fault=None, recovery_fault=None):
     """Test real first-party ZIP payloads through every journal crash point."""
     if not isinstance(archives, (list, tuple)) or len(archives) != 2:
         raise ValueError('Two first-party release ZIPs required')
     if fault not in FAULTS or (fault is not None and type(fault) is not int):
         raise ValueError('Invalid synthetic fault point')
+    if recovery_fault not in RECOVERY_FAULTS or (recovery_fault is not None and type(recovery_fault) is not int):
+        raise ValueError('Invalid synthetic recovery fault point')
     with tempfile.TemporaryDirectory(prefix='ez2-ci-release-durable-') as temp:
         root = Path(temp) / 'fixture'
         root.mkdir(mode=0o700)
@@ -67,7 +70,16 @@ def exercise(archives, *, fault=None):
             raise ValueError('Installed scratch payload differs from staged release')
         if owner.read_bytes() != b'synthetic uploads must remain untouched':
             raise ValueError('Synthetic uploads changed during scratch apply')
-        receipt = recover(root)
+        recovery_interrupted = False
+        try:
+            receipt = recover(root, interrupt_after=recovery_fault)
+        except RuntimeError as exc:
+            if str(exc) != 'SYNTHETIC_RECOVERY_POWER_LOSS' or recovery_fault is None:
+                raise
+            recovery_interrupted = True
+            receipt = recover(root)
+        if recovery_interrupted != (recovery_fault is not None):
+            raise ValueError('Requested scratch recovery interruption not observed')
         if receipt['status'] != 'SYNTHETIC_RECOVERY_VERIFIED' or not recover(root)['idempotent']:
             raise ValueError('Durable scratch recovery incomplete')
         if snapshot(root / 'live') != original:
@@ -79,6 +91,7 @@ def exercise(archives, *, fault=None):
             'first_party_archives_staged': 2,
             'journal_components_rehearsed': 3,
             'power_loss_injected': interrupted,
+            'recovery_power_loss_injected': recovery_interrupted,
             'original_bytes_restored': True,
             'synthetic_uploads_unchanged': True,
             'elementor_plugin_installed': False,
@@ -105,12 +118,14 @@ def main():
             or catalog['localwp_installed'] is not False):
         raise ValueError('Release not safe for synthetic rehearsal')
     archives = [release / item[0] for item in FIRST_PARTY]
-    receipts = [exercise(archives, fault=fault) for fault in FAULTS]
+    receipts = [exercise(archives, fault=fault, recovery_fault=recovery_fault)
+                for fault in FAULTS for recovery_fault in RECOVERY_FAULTS]
     if any(not r['original_bytes_restored'] or r['can_apply'] or r['localwp_touched']
            for r in receipts):
         raise ValueError('Incomplete durable release rehearsal')
     print('EZ2_CI_EXACT_RELEASE_DURABLE_ROLLBACK_PASS first_party=2 journal_components=3 '
-          'fault_scenarios=6 elementor_installed=false localwp_touched=false can_apply=false')
+          'fault_scenarios=6 elementor_installed=false localwp_touched=false can_apply=false '
+          'recovery_fault_scenarios=21')
 
 
 if __name__ == '__main__':

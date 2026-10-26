@@ -42,7 +42,7 @@ jobs:
       - name: Test exact-release durable scratch bridge (no site writes)
         run: |
           python3 scripts/test_ez2_ci_release_durable_recovery.py | tee /tmp/ez2-release-durable-bridge.log
-          grep -Fq 'EZ2_CI_RELEASE_DURABLE_BRIDGE_TEST_PASS cases=17 synthetic_only=true localwp_touched=false can_apply=false' /tmp/ez2-release-durable-bridge.log
+          grep -Fq 'EZ2_CI_RELEASE_DURABLE_BRIDGE_TEST_PASS cases=44 synthetic_only=true localwp_touched=false can_apply=false' /tmp/ez2-release-durable-bridge.log
 
       - name: Check isolated Elementor runtime dependency (read-only)
         run: |
