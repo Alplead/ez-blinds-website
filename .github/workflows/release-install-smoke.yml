@@ -339,6 +339,7 @@ jobs:
       - name: Exercise envelope-sourced Elementor candidate in release-installed WordPress (CI only)
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EZ2_CI_RELEASE_ENVELOPE_REQUIRED: YES_VERIFIED_ENVELOPE
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"

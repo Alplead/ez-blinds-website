@@ -40,7 +40,7 @@ def setup(root):
 def run(root, expected=PAYLOAD, metadata=None):
     with patch.object(target, 'verify_release_set', return_value=catalog() if metadata is None else metadata), \
          patch.object(target, 'verify_candidate', return_value={'source_sha': SHA}):
-        return stage(root, SHA, expected)
+        return stage(root, SHA, expected, envelope_required=True)
 
 
 def reject(action):
@@ -131,5 +131,18 @@ with tempfile.TemporaryDirectory() as temp:
     staged.symlink_to(root, target_is_directory=True)
     reject(lambda: run(root))  # Directory link must not bypass envelope stage.
 
-assert CASES == 20, CASES
+# The independent Elementor browser workflow intentionally has no envelope.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input'
+    (staged / 'ez2-content-candidate.zip').unlink()
+    staged.rmdir()
+    with patch.object(target, 'verify_release_set', return_value=catalog()), \
+         patch.object(target, 'verify_candidate', return_value={'source_sha': SHA}):
+        info = stage(root, SHA, PAYLOAD)
+    assert info['source_sha'] == SHA and (root / OUTPUT).read_bytes() == PAYLOAD
+    CASES += 1
+
+assert CASES == 21, CASES
 print(f'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases={CASES}')

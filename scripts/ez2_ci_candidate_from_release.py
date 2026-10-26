@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Stage the Elementor candidate from the verified delivery envelope for disposable CI only."""
+"""Stage exact-head Elementor content for two distinct disposable CI test modes.
+
+Release-install CI must consume the verified delivery envelope. The separate
+Elementor browser CI uses the independently verified release candidate because
+it intentionally does not build the delivery envelope.
+"""
 import hashlib
 import io
 import os
@@ -14,7 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = 'ez2-runtime-candidate.json'
 
 
-def stage(release_dir, sha, expected_source):
+def stage(release_dir, sha, expected_source, *, envelope_required=False):
+    if type(envelope_required) is not bool:
+        raise ValueError('Invalid envelope mode')
     root = Path(release_dir)
     if root.is_symlink() or not root.is_dir():
         raise ValueError('Unsafe release directory')
@@ -32,20 +39,21 @@ def stage(release_dir, sha, expected_source):
     ):
         if catalog.get(key) != value or (isinstance(value, bool) and catalog.get(key) is not value):
             raise ValueError('Unsafe or mismatched release catalog: ' + key)
-    # A single envelope must supply theme, core, pinned dependency AND content.
-    # The original release remains a separate exact-head parity witness.
-    envelope_dir = root / 'ez2-envelope-install-input'
-    if envelope_dir.is_symlink() or not envelope_dir.is_dir():
-        raise ValueError('Verified envelope install inputs required')
     source_archive = root / 'ez2-content-candidate.zip'
-    envelope_archive = envelope_dir / 'ez2-content-candidate.zip'
-    for path in (source_archive, envelope_archive):
+    # The standalone browser CI has no envelope. Release-install CI must
+    # explicitly opt into using the verified envelope's staged candidate.
+    envelope_dir = root / 'ez2-envelope-install-input'
+    if envelope_required and (envelope_dir.is_symlink() or not envelope_dir.is_dir()):
+        raise ValueError('Verified envelope install inputs required')
+    archive_path = (envelope_dir / 'ez2-content-candidate.zip'
+                    if envelope_required else source_archive)
+    for path in (source_archive, archive_path):
         if (path.is_symlink() or not path.is_file()
                 or path.stat().st_nlink != 1
                 or not 0 < path.stat().st_size <= 64 * 1024 * 1024):
             raise ValueError('Unsafe exact-head candidate archive')
-    archive = envelope_archive.read_bytes()
-    if archive != source_archive.read_bytes():
+    archive = archive_path.read_bytes()
+    if envelope_required and archive != source_archive.read_bytes():
         raise ValueError('Envelope candidate differs from exact-head release')
     verify_candidate(sha, archive)
     with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
@@ -80,7 +88,10 @@ def main(args):
     if current != sha:
         raise ValueError('Checked-out HEAD differs from expected SHA')
     committed = subprocess.check_output(['git', '-C', str(ROOT), 'show', f'{sha}:{SOURCE}'])
-    result = stage(release_dir, sha, committed)
+    mode = os.environ.get('EZ2_CI_RELEASE_ENVELOPE_REQUIRED', '')
+    if mode not in ('', 'YES_VERIFIED_ENVELOPE'):
+        raise ValueError('Unknown release envelope mode')
+    result = stage(release_dir, sha, committed, envelope_required=bool(mode))
     print('EZ2_RELEASE_CANDIDATE_RUNTIME_PASS source_sha=' + result['source_sha'])
 
 
