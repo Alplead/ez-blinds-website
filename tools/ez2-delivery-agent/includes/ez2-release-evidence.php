@@ -21,7 +21,29 @@ final class EZ2_Release_Evidence {
         'EZ2 Hero Candidate (No Deployment)' => ['ez2-hero-review-'],
     ];
 
-    public static function evaluate(array $pr, array $runs, array $artifactSets): array {
+    /**
+     * GitHub's expired=false flag is not a freshness or byte-presence proof.
+     * Validate the actual expiry instant and bounded nonempty artifact size.
+     * This remains metadata-only evidence, never a verified download.
+     */
+    private static function artifactLive(array $artifact, DateTimeImmutable $now): bool {
+        $size = $artifact['size_in_bytes'] ?? null;
+        $raw = $artifact['expires_at'] ?? null;
+        if (!is_int($size) || $size < 1 || $size > 268435456
+            || !is_string($raw)
+            || !preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/D', $raw)) {
+            return false;
+        }
+        $expiry = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s\\Z',
+            $raw, new DateTimeZone('UTC'));
+        return $expiry instanceof DateTimeImmutable
+            && $expiry->format('Y-m-d\\TH:i:s\\Z') === $raw
+            && $expiry > $now;
+    }
+
+    public static function evaluate(array $pr, array $runs, array $artifactSets,
+                                    ?DateTimeImmutable $now = null): array {
+        $now = $now ?? new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $issues = [];
         $sha = $pr['head']['sha'] ?? null;
         if (!is_string($sha) || !preg_match('/^[0-9a-f]{40}$/D', $sha)) {
@@ -76,6 +98,7 @@ final class EZ2_Release_Evidence {
                 }
                 $a = $matches[0];
                 if (($a['expired'] ?? null) !== false
+                    || !self::artifactLive($a, $now)
                     || !is_int($a['id'] ?? null) || $a['id'] < 1
                     || ($a['workflow_run']['head_sha'] ?? null) !== $sha
                     || ($a['workflow_run']['id'] ?? null) !== ($selected[$name]['id'] ?? null)) {

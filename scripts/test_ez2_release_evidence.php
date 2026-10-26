@@ -28,13 +28,15 @@ foreach ($prefixes as $name => $items) {
     $run = current(array_values(array_filter($runs, fn($x) => $x['name'] === $name)));
     foreach ($items as $prefix) {
         $sets[$name][] = ['name' => $prefix . $sha, 'id' => $n++, 'expired' => false,
+                          'size_in_bytes' => 1024, 'expires_at' => '2099-01-01T00:00:00Z',
                           'workflow_run' => ['head_sha' => $sha, 'id' => $run['id']]];
     }
 }
 $cases = 0;
 function expect_evidence(array $pr, array $runs, array $sets, bool $pass): void {
     global $cases;
-    $out = EZ2_Release_Evidence::evaluate($pr, $runs, $sets);
+    $out = EZ2_Release_Evidence::evaluate($pr, $runs, $sets,
+        new DateTimeImmutable('2026-10-27T00:00:00Z'));
     if (($out['status'] === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') !== $pass
         || $out['can_apply'] !== false || $out['site_modified'] !== false
         || $out['localwp_installed'] !== false || $out['one_click_complete'] !== false) {
@@ -54,6 +56,13 @@ $r = $runs; $r[0]['conclusion'] = 'failure'; expect_evidence($pr, $r, $sets, fal
 $r = $runs; $r[1]['event'] = 'push'; expect_evidence($pr, $r, $sets, false);
 $r = $runs; $r[2]['head_sha'] = str_repeat('f', 40); expect_evidence($pr, $r, $sets, false);
 $s = $sets; $s['Release Install Smoke'][0]['expired'] = true; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['size_in_bytes'] = 0; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['size_in_bytes'] = '1024'; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['size_in_bytes'] = 268435457; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['expires_at'] = '2020-01-01T00:00:00Z'; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['expires_at'] = '2026-10-27T00:00:00Z'; expect_evidence($pr, $runs, $s, false);
+$s = $sets; $s['Release Install Smoke'][0]['expires_at'] = '2099-02-30T00:00:00Z'; expect_evidence($pr, $runs, $s, false);
+$s = $sets; unset($s['Release Install Smoke'][0]['expires_at']); expect_evidence($pr, $runs, $s, false);
 $s = $sets; unset($s['Release Install Smoke'][1]); expect_evidence($pr, $runs, $s, false);
 $s = $sets; $s['EZ2 Hero Candidate (No Deployment)'][0]['workflow_run']['id'] = 99; expect_evidence($pr, $runs, $s, false);
 $s = $sets; $s['EZ2 Elementor Ephemeral Runtime (No Deployment)'][0]['workflow_run']['head_sha'] = str_repeat('b', 40); expect_evidence($pr, $runs, $s, false);
@@ -118,5 +127,5 @@ $p = $pr; $p['base']['ref'] = 'release';
 check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
 check_live_evidence($pr, $runs, $sets, ['final_pr' => []], false);
 
-if ($cases !== 22) throw new RuntimeException('Unexpected case count');
+if ($cases !== 29) throw new RuntimeException('Unexpected case count');
 echo "EZ2_RELEASE_EVIDENCE_GUARD_PASS cases={$cases} apply_disabled=true\n";
