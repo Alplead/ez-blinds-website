@@ -120,6 +120,16 @@ jobs:
           python3 scripts/ez2_ci_file_upgrade.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-file-upgrade.log
           grep -Fq 'EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true fault_scenarios=4' /tmp/ez2-file-upgrade.log
 
+      - name: Bind exact-head release ZIPs to crash-resumable scratch journal (no site writes)
+        env:
+          EZ2_CI_DURABLE_RELEASE: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_release_durable_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-release-durable.log
+          grep -Fq 'EZ2_CI_EXACT_RELEASE_DURABLE_ROLLBACK_PASS first_party=2 journal_components=3 fault_scenarios=6 elementor_installed=false localwp_touched=false can_apply=false' /tmp/ez2-release-durable.log
+
       - name: Observe official Elementor Free ZIP checksum (unattested; no install)
         run: |
           python3 - <<'PY'
