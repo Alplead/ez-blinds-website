@@ -8,6 +8,7 @@
 require_once __DIR__ . '/includes/ez2-release-evidence.php';
 require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory.php';
+require_once __DIR__ . '/includes/ez2-private-media-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
 require_once __DIR__ . '/includes/ez2-installed-baseline-receipt.php';
 require_once __DIR__ . '/includes/ez2-transaction-readiness.php';
@@ -128,6 +129,15 @@ final class EZ2_Isolated_Delivery_Agent {
             foreach ($inventory['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
             echo '</ul>';
         }
+        $media = EZ2_Private_Media_Readiness::observe($report);
+        echo '<h2>Private Elementor media-slot integrity (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($media['status']) . '</p>';
+        echo '<p>Verified local attachment slots: ' . esc_html((string) $media['verified_count'])
+            . ' / ' . esc_html((string) $media['slot_count']) . '.</p>';
+        echo '<p>Only local attachment integrity is inspected. No image names, paths or URLs are sent '
+            . 'to GitHub or shown here; media publication and installation remain disabled.</p>';
+        foreach ($media['issues'] as $issue)
+            echo '<p>' . esc_html($issue) . '</p>';
         // Historical observation is optional and untrusted: no code writes a baseline.
         // Never emit stored page text or a stored candidate payload to the browser.
         $prior = get_option('ez2_managed_inventory_observation', null);
@@ -163,13 +173,14 @@ final class EZ2_Isolated_Delivery_Agent {
         foreach ($baseline['issues'] as $issue)
             echo '<p>' . esc_html($issue) . '</p>';
         $transaction = EZ2_Transaction_Readiness::evaluate(
-            $report, $remote, $backup, $inventory, $baseline);
+            $report, $remote, $backup, $inventory, $baseline, $media);
         echo '<h2>Single-update transaction readiness (read-only)</h2>';
         echo '<p><strong>Status:</strong> ' . esc_html($transaction['status']) . '</p>';
         echo '<p>Isolated site: ' . ($transaction['isolated_site_observed'] ? 'observed' : 'blocked')
             . '; exact-head release: ' . ($transaction['exact_head_release_observed'] ? 'observed' : 'blocked')
             . '; backup destination: ' . ($transaction['backup_location_observed'] ? 'observed' : 'blocked')
             . '; managed pages: ' . ($transaction['managed_pages_observed'] ? 'observed' : 'blocked')
+            . '; private media: ' . ($transaction['private_media_observed'] ? 'observed' : 'blocked')
             . '; receipt integrity: ' . ($transaction['receipt_integrity_observed'] ? 'observed' : 'unavailable')
             . '.</p>';
         echo '<p>No installer, private backup, restore rehearsal, media reconciliation, or trusted installed-release attestation is available. No update action is enabled.</p>';

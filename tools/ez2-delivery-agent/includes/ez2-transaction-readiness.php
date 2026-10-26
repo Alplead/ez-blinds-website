@@ -16,7 +16,7 @@ final class EZ2_Transaction_Readiness {
     }
 
     /** All inputs are read-only reports, never authorization tokens. */
-    public static function evaluate($site, $release, $backup, $inventory, $baseline): array {
+    public static function evaluate($site, $release, $backup, $inventory, $baseline, $media = null): array {
         $issues = [];
         $siteReady = is_array($site)
             && ($site['status'] ?? null) === 'READ_ONLY_PREVIEW_READY'
@@ -61,6 +61,24 @@ final class EZ2_Transaction_Readiness {
         }
         if (!$inventoryReady) $issues[] = 'MANAGED_CONTENT_NOT_OBSERVED';
 
+        // A symbolic slot map is not sufficient: the isolated WordPress site's
+        // actual attachment records and local image bytes must agree.
+        // This is still read-only evidence, never an install authorization.
+        $mediaReady = is_array($media)
+            && ($media['status'] ?? null) === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
+            && ($media['issues'] ?? null) === []
+            && ($media['mode'] ?? null) === 'read-only'
+            && ($media['target_site'] ?? null) === 'ez2-isolated-only'
+            && is_int($media['slot_count'] ?? null)
+            && $media['slot_count'] > 0 && $media['slot_count'] <= 100
+            && ($media['verified_count'] ?? null) === $media['slot_count']
+            && ($media['unresolved_count'] ?? null) === 0
+            && ($media['private_content_emitted'] ?? null) === false
+            && ($media['media_publication_authorized'] ?? null) === false
+            && ($media['can_apply'] ?? null) === false
+            && ($media['site_modified'] ?? null) === false;
+        if (!$mediaReady) $issues[] = 'PRIVATE_MEDIA_SLOTS_NOT_VERIFIED';
+
         $receiptAuthenticated = is_array($baseline)
             && ($baseline['receipt_authenticated'] ?? null) === true
             && ($baseline['issues'] ?? null) === []
@@ -94,6 +112,7 @@ final class EZ2_Transaction_Readiness {
             'exact_head_release_observed' => $releaseReady,
             'backup_location_observed' => $backupLocation,
             'managed_pages_observed' => $inventoryReady,
+            'private_media_observed' => $mediaReady,
             'receipt_integrity_observed' => $receiptAuthenticated,
             'local_changes_observed' => $receiptAuthenticated
                 ? $baseline['local_drift_count'] : null,

@@ -40,14 +40,21 @@ $baseline = [
     'baseline_trusted' => false, 'installed_release_attested' => false,
     'can_apply' => false, 'site_modified' => false, 'local_drift_count' => 0,
 ];
-$plan = static fn($s = null, $r = null, $b = null, $i = null, $l = null) =>
+$media = [
+    'status' => 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY', 'issues' => [],
+    'mode' => 'read-only', 'target_site' => 'ez2-isolated-only',
+    'slot_count' => 1, 'verified_count' => 1, 'unresolved_count' => 0,
+    'private_content_emitted' => false, 'media_publication_authorized' => false,
+    'can_apply' => false, 'site_modified' => false,
+];
+$plan = static fn($s = null, $r = null, $b = null, $i = null, $l = null, $m = null) =>
     EZ2_Transaction_Readiness::evaluate($s ?? $site, $r ?? $release,
-        $b ?? $backup, $i ?? $inventory, $l ?? $baseline);
+        $b ?? $backup, $i ?? $inventory, $l ?? $baseline, $m ?? $media);
 $ok = $plan();
 $check($ok['status'] === 'BLOCKED_TRANSACTION_NOT_IMPLEMENTED', 'always blocked');
 $check($ok['isolated_site_observed'] && $ok['exact_head_release_observed']
     && $ok['backup_location_observed'] && $ok['managed_pages_observed']
-    && $ok['receipt_integrity_observed'], 'read-only evidence composed');
+    && $ok['receipt_integrity_observed'] && $ok['private_media_observed'], 'read-only evidence composed');
 $check(!$ok['private_backup_verified'] && !$ok['restore_rehearsed']
     && !$ok['installed_release_attested'] && !$ok['can_apply']
     && !$ok['one_click_complete'] && !$ok['site_modified'], 'never grants write');
@@ -55,6 +62,15 @@ $check(in_array('INSTALLED_RELEASE_NOT_ATTESTED', $ok['issues'], true), 'receipt
 $check(in_array('DEPENDENCY_CONTENT_MEDIA_TRANSACTION_NOT_IMPLEMENTED', $ok['issues'], true), 'no fake migration');
 $check(!str_contains(json_encode($ok), 'PRIVATE_SYNTHETIC_TEXT'), 'no private content');
 $check($ok['source_sha'] === $sha && $ok['local_changes_observed'] === 0, 'public SHA and count only');
+foreach (['status' => 'BLOCKED_PRIVATE_MEDIA_READINESS', 'verified_count' => 0,
+          'unresolved_count' => 1, 'can_apply' => true,
+          'private_content_emitted' => true] as $key => $value) {
+    $bad = $media; $bad[$key] = $value;
+    $result = $plan(null, null, null, null, null, $bad);
+    $check(!$result['private_media_observed']
+        && in_array('PRIVATE_MEDIA_SLOTS_NOT_VERIFIED', $result['issues'], true),
+        'private media ' . $key);
+}
 foreach (['status' => 'BLOCKED', 'target_site' => 'ez-bns-new-dev.local',
           'mode' => 'write', 'can_apply' => true, 'site_modified' => true] as $key => $value) {
     $bad = $site; $bad[$key] = $value;
@@ -101,5 +117,5 @@ $bad = $baseline; $bad['local_drift_count'] = 1;
 $check(!$plan(null, null, null, null, $bad)['receipt_integrity_observed'], 'drift count mismatch');
 $check(!$plan(null, null, null, null, [])['receipt_integrity_observed'], 'missing receipt');
 $check(!$plan(null, null, null, null, ['issues' => ['BAD']])['receipt_integrity_observed'], 'blocked receipt');
-$check($cases === 37, 'regression case count');
+$check($cases === 42, 'regression case count');
 echo "EZ2_TRANSACTION_READINESS_PASS cases={$cases} read_only=true can_apply=false localwp_touched=false\n";
