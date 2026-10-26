@@ -4,6 +4,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from ez2_backup_snapshot_pack import pack
 from ez2_backup_preflight import verify
@@ -105,5 +107,40 @@ with tempfile.TemporaryDirectory() as temp:
     assert replay(base / "backup", SHA)["replayed_files"] == 4
     cases += 1
 
-assert cases == 18, cases
+# Normal checkout and linked-worktree markers both forbid private backups.
+reject(lambda src, dst: (src.parent / ".git").mkdir())
+reject(lambda src, dst: (src.parent / ".git").write_text("gitdir: elsewhere", encoding="utf-8"))
+
+# A clean snapshot must not be written into a different Git checkout.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    checkout = base / "public-repo"
+    checkout.mkdir()
+    (checkout / ".git").mkdir()
+    destination = checkout / "private-backup"
+    try:
+        pack(base / "snapshot", destination, SHA)
+    except ValueError:
+        assert not destination.exists()
+        cases += 1
+    else:
+        raise AssertionError("Backup inside Git checkout accepted")
+
+# Insufficient disk space must fail before a backup directory is created.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    destination = base / "private-backup"
+    with patch("ez2_backup_snapshot_pack.shutil.disk_usage",
+               return_value=SimpleNamespace(free=1)):
+        try:
+            pack(base / "snapshot", destination, SHA)
+        except ValueError:
+            assert not destination.exists()
+            cases += 1
+        else:
+            raise AssertionError("Low-space backup accepted")
+
+assert cases == 22, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")
