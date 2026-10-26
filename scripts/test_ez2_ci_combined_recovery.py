@@ -1,5 +1,7 @@
 """Offline regressions for CI-only cross-domain recovery. No Docker needed."""
 import os
+import io
+import shutil
 import stat
 import json
 import tempfile
@@ -9,7 +11,7 @@ from unittest.mock import patch
 
 from ez2_ci_combined_recovery import (CLONE, SCRATCH_FAULT_PHASES, candidate_payload,
                                       exercise_swap_faults, gate, inject_content_fault,
-                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction, verify_release_bytes, verify_elementor_source)
+                                      restore_files, scratch_upgrade, snapshot, verify_applied_transaction, verify_release_bytes, verify_elementor_source, envelope_transaction_source)
 from ez2_content_candidate_bundle import package
 
 CASES = 0
@@ -218,7 +220,61 @@ with tempfile.TemporaryDirectory() as tmp:
          patch('ez2_ci_combined_recovery.sql', side_effect=observations[:-1] + [b'00']):
         expect_blocked(lambda: verify_applied_transaction(live, original, source_digest, payload, 1))
 
+
+# The combined file+SQL+Elementor recovery MUST use one verified delivery
+# envelope, not independently selected ZIPs or an unrelated plugin lock.
+from ez2_delivery_envelope import OUT_NAME, DEPENDENCY
+from ez2_release_set import COMPONENTS as RELEASE_COMPONENTS, CATALOG as RELEASE_CATALOG
+
+def envelope_fixture(change=None, *, bad_receipt=False, bad_catalog=False):
+    global CASES
+    with tempfile.TemporaryDirectory(prefix='ez2-envelope-recovery-test-') as tmp:
+        root = Path(tmp)
+        staged = root / 'ez2-envelope-install-input'
+        staged.mkdir()
+        contents = {name: ('synthetic-' + name).encode() for name in (*RELEASE_COMPONENTS, RELEASE_CATALOG)}
+        for name, raw in contents.items():
+            (root / name).write_bytes(raw)
+            (staged / name).write_bytes(raw)
+        lock = staged / DEPENDENCY
+        lock.parent.mkdir()
+        lock.write_bytes(b'{"synthetic":"pinned-plugin-fixture"}')
+        with zipfile.ZipFile(root / OUT_NAME, 'w') as zipped:
+            for name, raw in contents.items():
+                zipped.writestr('release/' + name, raw)
+            zipped.writestr(DEPENDENCY, lock.read_bytes())
+        if change is not None:
+            change(root, staged)
+        sha = 'a' * 40
+        receipt = {'source_sha': ('b' * 40 if bad_receipt else sha),
+                   'can_apply': False, 'deployment_authorized': False}
+        catalog = {'source_sha': sha, 'target_site': 'ez2-isolated-only',
+                   'deployment_authorized': False, 'one_click_complete': False}
+        with patch('ez2_ci_combined_recovery.verify_bytes', return_value=receipt), \\
+             patch('ez2_ci_combined_recovery.verify_release',
+                   side_effect=ValueError('bad catalog') if bad_catalog else None,
+                   return_value=catalog):
+            if change is None and not bad_receipt and not bad_catalog:
+                result, dependency = envelope_transaction_source(root, sha)
+                assert result == staged and dependency == lock
+                CASES += 1
+            else:
+                expect_blocked(lambda: envelope_transaction_source(root, sha))
+
+envelope_fixture()
+envelope_fixture(lambda root, stage: (root / OUT_NAME).unlink())
+envelope_fixture(lambda root, stage: shutil.rmtree(stage))
+envelope_fixture(bad_receipt=True)
+envelope_fixture(lambda root, stage: (root / 'ezb-theme.zip').write_bytes(b'changed-source'))
+envelope_fixture(lambda root, stage: (stage / 'ezb-core.zip').write_bytes(b'changed-stage'))
+envelope_fixture(lambda root, stage: (stage / DEPENDENCY).write_bytes(b'changed-lock'))
+envelope_fixture(lambda root, stage: (stage / RELEASE_CATALOG).unlink())
+envelope_fixture(lambda root, stage: (shutil.rmtree(stage), stage.symlink_to(root, target_is_directory=True)))
+envelope_fixture(lambda root, stage: ((stage / 'ezb-theme.zip').unlink(), (stage / 'ezb-theme.zip').symlink_to(root / 'ezb-theme.zip')))
+envelope_fixture(lambda root, stage: os.link(root / OUT_NAME, root / 'duplicate-envelope'))
+envelope_fixture(bad_catalog=True)
+
 assert CLONE == 'ez2_ci_combined_disposable'
 CASES += 1
-assert CASES == 41, CASES
-print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=41 file_fault_scenarios=4')
+assert CASES == 53, CASES
+print('EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=53 file_fault_scenarios=4')

@@ -18,10 +18,11 @@ from pathlib import Path
 
 from ez2_content_candidate_bundle import NAME, SLOTS, verify as verify_candidate
 from ez2_elementor_export_check import check as check_elementor, unique, reject_nonfinite
-from ez2_release_set import safe_read
+from ez2_release_set import safe_read, COMPONENTS as RELEASE_COMPONENTS, CATALOG as RELEASE_CATALOG
+from ez2_delivery_envelope import OUT_NAME, DEPENDENCY, verify_bytes
 
 from ez2_ci_file_upgrade import COMPONENTS, snapshot, unpack
-from ez2_ci_pinned_plugin_install import LOCK_PATH, download_verified
+from ez2_ci_pinned_plugin_install import download_verified
 from ez2_ci_pinned_plugin_recovery import rehearse_bundle
 from ez2_plugin_dependency_check import read as read_plugin_lock
 from ez2_release_set import run as verify_release
@@ -45,6 +46,52 @@ def gate(release, sha):
     if actual != sha:
         raise ValueError('CI checkout is not exact requested SHA')
     verify_release('verify', Path(release), sha)
+
+
+
+def envelope_transaction_source(release, sha):
+    """Select one verified envelope for files, Elementor lock and SQL candidate.
+
+    The release-install workflow previously exercised SQL/file rollback against
+    separate .release inputs. Rechecking envelope bytes here prevents a passing
+    recovery test from silently using a different set of inputs. CI-only: this
+    never downloads to, or changes, an Owner WordPress installation.
+    """
+    root = Path(release)
+    archive = root / OUT_NAME
+    staged = root / 'ez2-envelope-install-input'
+    if (root.is_symlink() or not root.is_dir()
+            or archive.is_symlink() or not archive.is_file()
+            or archive.stat().st_nlink != 1
+            or staged.is_symlink() or not staged.is_dir()
+            or staged.resolve(strict=True).parent != root.resolve(strict=True)):
+        raise ValueError('Missing or unsafe envelope transaction inputs')
+    raw = archive.read_bytes()
+    receipt = verify_bytes(raw, sha)
+    if (receipt.get('source_sha') != sha
+            or receipt.get('can_apply') is not False
+            or receipt.get('deployment_authorized') is not False):
+        raise ValueError('Unverified non-deployable envelope receipt')
+    lock = staged / DEPENDENCY
+    if (lock.is_symlink() or not lock.is_file() or lock.stat().st_nlink != 1
+            or not 0 < lock.stat().st_size <= 32768):
+        raise ValueError('Unsafe envelope plugin dependency')
+    with zipfile.ZipFile(io.BytesIO(raw)) as zipped:
+        for name in (*RELEASE_COMPONENTS, RELEASE_CATALOG):
+            original = safe_read(root, name)
+            candidate = safe_read(staged, name)
+            if (original != candidate or
+                    candidate != zipped.read('release/' + name)):
+                raise ValueError('Envelope recovery input differs from exact-head release')
+        if lock.read_bytes() != zipped.read(DEPENDENCY):
+            raise ValueError('Envelope plugin dependency changed after staging')
+    catalog = verify_release('verify', staged, sha)
+    if (catalog.get('source_sha') != sha
+            or catalog.get('target_site') != 'ez2-isolated-only'
+            or catalog.get('deployment_authorized') is not False
+            or catalog.get('one_click_complete') is not False):
+        raise ValueError('Unsafe envelope transaction catalog')
+    return staged, lock
 
 
 def verify_elementor_source():
@@ -304,7 +351,7 @@ def verify_applied_transaction(live, before, source_digest, payload, post_id):
 
 def main(release, sha):
     gate(release, sha)
-    release = Path(release)
+    release, envelope_plugin_lock = envelope_transaction_source(release, sha)
     payload = candidate_payload(release, sha)
     fixture = sql(('-e', 'SELECT @@hostname'))
     if not fixture.strip():
@@ -385,7 +432,7 @@ def main(release, sha):
             # The official checksum-pinned Elementor ZIP remains outside public Git.
             # Apply three file trees and exact-head content to a disposable SQL clone.
             with tempfile.TemporaryDirectory(prefix='ez2-ci-three-domain-zip-', dir='/tmp') as cache:
-                plugin_lock = read_plugin_lock(LOCK_PATH)
+                plugin_lock = read_plugin_lock(envelope_plugin_lock)
                 plugin_zip = download_verified(plugin_lock, cache)
 
                 def inspect_three_domains(installed, original_files):
