@@ -250,7 +250,7 @@ def envelope_fixture(change=None, *, bad_receipt=False, bad_catalog=False):
                    'can_apply': False, 'deployment_authorized': False}
         catalog = {'source_sha': sha, 'target_site': 'ez2-isolated-only',
                    'deployment_authorized': False, 'one_click_complete': False}
-        with patch('ez2_ci_combined_recovery.verify_bytes', return_value=receipt), \\
+        with patch('ez2_ci_combined_recovery.verify_bytes', return_value=receipt), \
              patch('ez2_ci_combined_recovery.verify_release',
                    side_effect=ValueError('bad catalog') if bad_catalog else None,
                    return_value=catalog):
