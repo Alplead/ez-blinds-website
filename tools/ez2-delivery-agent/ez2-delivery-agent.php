@@ -10,6 +10,7 @@ require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
 require_once __DIR__ . '/includes/ez2-installed-baseline-receipt.php';
+require_once __DIR__ . '/includes/ez2-transaction-readiness.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -160,6 +161,19 @@ final class EZ2_Isolated_Delivery_Agent {
         echo '<p>Observed changes against receipt: ' . esc_html((string) $baseline['local_drift_count']) . '.</p>';
         echo '<p>Receipt authentication alone is not installation proof. No trusted baseline or update permission exists yet.</p>';
         foreach ($baseline['issues'] as $issue)
+            echo '<p>' . esc_html($issue) . '</p>';
+        $transaction = EZ2_Transaction_Readiness::evaluate(
+            $report, $remote, $backup, $inventory, $baseline);
+        echo '<h2>Single-update transaction readiness (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($transaction['status']) . '</p>';
+        echo '<p>Isolated site: ' . ($transaction['isolated_site_observed'] ? 'observed' : 'blocked')
+            . '; exact-head release: ' . ($transaction['exact_head_release_observed'] ? 'observed' : 'blocked')
+            . '; backup destination: ' . ($transaction['backup_location_observed'] ? 'observed' : 'blocked')
+            . '; managed pages: ' . ($transaction['managed_pages_observed'] ? 'observed' : 'blocked')
+            . '; receipt integrity: ' . ($transaction['receipt_integrity_observed'] ? 'observed' : 'unavailable')
+            . '.</p>';
+        echo '<p>No installer, private backup, restore rehearsal, media reconciliation, or trusted installed-release attestation is available. No update action is enabled.</p>';
+        foreach ($transaction['issues'] as $issue)
             echo '<p>' . esc_html($issue) . '</p>';
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
         echo '</div>';

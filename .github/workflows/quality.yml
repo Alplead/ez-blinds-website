@@ -34,6 +34,13 @@ jobs:
         run: |
           find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Guard isolated EZ2 transaction readiness and Owner-content safety
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-transaction-readiness.php
+          php -l scripts/test_ez2_transaction_readiness.php
+          php scripts/test_ez2_transaction_readiness.php | tee /tmp/ez2-transaction-readiness.log
+          grep -Fq 'EZ2_TRANSACTION_READINESS_PASS cases=38 read_only=true can_apply=false localwp_touched=false' /tmp/ez2-transaction-readiness.log
+
       - name: Check Visual QA JavaScript syntax
         run: node --check scripts/visual-qa.mjs
 
