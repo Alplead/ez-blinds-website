@@ -576,6 +576,8 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-managed-inventory-diff.php
           php -l scripts/test_ez2_managed_agent_diff.php
           php scripts/test_ez2_managed_agent_diff.php | tee /tmp/ez2-managed-agent-diff.log
+          php -l scripts/test_ez2_managed_three_way.php
+          php scripts/test_ez2_managed_three_way.php | grep -Fq 'EZ2_MANAGED_THREE_WAY_PASS cases=19'
           grep -Fq 'EZ2_MANAGED_AGENT_DIFF_PASS cases=' /tmp/ez2-managed-agent-diff.log
           grep -Fq 'read_only=true can_apply=false private_content_emitted=false' /tmp/ez2-managed-agent-diff.log
           php -l tools/ez2-delivery-agent/includes/ez2-release-evidence.php
