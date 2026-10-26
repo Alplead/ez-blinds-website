@@ -8,6 +8,7 @@
 require_once __DIR__ . '/includes/ez2-release-evidence.php';
 require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory.php';
+require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -123,6 +124,24 @@ final class EZ2_Isolated_Delivery_Agent {
         if ($inventory['issues']) {
             echo '<ul>';
             foreach ($inventory['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
+            echo '</ul>';
+        }
+        // Historical observation is optional and untrusted: no code writes a baseline.
+        // Never emit stored page text or a stored candidate payload to the browser.
+        $prior = get_option('ez2_managed_inventory_observation', null);
+        $comparison = EZ2_Managed_Inventory_Diff::compare($prior, $inventory);
+        echo '<h2>Managed page change check (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($comparison['status']) . '</p>';
+        echo '<p>Changed managed keys: ' . esc_html((string) $comparison['change_count']) . '.</p>';
+        echo '<p>A previous observation is not a trusted installed-release baseline. '
+            . 'Matching fingerprints do not prove that Owner edits are absent or allow installation.</p>';
+        foreach ($comparison['issues'] as $issue)
+            echo '<p>' . esc_html($issue) . '</p>';
+        if ($comparison['changes']) {
+            echo '<ul>';
+            foreach ($comparison['changes'] as $change)
+                echo '<li>' . esc_html($change['key']) . ': '
+                    . esc_html($change['kind']) . '</li>';
             echo '</ul>';
         }
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
