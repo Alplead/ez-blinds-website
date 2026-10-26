@@ -15,7 +15,8 @@ file_put_contents($file, $pixel);
 $host = 'ez2-review.local';
 $url = 'http://' . $host . '/wp-content/uploads/2026/10/hero.png';
 $site = ['status' => 'READ_ONLY_PREVIEW_READY', 'target_site' => 'ez2-isolated-only',
-    'mode' => 'read-only', 'can_apply' => false, 'site_modified' => false];
+    'mode' => 'read-only', 'can_apply' => false, 'site_modified' => false,
+    'issues' => []];
 $map = ['schema_version' => 2, 'target_site' => 'ez2-isolated-only',
     'host' => $host, 'slots' => ['home-hero-one' => ['id' => 17, 'url' => $url, 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)]]];
 $meta = ['post_type' => 'attachment', 'status' => 'inherit', 'mime' => 'image/png',
@@ -40,6 +41,10 @@ try {
         $bad = $site; $bad[$key] = $value;
         $check($run($bad)['issues'] === ['ISOLATED_SITE_REQUIRED'], 'unsafe site');
     }
+    $badSite = $site; $badSite['issues'] = ['ISOLATED_HOST_REQUIRED'];
+    $check($run($badSite)['issues'] === ['ISOLATED_SITE_REQUIRED'], 'reject blocked site report');
+    $badSite = $site; unset($badSite['issues']);
+    $check($run($badSite)['issues'] === ['ISOLATED_SITE_REQUIRED'], 'require explicit clean site issues');
     foreach (['ezbns.com.au', 't2-ez-blinds-shutters.local', 'ez-bns-new-dev.local',
               'ez2-review.local.evil.invalid'] as $badHost)
         $check($run(null, null, $badHost)['issues'] === ['ISOLATED_SITE_REQUIRED'], 'unsafe host');
@@ -105,6 +110,15 @@ try {
         $check($run()['issues'] === ['UNSAFE_PRIVATE_MEDIA_FILE'], 'hardlink');
         unlink($hard);
     }
+    foreach ([[20001, 1], [9000, 9000]] as [$width, $height]) {
+        $oversized = substr_replace($pixel, pack('N', $width) . pack('N', $height), 16, 8);
+        file_put_contents($file, $oversized);
+        $oversizedMap = $map;
+        $oversizedMap['slots']['home-hero-one']['sha256'] = hash('sha256', $oversized);
+        $check($run(null, $oversizedMap)['issues'] === ['PRIVATE_MEDIA_DIMENSIONS_UNSAFE'],
+            'reject oversized declared image dimensions');
+    }
+    file_put_contents($file, $pixel);
     file_put_contents($file, 'not an image but more than thirty-two bytes of synthetic data');
     $check($run()['issues'] === ['INVALID_PRIVATE_MEDIA_IMAGE'], 'corrupt bytes');
     file_put_contents($file, $pixel);

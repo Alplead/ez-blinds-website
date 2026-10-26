@@ -51,6 +51,7 @@ final class EZ2_Private_Media_Readiness {
             || ($site['mode'] ?? null) !== 'read-only'
             || ($site['can_apply'] ?? null) !== false
             || ($site['site_modified'] ?? null) !== false
+            || ($site['issues'] ?? null) !== []
             || !is_string($host) || !preg_match(self::HOST, $host))
             return self::blocked('ISOLATED_SITE_REQUIRED');
         if (!is_array($mapping) || array_keys($mapping) !== ['schema_version', 'target_site', 'host', 'slots']
@@ -105,11 +106,25 @@ final class EZ2_Private_Media_Readiness {
             if ($image === false || ($image['mime'] ?? null) !== $item['mime']
                 || ($image[0] ?? 0) < 1 || ($image[1] ?? 0) < 1)
                 return self::blocked('INVALID_PRIVATE_MEDIA_IMAGE', $count, $verified);
+            // Reject oversized declared dimensions before accepting even a pinned
+            // image: extreme pixel counts can exhaust browser or editor memory.
+            if ($image[0] > 12000 || $image[1] > 12000
+                || $image[0] * $image[1] > 50000000)
+                return self::blocked('PRIVATE_MEDIA_DIMENSIONS_UNSAFE', $count, $verified);
             // Metadata and image headers alone cannot detect a replaced image.
             // The expected digest is kept only in the isolated site's private map.
             $digest = @hash_file('sha256', $real);
             if (!is_string($digest) || !hash_equals($item['sha256'], $digest))
                 return self::blocked('PRIVATE_MEDIA_BYTES_MISMATCH', $count, $verified);
+            // Re-check the same regular file after hashing. A concurrent
+            // replacement is not an acceptable integrity observation.
+            clearstatcache(true, $actual['file']);
+            $after = @lstat($actual['file']);
+            if ($after === false || realpath($actual['file']) !== $real
+                || $after['dev'] !== $stat['dev'] || $after['ino'] !== $stat['ino']
+                || $after['size'] !== $stat['size'] || $after['mtime'] !== $stat['mtime']
+                || $after['ctime'] !== $stat['ctime'] || $after['nlink'] !== 1)
+                return self::blocked('PRIVATE_MEDIA_FILE_CHANGED_DURING_READ', $count, $verified);
             ++$verified;
         }
         return self::result('PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY', [], $count, $verified);
