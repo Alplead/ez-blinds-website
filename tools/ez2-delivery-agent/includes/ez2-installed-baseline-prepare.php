@@ -71,7 +71,7 @@ final class EZ2_Installed_Baseline_Prepare {
         ];
         try {
             $json = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $receipt = $payload + ['mac_sha256' => hash_hmac('sha256', "EZ2_INSTALLED_BASELINE_V1\\n" . $json, $secret)];
+            $receipt = $payload + ['mac_sha256' => hash_hmac('sha256', "EZ2_INSTALLED_BASELINE_V1\n" . $json, $secret)];
         } catch (Throwable $e) {
             return self::blocked('RECEIPT_SERIALIZATION_FAILED');
         }
