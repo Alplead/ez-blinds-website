@@ -336,7 +336,7 @@ jobs:
           grep -Fq 'elementor_active=true' /tmp/ez2-ci-combined-recovery.log
           grep -Fq 'EZ2_CI_THREE_DOMAIN_ROLLBACK_PASS components=3 sql_clone_recovered=true after_content_fault_recovered=true pinned_elementor_verified=true' /tmp/ez2-ci-combined-recovery.log
 
-      - name: Exercise exact-head Elementor candidate in release-installed WordPress (CI only)
+      - name: Exercise envelope-sourced Elementor candidate in release-installed WordPress (CI only)
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |

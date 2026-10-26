@@ -368,7 +368,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_ci_candidate_from_release.py scripts/test_ez2_ci_candidate_from_release.py
           python3 scripts/test_ez2_ci_candidate_from_release.py | tee /tmp/ez2-runtime-candidate-regression.log
-          grep -q 'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases=15' /tmp/ez2-runtime-candidate-regression.log
+          grep -q 'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases=20' /tmp/ez2-runtime-candidate-regression.log
 
       - name: Preflight controlled Elementor exports without importing them
         run: |

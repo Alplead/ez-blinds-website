@@ -30,7 +30,11 @@ def catalog(**changes):
 
 
 def setup(root):
-    (root / 'ez2-content-candidate.zip').write_bytes(candidate_zip())
+    raw = candidate_zip()
+    (root / 'ez2-content-candidate.zip').write_bytes(raw)
+    envelope = root / 'ez2-envelope-install-input'
+    envelope.mkdir()
+    (envelope / 'ez2-content-candidate.zip').write_bytes(raw)
 
 
 def run(root, expected=PAYLOAD, metadata=None):
@@ -88,5 +92,44 @@ with tempfile.TemporaryDirectory() as temp:
     (root / 'ez2-content-candidate.zip').symlink_to(root / 'missing.zip')
     reject(lambda: run(root))
 
-assert CASES == 15, CASES
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input' / 'ez2-content-candidate.zip'
+    staged.unlink()
+    reject(lambda: run(root))  # No candidate in the verified envelope stage.
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input' / 'ez2-content-candidate.zip'
+    staged.write_bytes(candidate_zip(b'changed'))
+    reject(lambda: run(root))  # Envelope content drift.
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input' / 'ez2-content-candidate.zip'
+    staged.unlink()
+    staged.symlink_to(root / 'ez2-content-candidate.zip')
+    reject(lambda: run(root))  # Symlink may escape a trusted stage.
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input' / 'ez2-content-candidate.zip'
+    staged.unlink()
+    os.link(root / 'ez2-content-candidate.zip', staged)
+    reject(lambda: run(root))  # Shared inode could change during use.
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    setup(root)
+    staged = root / 'ez2-envelope-install-input'
+    (staged / 'ez2-content-candidate.zip').unlink()
+    staged.rmdir()
+    staged.symlink_to(root, target_is_directory=True)
+    reject(lambda: run(root))  # Directory link must not bypass envelope stage.
+
+assert CASES == 20, CASES
 print(f'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases={CASES}')

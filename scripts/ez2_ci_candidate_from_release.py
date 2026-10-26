@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Stage a verified exact-head Elementor candidate for disposable CI only."""
+"""Stage the Elementor candidate from the verified delivery envelope for disposable CI only."""
 import hashlib
+import io
 import os
 import subprocess
 import sys
@@ -31,12 +32,23 @@ def stage(release_dir, sha, expected_source):
     ):
         if catalog.get(key) != value or (isinstance(value, bool) and catalog.get(key) is not value):
             raise ValueError('Unsafe or mismatched release catalog: ' + key)
-    archive_path = root / 'ez2-content-candidate.zip'
-    if archive_path.is_symlink():
-        raise ValueError('Linked candidate archive')
-    archive = archive_path.read_bytes()
+    # A single envelope must supply theme, core, pinned dependency AND content.
+    # The original release remains a separate exact-head parity witness.
+    envelope_dir = root / 'ez2-envelope-install-input'
+    if envelope_dir.is_symlink() or not envelope_dir.is_dir():
+        raise ValueError('Verified envelope install inputs required')
+    source_archive = root / 'ez2-content-candidate.zip'
+    envelope_archive = envelope_dir / 'ez2-content-candidate.zip'
+    for path in (source_archive, envelope_archive):
+        if (path.is_symlink() or not path.is_file()
+                or path.stat().st_nlink != 1
+                or not 0 < path.stat().st_size <= 64 * 1024 * 1024):
+            raise ValueError('Unsafe exact-head candidate archive')
+    archive = envelope_archive.read_bytes()
+    if archive != source_archive.read_bytes():
+        raise ValueError('Envelope candidate differs from exact-head release')
     verify_candidate(sha, archive)
-    with zipfile.ZipFile(archive_path) as zipped:
+    with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
         payload = zipped.read(NAME)
     if payload != expected_source:
         raise ValueError('Candidate differs from committed exact-head source')
