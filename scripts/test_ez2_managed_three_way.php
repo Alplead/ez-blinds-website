@@ -59,6 +59,10 @@ $check($run($base, $empty, $base)['changes'][0]['kind'] === 'local_missing_revie
 $renumbered = $observe([array_replace($row, ['id' => 99])]);
 $check($run($base, $renumbered, $base)['changes'][0]['kind'] === 'local_identity_conflict',
     'local post id change');
+$check($run($base, $base, $renumbered)['changes'][0]['kind'] === 'candidate_identity_conflict',
+    'candidate post id change');
+$check($run($base, $local, $renumbered)['changes'][0]['kind'] === 'candidate_identity_conflict',
+    'candidate post id change with local edits');
 $check($run($empty, $base, $empty)['changes'][0]['kind'] === 'local_only_preserve',
     'local only');
 $check($run($empty, $base, $base)['changes'][0]['kind'] === 'untracked_local_candidate_collision',

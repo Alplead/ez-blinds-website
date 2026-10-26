@@ -52,6 +52,8 @@ final class EZ2_Managed_Three_Way {
                 $kind = 'local_identity_conflict';
             } elseif ($n === null) {
                 $kind = 'candidate_removal_review';
+            } elseif ($n['post_id'] !== $b['post_id']) {
+                $kind = 'candidate_identity_conflict';
             } else {
                 $localChanged = $l['content_sha256'] !== $b['content_sha256'];
                 $candidateChanged = $n['content_sha256'] !== $b['content_sha256'];

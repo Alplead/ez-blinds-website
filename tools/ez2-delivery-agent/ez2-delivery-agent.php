@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/ez2-release-evidence.php';
 require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
+require_once __DIR__ . '/includes/ez2-installed-baseline-receipt.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -144,6 +145,22 @@ final class EZ2_Isolated_Delivery_Agent {
                     . esc_html($change['kind']) . '</li>';
             echo '</ul>';
         }
+        // A locally authenticated receipt is still NOT a verified installation.
+        // The eventual transactional installer must be the only receipt issuer.
+        $home = get_option('home');
+        $parts = is_string($home) ? parse_url($home) : false;
+        $siteHost = is_array($parts) ? ($parts['host'] ?? null) : null;
+        $receipt = $report['status'] === 'READ_ONLY_PREVIEW_READY'
+            ? get_option('ez2_installed_baseline_receipt', null) : null;
+        $salt = function_exists('wp_salt') ? wp_salt('auth') : null;
+        $baseline = EZ2_Installed_Baseline_Receipt::verify(
+            $receipt, $inventory, $siteHost, $salt);
+        echo '<h2>Installed baseline receipt integrity (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($baseline['status']) . '</p>';
+        echo '<p>Observed changes against receipt: ' . esc_html((string) $baseline['local_drift_count']) . '.</p>';
+        echo '<p>Receipt authentication alone is not installation proof. No trusted baseline or update permission exists yet.</p>';
+        foreach ($baseline['issues'] as $issue)
+            echo '<p>' . esc_html($issue) . '</p>';
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
         echo '</div>';
     }
