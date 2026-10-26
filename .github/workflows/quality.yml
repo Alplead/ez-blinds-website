@@ -487,6 +487,12 @@ jobs:
           python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
           grep -Fq 'EZ2_UPGRADE_GATE_PASS cases=57 additional=18 total=75' /tmp/ez2-upgrade-gate.log
 
+      - name: Guard consolidated EZ2 delivery envelope (offline fixtures)
+        run: |
+          python3 -m py_compile scripts/ez2_delivery_envelope.py scripts/test_ez2_delivery_envelope.py
+          python3 scripts/test_ez2_delivery_envelope.py | tee /tmp/ez2-delivery-envelope.log
+          grep -Fq 'EZ2_DELIVERY_ENVELOPE_GUARD_PASS cases=12 installable=false private_media=false' /tmp/ez2-delivery-envelope.log
+
       - name: Test exact-head release evidence auditor (offline fixtures)
         run: |
           python3 -m py_compile scripts/ez2_release_evidence.py scripts/test_ez2_release_evidence.py

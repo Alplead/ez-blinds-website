@@ -58,6 +58,13 @@ jobs:
           python3 scripts/ez2_release_set.py build .release "${{ github.event.pull_request.head.sha || github.sha }}"
           python3 scripts/ez2_release_set.py verify .release "${{ github.event.pull_request.head.sha || github.sha }}"
 
+      - name: Assemble and verify single public-safe EZ2 delivery envelope (no install)
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 scripts/ez2_delivery_envelope.py build .release "${{ github.event.pull_request.head.sha || github.sha }}" design/ez2-elementor-pinned-plugin.json .release/EZ2_DELIVERY_ENVELOPE.zip
+          python3 scripts/ez2_delivery_envelope.py verify .release/EZ2_DELIVERY_ENVELOPE.zip "${{ github.event.pull_request.head.sha || github.sha }}"
+
       - name: Link exact-head release candidate to pinned Elementor delivery plan (no install)
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -424,6 +431,7 @@ jobs:
             .release/RELEASE_METADATA.txt
             .release/RELEASE_CONTENTS.json
             .release/SHA256SUMS
+            .release/EZ2_DELIVERY_ENVELOPE.zip
           if-no-files-found: error
           retention-days: 14
 
