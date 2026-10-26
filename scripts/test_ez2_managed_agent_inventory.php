@@ -65,5 +65,5 @@ foreach ([
 $extra = $row; $extra['customer_email'] = 'not-for-export';
 $assertBlocked($facts, [$extra]);
 $assertBlocked($facts, array_fill(0, 101, $row));
-if ($cases !== 23) throw new RuntimeException("Unexpected case count: $cases");
+if ($cases !== 24) throw new RuntimeException("Unexpected case count: $cases");
 echo "EZ2_MANAGED_AGENT_INVENTORY_PASS cases={$cases} private_content_emitted=false can_apply=false\n";
