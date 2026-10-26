@@ -75,6 +75,7 @@ final class EZ2_Transaction_Readiness {
             && ($media['unresolved_count'] ?? null) === 0
             && ($media['private_content_emitted'] ?? null) === false
             && ($media['media_publication_authorized'] ?? null) === false
+            && ($media['byte_integrity_verified'] ?? null) === true
             && ($media['can_apply'] ?? null) === false
             && ($media['site_modified'] ?? null) === false;
         if (!$mediaReady) $issues[] = 'PRIVATE_MEDIA_SLOTS_NOT_VERIFIED';

@@ -16,8 +16,8 @@ $host = 'ez2-review.local';
 $url = 'http://' . $host . '/wp-content/uploads/2026/10/hero.png';
 $site = ['status' => 'READ_ONLY_PREVIEW_READY', 'target_site' => 'ez2-isolated-only',
     'mode' => 'read-only', 'can_apply' => false, 'site_modified' => false];
-$map = ['schema_version' => 1, 'target_site' => 'ez2-isolated-only',
-    'host' => $host, 'slots' => ['home-hero-one' => ['id' => 17, 'url' => $url, 'mime' => 'image/png']]];
+$map = ['schema_version' => 2, 'target_site' => 'ez2-isolated-only',
+    'host' => $host, 'slots' => ['home-hero-one' => ['id' => 17, 'url' => $url, 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)]]];
 $meta = ['post_type' => 'attachment', 'status' => 'inherit', 'mime' => 'image/png',
     'url' => $url, 'file' => $file];
 $lookup = static fn(int $id) => $id === 17 ? $meta : null;
@@ -27,11 +27,14 @@ try {
     $good = $run();
     $check($good['status'] === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
         && $good['slot_count'] === 1 && $good['verified_count'] === 1
-        && $good['unresolved_count'] === 0, 'verified synthetic image');
+        && $good['unresolved_count'] === 0 && $good['byte_integrity_verified'] === true,
+        'verified synthetic image with pinned bytes');
     $check(!$good['private_content_emitted'] && !$good['can_apply']
         && !$good['media_publication_authorized'] && !$good['site_modified'], 'no apply');
     $check(!str_contains(json_encode($good), $url) && !str_contains(json_encode($good), $file)
         && !str_contains(json_encode($good), '17'), 'no private identifiers');
+    $check(!str_contains(json_encode($good), $map['slots']['home-hero-one']['sha256']),
+        'no private image digest in report');
     foreach (['status' => 'BLOCKED', 'target_site' => 'ez-bns-new-dev.local',
               'mode' => 'write', 'can_apply' => true, 'site_modified' => true] as $key => $value) {
         $bad = $site; $bad[$key] = $value;
@@ -46,7 +49,7 @@ try {
         === ['ATTACHMENT_MISSING_OR_MISMATCHED'], 'missing attachment');
     $check($run(null, null, null, null, static function ($id) { throw new RuntimeException('private'); })['issues']
         === ['ATTACHMENT_LOOKUP_FAILED'], 'lookup redaction');
-    foreach (['schema_version' => 2, 'target_site' => 'other', 'host' => 'ezbns.com.au',
+    foreach (['schema_version' => 1, 'target_site' => 'other', 'host' => 'ezbns.com.au',
               'slots' => []] as $key => $value) {
         $bad = $map; $bad[$key] = $value;
         $check($run(null, $bad)['status'] === 'BLOCKED_PRIVATE_MEDIA_READINESS', 'invalid map');
@@ -55,6 +58,20 @@ try {
         $bad = $map; $bad['slots'] = [$key => $map['slots']['home-hero-one']];
         $check($run(null, $bad)['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT'], 'bad slot key');
     }
+    $missingDigest = $map;
+    unset($missingDigest['slots']['home-hero-one']['sha256']);
+    $check($run(null, $missingDigest)['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT'],
+        'missing pinned image digest');
+    foreach (['bad', str_repeat('f', 63), strtoupper(hash('sha256', $pixel)), 42] as $digest) {
+        $bad = $map; $bad['slots']['home-hero-one']['sha256'] = $digest;
+        $check($run(null, $bad)['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT'],
+            'malformed pinned image digest');
+    }
+    $bad = $map; $bad['slots']['home-hero-one']['sha256'] = str_repeat('f', 64);
+    $check($run(null, $bad)['issues'] === ['PRIVATE_MEDIA_BYTES_MISMATCH'],
+        'valid format but incorrect digest');
+    $check($run(null, $bad)['byte_integrity_verified'] === false,
+        'failed image integrity never reported verified');
     foreach (['id' => 0, 'url' => 'https://evil.invalid/p.png', 'mime' => 'image/svg+xml'] as $key => $value) {
         $bad = $map; $bad['slots']['home-hero-one'][$key] = $value;
         $check($run(null, $bad)['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT'], 'bad slot value');
@@ -90,6 +107,10 @@ try {
     }
     file_put_contents($file, 'not an image but more than thirty-two bytes of synthetic data');
     $check($run()['issues'] === ['INVALID_PRIVATE_MEDIA_IMAGE'], 'corrupt bytes');
+    file_put_contents($file, $pixel);
+    file_put_contents($file, $pixel . 'synthetic-trailing-bytes');
+    $check($run()['issues'] === ['PRIVATE_MEDIA_BYTES_MISMATCH'],
+        'valid image header but modified private image bytes');
     file_put_contents($file, $pixel);
     $duplicate = $map;
     $duplicate['slots']['second-slot'] = ['id' => 18, 'url' => $url, 'mime' => 'image/png'];

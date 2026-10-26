@@ -1,7 +1,8 @@
 <?php
 /**
  * Read-only private WordPress attachment-to-Elementor-slot integrity audit.
- * No URLs, file paths, IDs, image bytes or private map values are emitted.
+ * No URLs, file paths, IDs, image bytes, digests or private map values are emitted.
+ * Schema v2 requires locally pinned SHA-256 for each image; v1 is rejected.
  * This is neither a media publisher nor an installer.
  */
 final class EZ2_Private_Media_Readiness {
@@ -16,6 +17,7 @@ final class EZ2_Private_Media_Readiness {
             'verified_count' => $verified, 'unresolved_count' => $slots - $verified,
             'private_content_emitted' => false, 'media_publication_authorized' => false,
             'site_modified' => false, 'can_apply' => false,
+            'byte_integrity_verified' => $status === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY',
         ];
     }
 
@@ -52,7 +54,7 @@ final class EZ2_Private_Media_Readiness {
             || !is_string($host) || !preg_match(self::HOST, $host))
             return self::blocked('ISOLATED_SITE_REQUIRED');
         if (!is_array($mapping) || array_keys($mapping) !== ['schema_version', 'target_site', 'host', 'slots']
-            || $mapping['schema_version'] !== 1
+            || $mapping['schema_version'] !== 2
             || $mapping['target_site'] !== 'ez2-isolated-only'
             || $mapping['host'] !== $host
             || !is_array($mapping['slots'])
@@ -68,9 +70,11 @@ final class EZ2_Private_Media_Readiness {
         $verified = 0; $count = count($mapping['slots']);
         foreach ($mapping['slots'] as $slot => $item) {
             if (!is_string($slot) || !preg_match(self::SLOT, $slot)
-                || !is_array($item) || array_keys($item) !== ['id', 'url', 'mime']
+                || !is_array($item) || array_keys($item) !== ['id', 'url', 'mime', 'sha256']
                 || !is_int($item['id']) || $item['id'] < 1 || $item['id'] > 2147483647
                 || !is_string($item['mime']) || !isset(self::MIME[$item['mime']])
+                || !is_string($item['sha256'])
+                || !preg_match('/^[0-9a-f]{64}$/D', $item['sha256'])
                 || !self::safeUrl($item['url'], $host, self::MIME[$item['mime']]))
                 return self::blocked('INVALID_PRIVATE_MEDIA_SLOT', $count, $verified);
             $id = $item['id']; $url = $item['url'];
@@ -101,6 +105,11 @@ final class EZ2_Private_Media_Readiness {
             if ($image === false || ($image['mime'] ?? null) !== $item['mime']
                 || ($image[0] ?? 0) < 1 || ($image[1] ?? 0) < 1)
                 return self::blocked('INVALID_PRIVATE_MEDIA_IMAGE', $count, $verified);
+            // Metadata and image headers alone cannot detect a replaced image.
+            // The expected digest is kept only in the isolated site's private map.
+            $digest = @hash_file('sha256', $real);
+            if (!is_string($digest) || !hash_equals($item['sha256'], $digest))
+                return self::blocked('PRIVATE_MEDIA_BYTES_MISMATCH', $count, $verified);
             ++$verified;
         }
         return self::result('PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY', [], $count, $verified);
