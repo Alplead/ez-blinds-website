@@ -34,6 +34,13 @@ jobs:
         run: |
           find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Check isolated Elementor runtime dependency (read-only)
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-plugin-runtime-readiness.php
+          php -l scripts/test_ez2_plugin_runtime_readiness.php
+          php scripts/test_ez2_plugin_runtime_readiness.php | tee /tmp/ez2-plugin-runtime.log
+          grep -Fq 'EZ2_PLUGIN_RUNTIME_READINESS_PASS' /tmp/ez2-plugin-runtime.log
+
       - name: Guard isolated EZ2 transaction readiness and Owner-content safety
         run: |
           php -l tools/ez2-delivery-agent/includes/ez2-transaction-readiness.php

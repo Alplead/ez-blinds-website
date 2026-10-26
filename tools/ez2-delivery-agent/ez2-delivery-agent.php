@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/ez2-release-evidence.php';
 require_once __DIR__ . '/includes/ez2-backup-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory.php';
 require_once __DIR__ . '/includes/ez2-private-media-readiness.php';
+require_once __DIR__ . '/includes/ez2-plugin-runtime-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
 require_once __DIR__ . '/includes/ez2-installed-baseline-receipt.php';
 require_once __DIR__ . '/includes/ez2-transaction-readiness.php';
@@ -130,6 +131,12 @@ final class EZ2_Isolated_Delivery_Agent {
             echo '</ul>';
         }
         $media = EZ2_Private_Media_Readiness::observe($report);
+        $plugin = EZ2_Plugin_Runtime_Readiness::observe($report);
+        echo '<h2>Local Elementor runtime (read-only)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($plugin['status']) . '</p>';
+        echo '<p>Matching locally installed plugins: ' . esc_html((string) $plugin['matching_count']) . ' / ' . esc_html((string) $plugin['checked_count']) . '.</p>';
+        echo '<p>Local dependency metadata is not trusted release provenance; no plugin install or activation is permitted.</p>';
+        foreach ($plugin['issues'] as $issue) echo '<p>' . esc_html($issue) . '</p>';
         echo '<h2>Private Elementor media-slot integrity (read-only)</h2>';
         echo '<p><strong>Status:</strong> ' . esc_html($media['status']) . '</p>';
         echo '<p>Verified local attachment slots: ' . esc_html((string) $media['verified_count'])
