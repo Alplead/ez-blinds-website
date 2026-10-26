@@ -569,6 +569,10 @@ jobs:
           php -l scripts/test_ez2_delivery_agent.php
           php scripts/test_ez2_delivery_agent.php | tee /tmp/ez2-delivery-agent.log
           grep -Fq 'EZ2_DELIVERY_AGENT_GUARD_PASS cases=18 apply_disabled=true' /tmp/ez2-delivery-agent.log
+          php -l tools/ez2-delivery-agent/includes/ez2-managed-inventory.php
+          php -l scripts/test_ez2_managed_agent_inventory.php
+          php scripts/test_ez2_managed_agent_inventory.php | tee /tmp/ez2-managed-agent-inventory.log
+          grep -Fq 'EZ2_MANAGED_AGENT_INVENTORY_PASS cases=23 private_content_emitted=false can_apply=false' /tmp/ez2-managed-agent-inventory.log
           php -l tools/ez2-delivery-agent/includes/ez2-release-evidence.php
           php -l scripts/test_ez2_release_evidence.php
           php scripts/test_ez2_release_evidence.php | tee /tmp/ez2-release-evidence-agent.log

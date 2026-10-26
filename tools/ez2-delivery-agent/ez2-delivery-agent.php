@@ -7,6 +7,7 @@
  */
 require_once __DIR__ . '/includes/ez2-release-evidence.php';
 require_once __DIR__ . '/includes/ez2-backup-readiness.php';
+require_once __DIR__ . '/includes/ez2-managed-inventory.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -111,6 +112,17 @@ final class EZ2_Isolated_Delivery_Agent {
         if ($backup['issues']) {
             echo '<ul>';
             foreach ($backup['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
+            echo '</ul>';
+        }
+        $inventory = EZ2_Managed_Inventory::observe($report['status']);
+        echo '<h2>Managed Elementor pages (read-only local fingerprints)</h2>';
+        echo '<p><strong>Status:</strong> ' . esc_html($inventory['status']) . '</p>';
+        echo '<p>Managed pages observed: ' . esc_html((string) $inventory['managed_count']) . '.</p>';
+        echo '<p>Only fingerprints are calculated; no Owner page text or media leaves WordPress. '
+            . 'An inventory does not authorise an update or prove that a release is installed.</p>';
+        if ($inventory['issues']) {
+            echo '<ul>';
+            foreach ($inventory['issues'] as $issue) echo '<li>' . esc_html($issue) . '</li>';
             echo '</ul>';
         }
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
