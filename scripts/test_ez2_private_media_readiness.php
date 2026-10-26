@@ -113,9 +113,9 @@ try {
         'valid image header but modified private image bytes');
     file_put_contents($file, $pixel);
     $duplicate = $map;
-    $duplicate['slots']['second-slot'] = ['id' => 18, 'url' => $url, 'mime' => 'image/png'];
+    $duplicate['slots']['second-slot'] = ['id' => 18, 'url' => $url, 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)];
     $check($run(null, $duplicate)['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING'], 'duplicate URL');
-    $duplicate['slots']['second-slot'] = ['id' => 17, 'url' => str_replace('hero.png', 'other.png', $url), 'mime' => 'image/png'];
+    $duplicate['slots']['second-slot'] = ['id' => 17, 'url' => str_replace('hero.png', 'other.png', $url), 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)];
     $check($run(null, $duplicate)['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING'], 'duplicate ID');
 } finally {
     foreach ([$file, $root . '/2026/10/other.png'] as $path) if (is_file($path)) unlink($path);
