@@ -28,7 +28,7 @@ function ezb_editorial_image_choices() {
 			'link'   => '/retractable-flyscreens/',
 		),
 		'shutters' => array(
-			'file'   => 'EZ blinds and shutters Plantation shutters 01.jpg',
+			'file'   => 'EZ blinds and shutters Plantation shutters  05.jpg',
 			'label'  => 'Plantation Shutters',
 			'link'   => '/plantation-shutters/',
 		),
