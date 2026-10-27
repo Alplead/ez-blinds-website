@@ -52,9 +52,13 @@ final class EZ2_Managed_Three_Way {
                 $kind = 'local_identity_conflict';
             } elseif ($n === null) {
                 $kind = 'candidate_removal_review';
-            } elseif ($n['post_id'] !== $b['post_id']) {
-                $kind = 'candidate_identity_conflict';
             } else {
+                // Candidate pages come from a separate disposable WordPress
+                // database. Numeric post IDs are local identifiers, not
+                // portable identities. The managed key and content digest
+                // drive this preview; the local post ID remains protected
+                // against changes relative to the installed observation.
+                // No candidate observation grants write authority.
                 $localChanged = $l['content_sha256'] !== $b['content_sha256'];
                 $candidateChanged = $n['content_sha256'] !== $b['content_sha256'];
                 if (!$localChanged && !$candidateChanged) continue;

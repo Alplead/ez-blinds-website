@@ -59,10 +59,17 @@ $check($run($base, $empty, $base)['changes'][0]['kind'] === 'local_missing_revie
 $renumbered = $observe([array_replace($row, ['id' => 99])]);
 $check($run($base, $renumbered, $base)['changes'][0]['kind'] === 'local_identity_conflict',
     'local post id change');
-$check($run($base, $base, $renumbered)['changes'][0]['kind'] === 'candidate_identity_conflict',
-    'candidate post id change');
-$check($run($base, $local, $renumbered)['changes'][0]['kind'] === 'candidate_identity_conflict',
-    'candidate post id change with local edits');
+// Independent CI WordPress and LocalWP assign different numeric post IDs.
+// Candidate IDs must not create false conflicts for the same managed key.
+$check($run($base, $base, $renumbered)['changes'] === [],
+    'candidate post id is not portable identity');
+$candidateFromOtherDb = $observe([array_replace($changed('candidate v2'), ['id' => 99])]);
+$check($run($base, $base, $candidateFromOtherDb)['changes'][0]['kind'] === 'candidate_update_review',
+    'candidate content change with independent post id');
+$check($run($base, $local, $candidateFromOtherDb)['changes'][0]['kind'] === 'local_candidate_conflict',
+    'local edit and independent candidate conflict');
+$check($run($base, $local, $renumbered)['changes'][0]['kind'] === 'local_drift_preserve',
+    'local edit remains protected when candidate id differs');
 $check($run($empty, $base, $empty)['changes'][0]['kind'] === 'local_only_preserve',
     'local only');
 $check($run($empty, $base, $base)['changes'][0]['kind'] === 'untracked_local_candidate_collision',
