@@ -5,6 +5,7 @@ Requires a separately authorised EZ2-only WP-CLI runtime. Never run on
 production, T2 or EZ BNS New Dev. This tool does not deploy or restore.
 The SQL export and copied private files MUST remain outside public Git.
 """
+import hashlib
 import json
 import os
 import re
@@ -59,7 +60,7 @@ def _inventory(source, role):
     """
     return tuple(
         (member, info.st_dev, info.st_ino, info.st_size,
-         info.st_mtime_ns, info.st_ctime_ns)
+         info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
         for _, member, info in _files(source, role)
     )
 
@@ -74,19 +75,65 @@ def _copy_component(source, destination, role):
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as reader:
             current = os.fstat(reader.fileno())
-            identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+            # A same-size rewrite with restored mtime must not silently
+            # enter a private rollback copy. Mirror the archive pack guard.
+            identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns,
+                                  s.st_ctime_ns, s.st_nlink)
             if not stat.S_ISREG(current.st_mode) or current.st_nlink != 1 or identity(current) != identity(expected):
                 raise ValueError("WordPress component changed before capture")
+            source_digest = hashlib.sha256()
             with target.open("xb") as writer:
                 while True:
                     block = reader.read(CHUNK)
                     if not block:
                         break
+                    source_digest.update(block)
                     writer.write(block)
+                writer.flush()
+                os.fsync(writer.fileno())
             after = os.fstat(reader.fileno())
             if identity(after) != identity(current):
                 raise ValueError("WordPress component changed during capture")
+            # A successful write is not proof that the private copy matches
+            # the source. Detect truncated writes or same-size corruption
+            # BEFORE the copy is packaged as a valid rollback archive.
+            with os.fdopen(os.open(target, flags), "rb") as check:
+                copied_before = os.fstat(check.fileno())
+                if (not stat.S_ISREG(copied_before.st_mode)
+                        or copied_before.st_nlink != 1
+                        or copied_before.st_size != current.st_size):
+                    raise ValueError("Copied WordPress component differs from source")
+                copied_digest = hashlib.sha256()
+                for block in iter(lambda: check.read(CHUNK), b""):
+                    copied_digest.update(block)
+                if (identity(os.fstat(check.fileno())) != identity(copied_before)
+                        or copied_digest.digest() != source_digest.digest()):
+                    raise ValueError("Copied WordPress component differs from source")
             target.chmod(0o600)
+
+
+def _bootstrap_fingerprint(path):
+    """Check bootstrap bytes and identity without following a swapped symlink.
+
+    WordPress configuration may contain secrets; only a digest is retained in
+    memory. Matching file size/mtime alone is not a sufficient drift check.
+    """
+    before = _regular(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(path, flags), "rb") as source:
+        current = os.fstat(source.fileno())
+        identity = lambda info: (
+            info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+            info.st_ctime_ns, info.st_nlink
+        )
+        if not stat.S_ISREG(current.st_mode) or identity(current) != identity(before):
+            raise ValueError("WordPress bootstrap changed before fingerprint")
+        digest = hashlib.sha256()
+        for block in iter(lambda: source.read(CHUNK), b""):
+            digest.update(block)
+        if identity(os.fstat(source.fileno())) != identity(before):
+            raise ValueError("WordPress bootstrap changed while fingerprinting")
+    return identity(before), digest.hexdigest()
 
 
 def _wp(wp_executable, root, args, env):
@@ -123,8 +170,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     # Never follow linked WordPress bootstrap files or administration roots.
     # A linked entrypoint can redirect WP-CLI outside the authorised site.
     try:
-        _regular(root / "wp-load.php")
-        config_before = _regular(root / "wp-config.php")
+        bootstrap_before = {
+            name: _bootstrap_fingerprint(root / name)
+            for name in ("wp-load.php", "wp-config.php")
+        }
         _real_directory(root / "wp-admin")
     except (ValueError, OSError) as exc:
         raise ValueError("Expected regular WordPress bootstrap files not found") from exc
@@ -173,11 +222,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         for role, source in components.items():
             _copy_component(source, staged / role, role)
         # Recheck config and runtime identity after WP-CLI export and file copy.
-        config_after = _regular(root / "wp-config.php")
-        def config_identity(info):
-            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
-        if config_identity(config_after) != config_identity(config_before):
-            raise ValueError("WordPress configuration changed during capture")
+        if any(_bootstrap_fingerprint(root / name) != fingerprint
+               for name, fingerprint in bootstrap_before.items()):
+            raise ValueError("WordPress bootstrap files changed during capture")
+        _real_directory(root / "wp-admin")
         post_gate = json.loads(_wp(wp_executable, root, ["eval-file", str(gate_file)], env))
         if post_gate != gate:
             raise ValueError("WordPress runtime identity changed during capture")
@@ -189,8 +237,24 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
             replay_result = replay(destination, exact_sha)
             if replay_result["status"] != "SCRATCH_FILE_REPLAY_VERIFIED_ONLY":
                 raise ValueError("Private backup scratch replay failed")
+            # Packaging and scratch replay can take time. A live WordPress site
+            # may change after the pre-pack inventory, leaving a stale rollback.
+            # Recheck the source *after* packaging and remove the new archive
+            # on drift; this is still not a database consistency guarantee.
+            if any(_bootstrap_fingerprint(root / name) != fingerprint
+                   for name, fingerprint in bootstrap_before.items()):
+                raise ValueError("WordPress bootstrap files changed after archive packaging")
+            _real_directory(root / "wp-admin")
+            final_gate = json.loads(_wp(wp_executable, root,
+                                      ["eval-file", str(gate_file)], env))
+            if final_gate != gate:
+                raise ValueError("WordPress runtime identity changed after archive packaging")
+            if any(_inventory(source, role) != initial_inventory[role]
+                   for role, source in components.items()):
+                raise ValueError("WordPress source file inventory changed after archive packaging")
         except BaseException:
-            shutil.rmtree(destination)
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination)
             raise
     return {
         "status": "EZ2_PRIVATE_CAPTURE_ARCHIVED_AND_SCRATCH_FILE_REPLAYED_ONLY",
