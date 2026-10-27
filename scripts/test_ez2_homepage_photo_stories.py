@@ -39,7 +39,7 @@ for label, (slug, slot) in products.items():
     must(f'href="/{slug}/"' in pattern, f'{label} original product link lost')
     must(pattern.count(f'[ezb_media_slot slot="{slot}"]') == 1,
          f'{label} missing or duplicate curated photo slot')
-    must(f'<h3 class="wp-block-heading"><a href="/{slug}/">{label}</a></h3>' in pattern,
+    must(f'<h3 class="wp-block-heading">{label}</h3>' in pattern,
          f'{label} heading/text hierarchy lost')
 must('href="/motorised-blinds/"' in pattern, 'Motorised Blinds link lost')
 must('ezb-feature-card__image--illustrative' in pattern,
