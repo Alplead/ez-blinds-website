@@ -138,10 +138,10 @@ restored_data_sha="$(data_fingerprint "$restore_db")"
 # Verify that changing a CHECK expression under the SAME constraint name
 # changes the schema fingerprint. Both variants accept the synthetic rows.
 # This probe touches only the disposable clone, never source WordPress.
-db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_id >= 0)" >/dev/null
+db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_name <> 'ez2_ci_forbidden_a')" >/dev/null
 check_definition_before="$(schema_fingerprint "$restore_db")"
 db -e "ALTER TABLE \`${restore_db}\`.wp_options DROP CONSTRAINT ez2_ci_check_probe" >/dev/null
-db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_id > 0)" >/dev/null
+db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_name <> 'ez2_ci_forbidden_b')" >/dev/null
 [[ "$(schema_fingerprint "$restore_db")" != "$check_definition_before" ]] \
   || { echo 'EZ2_CI_SQL_RESTORE_FAIL: same-name check-definition fault injection was not detected' >&2; exit 1; }
 db -e "ALTER TABLE \`${restore_db}\`.wp_options DROP CONSTRAINT ez2_ci_check_probe" >/dev/null
