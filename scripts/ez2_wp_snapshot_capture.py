@@ -189,8 +189,23 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
             replay_result = replay(destination, exact_sha)
             if replay_result["status"] != "SCRATCH_FILE_REPLAY_VERIFIED_ONLY":
                 raise ValueError("Private backup scratch replay failed")
+            # Packaging and scratch replay can take time. A live WordPress site
+            # may change after the pre-pack inventory, leaving a stale rollback.
+            # Recheck the source *after* packaging and remove the new archive
+            # on drift; this is still not a database consistency guarantee.
+            final_config = _regular(root / "wp-config.php")
+            if config_identity(final_config) != config_identity(config_before):
+                raise ValueError("WordPress configuration changed after archive packaging")
+            final_gate = json.loads(_wp(wp_executable, root,
+                                      ["eval-file", str(gate_file)], env))
+            if final_gate != gate:
+                raise ValueError("WordPress runtime identity changed after archive packaging")
+            if any(_inventory(source, role) != initial_inventory[role]
+                   for role, source in components.items()):
+                raise ValueError("WordPress source file inventory changed after archive packaging")
         except BaseException:
-            shutil.rmtree(destination)
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination)
             raise
     return {
         "status": "EZ2_PRIVATE_CAPTURE_ARCHIVED_AND_SCRATCH_FILE_REPLAYED_ONLY",

@@ -3,8 +3,9 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from ez2_wp_snapshot_capture import capture
+from ez2_wp_snapshot_capture import capture, pack as real_pack
 
 SHA = "a" * 40
 HOST = "ez2-review.local"
@@ -182,5 +183,35 @@ reject(lambda root, parent, fake: (parent.parent / ".git").mkdir())
 reject(lambda root, parent, fake: (parent.parent / ".git").write_text("gitdir: /synthetic/worktree"))
 reject(lambda root, parent, fake: (parent.parent / ".git").symlink_to("missing-gitdir"))
 
-assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7 + 4, CASES
+# A verified archive must not be accepted if live files change during
+# the potentially lengthy packaging/replay phase. Only the newly created
+# private backup is deleted; the WordPress source is never rolled back here.
+for scenario in ("upload-drift", "plugin-drift", "theme-addition", "config-drift"):
+    with tempfile.TemporaryDirectory() as temp:
+        root, parent, fake = fixture(Path(temp))
+
+        def pack_then_drift(*args, **kwargs):
+            result = real_pack(*args, **kwargs)
+            if scenario == "upload-drift":
+                (root / "wp-content/uploads/synthetic.txt").write_text("late upload change")
+            elif scenario == "plugin-drift":
+                (root / "wp-content/plugins/synthetic.txt").write_text("late plugin change")
+            elif scenario == "theme-addition":
+                (root / "wp-content/themes/late.txt").write_text("late theme addition")
+            else:
+                (root / "wp-config.php").write_text("<?php // late config change")
+            return result
+
+        with patch("ez2_wp_snapshot_capture.pack", side_effect=pack_then_drift):
+            try:
+                run(root, parent, fake)
+            except ValueError as exc:
+                assert "after archive packaging" in str(exc), str(exc)
+                assert not (parent / "ez2-backup-test").exists()
+                assert not any(x.name.startswith("ez2-capture-") for x in parent.iterdir())
+                CASES += 1
+            else:
+                raise AssertionError("Post-packaging WordPress drift was accepted")
+
+assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7 + 4 + 4, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
