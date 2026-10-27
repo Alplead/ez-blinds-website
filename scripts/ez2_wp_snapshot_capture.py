@@ -60,7 +60,7 @@ def _inventory(source, role):
     """
     return tuple(
         (member, info.st_dev, info.st_ino, info.st_size,
-         info.st_mtime_ns, info.st_ctime_ns)
+         info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
         for _, member, info in _files(source, role)
     )
 
@@ -75,7 +75,10 @@ def _copy_component(source, destination, role):
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as reader:
             current = os.fstat(reader.fileno())
-            identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+            # A same-size rewrite with restored mtime must not silently
+            # enter a private rollback copy. Mirror the archive pack guard.
+            identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns,
+                                  s.st_ctime_ns, s.st_nlink)
             if not stat.S_ISREG(current.st_mode) or current.st_nlink != 1 or identity(current) != identity(expected):
                 raise ValueError("WordPress component changed before capture")
             with target.open("xb") as writer:
