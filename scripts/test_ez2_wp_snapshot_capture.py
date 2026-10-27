@@ -224,5 +224,65 @@ for scenario in ("upload-drift", "plugin-drift", "theme-addition",
             else:
                 raise AssertionError("Post-packaging WordPress drift was accepted")
 
-assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6, CASES
+# A private file copy must reject same-length source rewrites even when
+# mtime is restored. These two races previously evaded size/mtime checks.
+def rewrite_same_size_preserving_mtime(path):
+    before = path.stat()
+    data = path.read_bytes()
+    assert data and data[0] != ord("X")
+    path.write_bytes(b"X" + data[1:])
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert path.stat().st_size == before.st_size
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+
+
+from ez2_wp_snapshot_capture import _copy_component
+import ez2_wp_snapshot_capture as capture_module
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "uploads"
+    source.mkdir()
+    file = source / "synthetic.txt"
+    file.write_bytes(b"synthetic private image")
+    original_files = capture_module._files
+
+    def rewrite_after_enumeration(root, role):
+        entries = original_files(root, role)
+        rewrite_same_size_preserving_mtime(file)
+        return entries
+
+    with patch("ez2_wp_snapshot_capture._files", side_effect=rewrite_after_enumeration):
+        try:
+            _copy_component(source, base / "copy", "uploads")
+        except ValueError as exc:
+            assert "changed before capture" in str(exc)
+            CASES += 1
+        else:
+            raise AssertionError("Timestamp-restored rewrite before copy accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "uploads"
+    source.mkdir()
+    file = source / "synthetic.txt"
+    file.write_bytes(b"synthetic private image")
+    original_open = Path.open
+
+    def rewrite_during_copy(path, mode="r", *args, **kwargs):
+        if mode == "xb" and path == base / "copy" / "synthetic.txt":
+            rewrite_same_size_preserving_mtime(file)
+        return original_open(path, mode, *args, **kwargs)
+
+    with patch.object(Path, "open", new=rewrite_during_copy):
+        try:
+            _copy_component(source, base / "copy", "uploads")
+        except ValueError as exc:
+            assert "changed during capture" in str(exc)
+            CASES += 1
+        else:
+            raise AssertionError("Timestamp-restored rewrite during copy accepted")
+
+
+assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6 + 2, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
