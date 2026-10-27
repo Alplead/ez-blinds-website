@@ -50,6 +50,8 @@ elif "db" in args and "export" in args:
         (root / "wp-content" / ".exported").write_text("synthetic")
     if mode == "config_modified":
         (root / "wp-config.php").write_text("<?php // changed synthetic configuration")
+    if mode == "bootstrap_modified":
+        (root / "wp-load.php").write_text("<?php // changed synthetic bootstrap")
     if mode == "empty_sql": path.write_bytes(b"")
     elif mode == "missing_sql": pass
     elif mode == "symlink_sql":
@@ -128,7 +130,7 @@ with tempfile.TemporaryDirectory() as temp:
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
              "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
              "symlink_sql", "hardlink_sql", "gate_drift_after_export",
-             "config_modified", "file_drift_modify", "file_drift_add",
+             "config_modified", "bootstrap_modified", "file_drift_modify", "file_drift_add",
              "file_drift_delete"):
     reject(mode=mode)
 for host in ("ezbns.com.au", "t2-ez-blinds-shutters.local", "ez-bns-new-dev.local",
@@ -186,7 +188,8 @@ reject(lambda root, parent, fake: (parent.parent / ".git").symlink_to("missing-g
 # A verified archive must not be accepted if live files change during
 # the potentially lengthy packaging/replay phase. Only the newly created
 # private backup is deleted; the WordPress source is never rolled back here.
-for scenario in ("upload-drift", "plugin-drift", "theme-addition", "config-drift"):
+for scenario in ("upload-drift", "plugin-drift", "theme-addition",
+                 "config-drift", "bootstrap-drift", "config-same-mtime"):
     with tempfile.TemporaryDirectory() as temp:
         root, parent, fake = fixture(Path(temp))
 
@@ -198,8 +201,16 @@ for scenario in ("upload-drift", "plugin-drift", "theme-addition", "config-drift
                 (root / "wp-content/plugins/synthetic.txt").write_text("late plugin change")
             elif scenario == "theme-addition":
                 (root / "wp-content/themes/late.txt").write_text("late theme addition")
-            else:
+            elif scenario == "config-drift":
                 (root / "wp-config.php").write_text("<?php // late config change")
+            elif scenario == "bootstrap-drift":
+                (root / "wp-load.php").write_text("<?php // late bootstrap change")
+            else:
+                config = root / "wp-config.php"
+                original = config.read_bytes()
+                before = config.stat()
+                config.write_bytes(b"X" + original[1:])
+                os.utime(config, ns=(before.st_atime_ns, before.st_mtime_ns))
             return result
 
         with patch("ez2_wp_snapshot_capture.pack", side_effect=pack_then_drift):
@@ -213,5 +224,5 @@ for scenario in ("upload-drift", "plugin-drift", "theme-addition", "config-drift
             else:
                 raise AssertionError("Post-packaging WordPress drift was accepted")
 
-assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7 + 4 + 4, CASES
+assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

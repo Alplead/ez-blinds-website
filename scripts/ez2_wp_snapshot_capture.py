@@ -5,6 +5,7 @@ Requires a separately authorised EZ2-only WP-CLI runtime. Never run on
 production, T2 or EZ BNS New Dev. This tool does not deploy or restore.
 The SQL export and copied private files MUST remain outside public Git.
 """
+import hashlib
 import json
 import os
 import re
@@ -89,6 +90,30 @@ def _copy_component(source, destination, role):
             target.chmod(0o600)
 
 
+def _bootstrap_fingerprint(path):
+    """Check bootstrap bytes and identity without following a swapped symlink.
+
+    WordPress configuration may contain secrets; only a digest is retained in
+    memory. Matching file size/mtime alone is not a sufficient drift check.
+    """
+    before = _regular(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(path, flags), "rb") as source:
+        current = os.fstat(source.fileno())
+        identity = lambda info: (
+            info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+            info.st_ctime_ns, info.st_nlink
+        )
+        if not stat.S_ISREG(current.st_mode) or identity(current) != identity(before):
+            raise ValueError("WordPress bootstrap changed before fingerprint")
+        digest = hashlib.sha256()
+        for block in iter(lambda: source.read(CHUNK), b""):
+            digest.update(block)
+        if identity(os.fstat(source.fileno())) != identity(before):
+            raise ValueError("WordPress bootstrap changed while fingerprinting")
+    return identity(before), digest.hexdigest()
+
+
 def _wp(wp_executable, root, args, env):
     try:
         process = subprocess.run(
@@ -123,8 +148,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     # Never follow linked WordPress bootstrap files or administration roots.
     # A linked entrypoint can redirect WP-CLI outside the authorised site.
     try:
-        _regular(root / "wp-load.php")
-        config_before = _regular(root / "wp-config.php")
+        bootstrap_before = {
+            name: _bootstrap_fingerprint(root / name)
+            for name in ("wp-load.php", "wp-config.php")
+        }
         _real_directory(root / "wp-admin")
     except (ValueError, OSError) as exc:
         raise ValueError("Expected regular WordPress bootstrap files not found") from exc
@@ -173,11 +200,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         for role, source in components.items():
             _copy_component(source, staged / role, role)
         # Recheck config and runtime identity after WP-CLI export and file copy.
-        config_after = _regular(root / "wp-config.php")
-        def config_identity(info):
-            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
-        if config_identity(config_after) != config_identity(config_before):
-            raise ValueError("WordPress configuration changed during capture")
+        if any(_bootstrap_fingerprint(root / name) != fingerprint
+               for name, fingerprint in bootstrap_before.items()):
+            raise ValueError("WordPress bootstrap files changed during capture")
+        _real_directory(root / "wp-admin")
         post_gate = json.loads(_wp(wp_executable, root, ["eval-file", str(gate_file)], env))
         if post_gate != gate:
             raise ValueError("WordPress runtime identity changed during capture")
@@ -193,9 +219,10 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
             # may change after the pre-pack inventory, leaving a stale rollback.
             # Recheck the source *after* packaging and remove the new archive
             # on drift; this is still not a database consistency guarantee.
-            final_config = _regular(root / "wp-config.php")
-            if config_identity(final_config) != config_identity(config_before):
-                raise ValueError("WordPress configuration changed after archive packaging")
+            if any(_bootstrap_fingerprint(root / name) != fingerprint
+                   for name, fingerprint in bootstrap_before.items()):
+                raise ValueError("WordPress bootstrap files changed after archive packaging")
+            _real_directory(root / "wp-admin")
             final_gate = json.loads(_wp(wp_executable, root,
                                       ["eval-file", str(gate_file)], env))
             if final_gate != gate:
