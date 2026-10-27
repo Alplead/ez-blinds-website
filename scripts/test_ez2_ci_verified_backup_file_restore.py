@@ -124,7 +124,9 @@ with tempfile.TemporaryDirectory(prefix="ez2-ci-backup-fixture-") as temp:
 
 reject(lambda r: (r / ROLES["uploads"]).write_bytes(b"damaged"),
        "Invalid compressed tar archive")
-reject(lambda r: (r / ROLES["uploads"]).write_bytes(b"tamper"),
+# Preserve byte count so the checksum (not merely the size guard) catches it.
+reject(lambda r: (r / ROLES["uploads"]).write_bytes(
+           b"X" * (r / ROLES["uploads"]).stat().st_size),
        "checksum mismatch", update=False)
 reject(lambda r: write_tar(r / ROLES["plugins"], "plugins",
                            name="../escape.txt", body=b"escape"),
