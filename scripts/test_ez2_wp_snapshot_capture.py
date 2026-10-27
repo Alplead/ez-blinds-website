@@ -3,8 +3,9 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from ez2_wp_snapshot_capture import capture
+from ez2_wp_snapshot_capture import capture, pack as real_pack
 
 SHA = "a" * 40
 HOST = "ez2-review.local"
@@ -49,6 +50,8 @@ elif "db" in args and "export" in args:
         (root / "wp-content" / ".exported").write_text("synthetic")
     if mode == "config_modified":
         (root / "wp-config.php").write_text("<?php // changed synthetic configuration")
+    if mode == "bootstrap_modified":
+        (root / "wp-load.php").write_text("<?php // changed synthetic bootstrap")
     if mode == "empty_sql": path.write_bytes(b"")
     elif mode == "missing_sql": pass
     elif mode == "symlink_sql":
@@ -127,7 +130,7 @@ with tempfile.TemporaryDirectory() as temp:
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
              "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
              "symlink_sql", "hardlink_sql", "gate_drift_after_export",
-             "config_modified", "file_drift_modify", "file_drift_add",
+             "config_modified", "bootstrap_modified", "file_drift_modify", "file_drift_add",
              "file_drift_delete"):
     reject(mode=mode)
 for host in ("ezbns.com.au", "t2-ez-blinds-shutters.local", "ez-bns-new-dev.local",
@@ -182,5 +185,147 @@ reject(lambda root, parent, fake: (parent.parent / ".git").mkdir())
 reject(lambda root, parent, fake: (parent.parent / ".git").write_text("gitdir: /synthetic/worktree"))
 reject(lambda root, parent, fake: (parent.parent / ".git").symlink_to("missing-gitdir"))
 
-assert CASES == 1 + 1 + 15 + 7 + 5 + 4 + 11 + 7 + 4, CASES
+# A verified archive must not be accepted if live files change during
+# the potentially lengthy packaging/replay phase. Only the newly created
+# private backup is deleted; the WordPress source is never rolled back here.
+for scenario in ("upload-drift", "plugin-drift", "theme-addition",
+                 "config-drift", "bootstrap-drift", "config-same-mtime"):
+    with tempfile.TemporaryDirectory() as temp:
+        root, parent, fake = fixture(Path(temp))
+
+        def pack_then_drift(*args, **kwargs):
+            result = real_pack(*args, **kwargs)
+            if scenario == "upload-drift":
+                (root / "wp-content/uploads/synthetic.txt").write_text("late upload change")
+            elif scenario == "plugin-drift":
+                (root / "wp-content/plugins/synthetic.txt").write_text("late plugin change")
+            elif scenario == "theme-addition":
+                (root / "wp-content/themes/late.txt").write_text("late theme addition")
+            elif scenario == "config-drift":
+                (root / "wp-config.php").write_text("<?php // late config change")
+            elif scenario == "bootstrap-drift":
+                (root / "wp-load.php").write_text("<?php // late bootstrap change")
+            else:
+                config = root / "wp-config.php"
+                original = config.read_bytes()
+                before = config.stat()
+                config.write_bytes(b"X" + original[1:])
+                os.utime(config, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return result
+
+        with patch("ez2_wp_snapshot_capture.pack", side_effect=pack_then_drift):
+            try:
+                run(root, parent, fake)
+            except ValueError as exc:
+                assert "after archive packaging" in str(exc), str(exc)
+                assert not (parent / "ez2-backup-test").exists()
+                assert not any(x.name.startswith("ez2-capture-") for x in parent.iterdir())
+                CASES += 1
+            else:
+                raise AssertionError("Post-packaging WordPress drift was accepted")
+
+# A private file copy must reject same-length source rewrites even when
+# mtime is restored. These two races previously evaded size/mtime checks.
+def rewrite_same_size_preserving_mtime(path):
+    before = path.stat()
+    data = path.read_bytes()
+    assert data and data[0] != ord("X")
+    path.write_bytes(b"X" + data[1:])
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert path.stat().st_size == before.st_size
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+
+
+from ez2_wp_snapshot_capture import _copy_component
+import ez2_wp_snapshot_capture as capture_module
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "uploads"
+    source.mkdir()
+    file = source / "synthetic.txt"
+    file.write_bytes(b"synthetic private image")
+    original_files = capture_module._files
+
+    def rewrite_after_enumeration(root, role):
+        entries = original_files(root, role)
+        rewrite_same_size_preserving_mtime(file)
+        return entries
+
+    with patch("ez2_wp_snapshot_capture._files", side_effect=rewrite_after_enumeration):
+        try:
+            _copy_component(source, base / "copy", "uploads")
+        except ValueError as exc:
+            assert "changed before capture" in str(exc)
+            CASES += 1
+        else:
+            raise AssertionError("Timestamp-restored rewrite before copy accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "uploads"
+    source.mkdir()
+    file = source / "synthetic.txt"
+    file.write_bytes(b"synthetic private image")
+    original_open = Path.open
+
+    def rewrite_during_copy(path, mode="r", *args, **kwargs):
+        if mode == "xb" and path == base / "copy" / "synthetic.txt":
+            rewrite_same_size_preserving_mtime(file)
+        return original_open(path, mode, *args, **kwargs)
+
+    with patch.object(Path, "open", new=rewrite_during_copy):
+        try:
+            _copy_component(source, base / "copy", "uploads")
+        except ValueError as exc:
+            assert "changed during capture" in str(exc)
+            CASES += 1
+        else:
+            raise AssertionError("Timestamp-restored rewrite during copy accepted")
+
+
+# The private copy must match the original bytes, not merely report
+# that both file handles were successfully opened. Exercise both a short
+# write and a same-length corrupt write without touching any WordPress site.
+for scenario in ("short-write", "same-length-corruption"):
+    with tempfile.TemporaryDirectory() as temp:
+        base = Path(temp)
+        source = base / "uploads"
+        source.mkdir()
+        (source / "synthetic.txt").write_bytes(b"synthetic private image")
+        destination = base / "copy"
+        original_open = Path.open
+
+        class AlteredCopyWriter:
+            def __init__(self, wrapped):
+                self.wrapped = wrapped
+            def __enter__(self):
+                self.wrapped.__enter__()
+                return self
+            def __exit__(self, *args):
+                return self.wrapped.__exit__(*args)
+            def __getattr__(self, name):
+                return getattr(self.wrapped, name)
+            def write(self, data):
+                if scenario == "short-write":
+                    return self.wrapped.write(data[:max(1, len(data) // 2)])
+                return self.wrapped.write(bytes([data[0] ^ 1]) + data[1:])
+
+        def corrupt_copy(path, mode="r", *args, **kwargs):
+            opened = original_open(path, mode, *args, **kwargs)
+            if path == destination / "synthetic.txt" and mode == "xb":
+                return AlteredCopyWriter(opened)
+            return opened
+
+        with patch.object(Path, "open", new=corrupt_copy):
+            try:
+                _copy_component(source, destination, "uploads")
+            except ValueError as exc:
+                assert "Copied WordPress component differs from source" in str(exc), str(exc)
+                CASES += 1
+            else:
+                raise AssertionError("Corrupt or truncated private copy accepted")
+
+
+assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6 + 2 + 2, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")
