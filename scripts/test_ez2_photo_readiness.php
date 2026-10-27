@@ -22,6 +22,10 @@ function ezb_media_slot_candidates() {
         'rfs-hero' => array( 'filename'=>'D.jpg', 'page_slug'=>'retractable-flyscreens' ),
     );
 }
+function ezb_editorial_image_choices() {
+    return array( 'sheer'=>array(), 'roller'=>array(), 'flyscreen'=>array(), 'shutters'=>array() );
+}
+function ezb_editorial_image_id( $key ) { return $GLOBALS['editorial_ids'][ $key ] ?? 0; }
 function ezb_featured_image_for_page_slug( $slug ) { return $GLOBALS['owner_featured'][ $slug ] ?? 0; }
 function ezb_find_attachment_by_basename( $filename ) { return array( 'A.jpg'=>11,'B.jpg'=>12,'C.jpg'=>13,'D.jpg'=>14 )[ $filename ] ?? 0; }
 function get_post_mime_type( $id ) { return $GLOBALS['media'][ $id ]['mime']; }
@@ -37,6 +41,7 @@ if ( ! mkdir( $base ) || ! mkdir( $uploads ) ) { throw new RuntimeException( 'Ca
 $GLOBALS['upload_dir'] = $uploads;
 $GLOBALS['home'] = 'https://sb-previewtest.vercel.run/';
 $GLOBALS['owner_featured'] = array();
+$GLOBALS['editorial_ids'] = array( 'sheer'=>11, 'roller'=>12, 'flyscreen'=>14, 'shutters'=>13 );
 $GLOBALS['library_ids'] = range( 11, 33 );
 $GLOBALS['media'] = array();
 $fake_webp = 'RIFF' . pack( 'V', 2040 ) . 'WEBP' . str_repeat( 'x', 2032 );
@@ -61,7 +66,7 @@ function checks( $value, $code, $label ) {
 try {
     $r = ez2_photo_readiness();
     if ( ! is_array( $r ) || $r['media_library_webp_count'] !== 23
-        || $r['curated_photo_slots'] !== 5 || $r['distinct_curated_photos'] !== 4
+        || $r['curated_photo_slots'] !== 5 || $r['editorial_hero_slides'] !== 4 || $r['distinct_curated_photos'] !== 4
         || $r['status'] !== 'READY_FOR_PRIVATE_VISUAL_REVIEW_ONLY'
         || $r['public_release_authorized'] !== false || $r['site_modified'] !== false ) {
         throw new RuntimeException( 'Complete private photo preview must pass without publication' );
@@ -93,6 +98,14 @@ try {
     $GLOBALS['owner_featured']['retractable-flyscreens'] = 11;
     checks( ez2_photo_readiness(), 'ez2_photo_repeated_media', 'one photo substituted for every product' );
     $GLOBALS['owner_featured'] = array();
+    $GLOBALS['editorial_ids']['shutters'] = 0;
+    checks( ez2_photo_readiness(), 'ez2_photo_editorial_unresolved',
+        'missing fourth hero slideshow photograph' );
+    $GLOBALS['editorial_ids']['shutters'] = 13;
+    $GLOBALS['editorial_ids']['flyscreen'] = 13;
+    checks( ez2_photo_readiness(), 'ez2_photo_editorial_duplicate',
+        'reused identical carousel picture' );
+    $GLOBALS['editorial_ids']['flyscreen'] = 14;
     if ( ! is_array( ez2_photo_readiness() ) ) { throw new RuntimeException( 'Fixture must recover after restoring images' ); }
     $tests++;
     echo 'EZ2_REAL_PHOTO_PREVIEW_GATE_PASS cases=' . $tests . "\n";
