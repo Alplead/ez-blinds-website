@@ -25,6 +25,10 @@ grep -Fq "EZ2_CI_SQL_RESTORE_FAIL: faulted clone not fully recovered" ez2_ci_wor
 grep -Fq 'python3 scripts/ez2_backup_snapshot_pack.py' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'python3 scripts/ez2_backup_archive_guard.py' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'python3 scripts/ez2_backup_scratch_replay.py' ez2_ci_wordpress_db_restore.sh
+# Full backup must also rehearse three real filesystem swaps and six failures.
+grep -Fq 'EZ2_CI_VERIFIED_FILE_RESTORE=YES_DISPOSABLE_RELEASE_STACK' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'python3 scripts/ez2_ci_verified_backup_file_restore.py' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'EZ2_CI_VERIFIED_BACKUP_FILE_RESTORE_PASS' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'backup_sql="$scratch/verified-backup/database.sql.gz"' ez2_ci_wordpress_db_restore.sh
 ! grep -Fq 'gzip -dc "$scratch/wordpress.sql.gz"' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'UPDATE \`${restore_db}\`.wp_options' ez2_ci_wordpress_db_restore.sh
@@ -36,4 +40,4 @@ grep -Fq 'restored WordPress schema differs' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'ADD COLUMN ez2_ci_schema_fault TINYINT NULL' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'schema fault injection was not detected' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'recovery changed source schema' ez2_ci_wordpress_db_restore.sh
-printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=23'
+printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=26'
