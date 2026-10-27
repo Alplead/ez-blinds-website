@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/includes/ezb-quote-receipt.php';
 
+require_once __DIR__ . '/includes/ezb-media-priority.php';
+
 /**
  * Make Page excerpts available to the Owner as the shared source for concise
  * introductory/SEO copy where a Page uses one.
@@ -2352,16 +2354,21 @@ add_shortcode(
 					? $owner_alt
 					: __( 'Window furnishings photograph', 'ezb-core' );
 			}
+			$fetch_attributes = ezb_media_slot_fetch_attributes(
+				$slot,
+				is_front_page(),
+				! empty( $candidate['page_slug'] ) && is_page( $candidate['page_slug'] )
+			);
 			return wp_get_attachment_image(
 				$attachment_id,
 				'large',
 				false,
-				array(
-					'class'         => 'ezb-media-slot__image',
-					'alt'           => $alt,
-					'loading'       => 'eager',
-					'fetchpriority' => 'high',
-					'decoding'      => 'async',
+				array_merge(
+					array(
+						'class' => 'ezb-media-slot__image',
+						'alt'   => $alt,
+					),
+					$fetch_attributes
 				)
 			);
 		}
