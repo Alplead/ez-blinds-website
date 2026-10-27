@@ -1,0 +1,38 @@
+name: EZ2 Homepage Photo Integration (No Deployment)
+on:
+  pull_request:
+    branches:
+      - feature/vertical-slice-v1
+    paths:
+      - 'wp-content/themes/ezb-theme/patterns/core-solutions.php'
+      - 'wp-content/themes/ezb-theme/assets/css/editorial.css'
+      - 'wp-content/themes/ezb-theme/templates/front-page.html'
+      - 'scripts/test_ez2_homepage_photo_stories.py'
+      - '.github/workflows/ez2-homepage-photo-integration.yml'
+permissions:
+  contents: read
+jobs:
+  integration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Check existing page architecture and meaningful product photo slots
+        run: |
+          set -euo pipefail
+          php -l wp-content/themes/ezb-theme/patterns/core-solutions.php
+          python3 scripts/test_ez2_homepage_photo_stories.py | tee /tmp/ez2-homepage-test.log
+          grep -Fxq 'EZ2_HOMEPAGE_PHOTO_STORIES_PASS cases=40' /tmp/ez2-homepage-test.log
+      - name: Preserve private media boundary
+        run: |
+          set -euo pipefail
+          ! grep -Eiq 'https://(drive\.google|images\.unsplash)|\.jpeg["\x27]?\?auth|(?i:api_key|secret_key)' wp-content/themes/ezb-theme/patterns/core-solutions.php
+          echo EZ2_OWNER_MEDIA_STAYS_IN_PRIVATE_WORDPRESS_PASS
