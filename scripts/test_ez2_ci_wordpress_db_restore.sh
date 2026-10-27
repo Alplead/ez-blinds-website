@@ -28,5 +28,12 @@ grep -Fq 'python3 scripts/ez2_backup_scratch_replay.py' ez2_ci_wordpress_db_rest
 grep -Fq 'backup_sql="$scratch/verified-backup/database.sql.gz"' ez2_ci_wordpress_db_restore.sh
 ! grep -Fq 'gzip -dc "$scratch/wordpress.sql.gz"' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'UPDATE \`${restore_db}\`.wp_options' ez2_ci_wordpress_db_restore.sh
-grep -Fq 'fault_recovered=true packaged_backup_verified=true synthetic_ci_only=true localwp_touched=false' ez2_ci_wordpress_db_restore.sh
-printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=17'
+grep -Fq 'fault_recovered=true schema_recovered=true packaged_backup_verified=true synthetic_ci_only=true localwp_touched=false' ez2_ci_wordpress_db_restore.sh
+# Guard real disposable schema equality, injected schema drift and recovery.
+grep -Fq 'schema_fingerprint() {' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'source_schema_sha="$(schema_fingerprint "$source_db")"' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'restored WordPress schema differs' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'ADD COLUMN ez2_ci_schema_fault TINYINT NULL' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'schema fault injection was not detected' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'recovery changed source schema' ez2_ci_wordpress_db_restore.sh
+printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=23'
