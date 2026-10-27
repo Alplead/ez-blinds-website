@@ -11,8 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 function ezb_media_slot_fetch_attributes( $slot, $is_front_page, $is_matching_product_page ) {
-    $hero = ( 'home-hero' === $slot && true === $is_front_page )
-        || ( true === $is_matching_product_page && true !== $is_front_page );
+    // Local prototype routes can be rendered while WP still reports the
+    // underlying queried page as front_page. A matching product hero wins.
+    $hero = true === $is_matching_product_page
+        || ( 'home-hero' === $slot && true === $is_front_page );
 
     return array(
         'loading'       => $hero ? 'eager' : 'lazy',
