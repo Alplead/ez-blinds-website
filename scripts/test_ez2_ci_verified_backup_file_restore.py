@@ -14,6 +14,7 @@ import tempfile
 from unittest.mock import patch
 
 from ez2_backup_preflight import ROLES
+import ez2_ci_verified_backup_file_restore as engine
 from ez2_ci_verified_backup_file_restore import rehearse
 
 SHA = "a" * 40
@@ -120,6 +121,43 @@ with tempfile.TemporaryDirectory(prefix="ez2-ci-backup-fixture-") as temp:
         assert "Wrong site, source or manifest schema" in str(e)
     else:
         raise AssertionError("Mismatched SHA was accepted")
+    cases += 1
+
+# An actual failed rename, not just a labelled test exception, must recover
+# every component already moved and MUST propagate its error to the caller.
+with tempfile.TemporaryDirectory(prefix="ez2-ci-io-failure-") as tmp:
+    parent = Path(tmp)
+    source = parent / "master"
+    attempt_root = parent / "attempts"
+    source.mkdir()
+    attempt_root.mkdir()
+    for role in engine.ROLES_TO_RESTORE:
+        (source / role).mkdir()
+        (source / role / "new.txt").write_text("SYNTHETIC-NEW-" + role)
+    expected = {role: engine.fingerprint(source / role)
+                for role in engine.ROLES_TO_RESTORE}
+    original_move = engine.safe_move
+    move_count = [0]
+
+    def fail_fourth_move(a, b):
+        move_count[0] += 1
+        if move_count[0] == 4:
+            raise OSError("SYNTHETIC_DISK_RENAME_FAILURE")
+        original_move(a, b)
+
+    with patch("ez2_ci_verified_backup_file_restore.safe_move", side_effect=fail_fourth_move):
+        try:
+            engine.run_one(source, expected, None, attempt_root)
+        except OSError as exc:
+            assert str(exc) == "SYNTHETIC_DISK_RENAME_FAILURE"
+        else:
+            raise AssertionError("Real I/O error was hidden as success")
+    attempt = attempt_root / "case-success"
+    for role in engine.ROLES_TO_RESTORE:
+        assert (attempt / "installed" / role / "original-ci-marker.txt").read_text() == (
+            "SYNTHETIC-OLD-ONLY:" + role + "\n")
+    engine.verify_role_set(attempt / "incoming", expected)
+    assert not list((attempt / "backup").iterdir())
     cases += 1
 
 reject(lambda r: (r / ROLES["uploads"]).write_bytes(b"damaged"),
