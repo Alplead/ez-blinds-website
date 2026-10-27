@@ -29,7 +29,7 @@
             <!-- wp:paragraph {"className":"ezb-feature-card__tag"} --><p class="ezb-feature-card__tag">PRIVACY · LIGHT CONTROL</p><!-- /wp:paragraph -->
             <!-- wp:heading {"level":3} --><h3 class="wp-block-heading">Roller Blinds</h3><!-- /wp:heading -->
             <!-- wp:paragraph --><p>A clean, practical option for privacy, light control and everyday use.</p><!-- /wp:paragraph -->
-            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/roller-blinds/">Explore Roller Blinds →</a></p><!-- /wp:paragraph -->
+            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/roller-blinds/">Roller Blinds</a></p><!-- /wp:paragraph -->
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
@@ -43,7 +43,7 @@
             <!-- wp:paragraph {"className":"ezb-feature-card__tag"} --><p class="ezb-feature-card__tag">SOFT LIGHT · LAYERED LIVING</p><!-- /wp:paragraph -->
             <!-- wp:heading {"level":3} --><h3 class="wp-block-heading">Sheer Curtains</h3><!-- /wp:heading -->
             <!-- wp:paragraph --><p>Soft filtered light with a full-height layered finish.</p><!-- /wp:paragraph -->
-            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/sheer-curtains/">Explore Sheer Curtains →</a></p><!-- /wp:paragraph -->
+            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/sheer-curtains/">Sheer Curtains</a></p><!-- /wp:paragraph -->
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
@@ -57,7 +57,7 @@
             <!-- wp:paragraph {"className":"ezb-feature-card__tag"} --><p class="ezb-feature-card__tag">STRUCTURE · FLEXIBILITY</p><!-- /wp:paragraph -->
             <!-- wp:heading {"level":3} --><h3 class="wp-block-heading">Plantation Shutters</h3><!-- /wp:heading -->
             <!-- wp:paragraph --><p>A structured finish with adjustable light, privacy and a strong architectural look.</p><!-- /wp:paragraph -->
-            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/plantation-shutters/">Explore Plantation Shutters →</a></p><!-- /wp:paragraph -->
+            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/plantation-shutters/">Plantation Shutters</a></p><!-- /wp:paragraph -->
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
@@ -71,7 +71,7 @@
             <!-- wp:paragraph {"className":"ezb-feature-card__tag"} --><p class="ezb-feature-card__tag">OPENINGS · EVERYDAY ACCESS</p><!-- /wp:paragraph -->
             <!-- wp:heading {"level":3} --><h3 class="wp-block-heading">Retractable Flyscreens</h3><!-- /wp:heading -->
             <!-- wp:paragraph --><p>Screen selected doors and larger openings while keeping the opening visually light.</p><!-- /wp:paragraph -->
-            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/retractable-flyscreens/">Explore Retractable Flyscreens →</a></p><!-- /wp:paragraph -->
+            <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/retractable-flyscreens/">Retractable Flyscreens</a></p><!-- /wp:paragraph -->
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
       <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--motorised","layout":{"type":"default"}} -->
@@ -85,7 +85,7 @@
           <!-- wp:paragraph {"className":"ezb-feature-card__tag"} --><p class="ezb-feature-card__tag">EASE · CONVENIENCE</p><!-- /wp:paragraph -->
           <!-- wp:heading {"level":3} --><h3 class="wp-block-heading">Motorised Blinds</h3><!-- /wp:heading -->
           <!-- wp:paragraph --><p>Useful where access, convenience or repeated operation makes powered control worthwhile.</p><!-- /wp:paragraph -->
-          <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/motorised-blinds/">Explore Motorised Blinds →</a></p><!-- /wp:paragraph -->
+          <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/motorised-blinds/">Motorised Blinds</a></p><!-- /wp:paragraph -->
         </div><!-- /wp:group -->
       </article><!-- /wp:group -->
     </div><!-- /wp:group -->
