@@ -51,26 +51,38 @@ def _regular(path):
     return info
 
 
+def _walk_error(exc):
+    """Never silently omit an unreadable subtree from a private rollback set."""
+    raise ValueError("Cannot enumerate complete snapshot directory") from exc
+
+
 def _files(root, role):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Snapshot component must be a real directory")
     result = []
     seen = set()
+    # A Linux fixture may contain Photos/ and photos/ as distinct folders,
+    # but restoring both on Windows LocalWP would silently merge them.
+    # Track directory spelling as well as file spelling before writing ZIPs.
+    directory_spellings = {}
     total = 0
-    for base, directories, files in os.walk(root, followlinks=False):
+    for base, directories, files in os.walk(root, followlinks=False, onerror=_walk_error):
         for name in directories:
             directory = Path(base) / name
             if directory.is_symlink() or not directory.is_dir():
                 raise ValueError("Snapshot directory link or special entry")
-            relative = directory.relative_to(root).as_posix()
-            safe_member(role + "/" + relative, role, is_dir=True)
+            member = role + "/" + directory.relative_to(root).as_posix()
+            folded = safe_member(member, role, is_dir=True)
+            previous = directory_spellings.setdefault(folded, member)
+            if previous != member or folded in seen:
+                raise ValueError("Case-colliding snapshot directory or file")
         for name in files:
             path = Path(base) / name
             info = _regular(path)
             member = role + "/" + path.relative_to(root).as_posix()
             folded = safe_member(member, role)
-            if folded in seen:
-                raise ValueError("Case-colliding snapshot file")
+            if folded in seen or folded in directory_spellings:
+                raise ValueError("Case-colliding snapshot file or directory")
             seen.add(folded)
             result.append((path, member, info))
             total += info.st_size
@@ -81,6 +93,12 @@ def _files(root, role):
     return sorted(result, key=lambda item: item[1])
 
 
+def _file_identity(info):
+    """Include ctime/link count: size and restored mtime can conceal a rewrite."""
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+            info.st_ctime_ns, info.st_nlink)
+
+
 def _write_tar(destination, role, entries):
     with destination.open("xb") as output:
         with tarfile.open(fileobj=output, mode="w:gz") as archive:
@@ -89,8 +107,7 @@ def _write_tar(destination, role, entries):
                 with os.fdopen(os.open(path, flags), "rb") as source:
                     before = os.fstat(source.fileno())
                     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-                            or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
-                            != (initial.st_dev, initial.st_ino, initial.st_size, initial.st_mtime_ns)):
+                            or _file_identity(before) != _file_identity(initial)):
                         raise ValueError("Snapshot file changed during packaging")
                     entry = tarfile.TarInfo(member)
                     entry.size = before.st_size
@@ -98,7 +115,7 @@ def _write_tar(destination, role, entries):
                     entry.mtime = 0
                     archive.addfile(entry, source)
                     after = os.fstat(source.fileno())
-                    if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
+                    if _file_identity(after) != _file_identity(before):
                         raise ValueError("Snapshot file changed while reading")
     destination.chmod(0o600)
 
@@ -108,8 +125,7 @@ def _write_sql(source_path, destination):
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     with os.fdopen(os.open(source_path, flags), "rb") as source:
         before = os.fstat(source.fileno())
-        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
-                initial.st_dev, initial.st_ino, initial.st_size, initial.st_mtime_ns):
+        if before.st_nlink != 1 or _file_identity(before) != _file_identity(initial):
             raise ValueError("SQL source changed before packaging")
         with destination.open("xb") as output:
             with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as compressed:
@@ -119,7 +135,7 @@ def _write_sql(source_path, destination):
                         break
                     compressed.write(block)
         after = os.fstat(source.fileno())
-        if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
+        if _file_identity(after) != _file_identity(before):
             raise ValueError("SQL source changed while reading")
     destination.chmod(0o600)
 
