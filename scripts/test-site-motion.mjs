@@ -41,7 +41,7 @@ function simulate({ reduced, observerSupported }) {
   }
   runInNewContext(script, context);
   return {
-    rootClasses, targetClasses, video, observerInstance,
+    rootClasses, targetClasses, video, get observerInstance() { return observerInstance; },
     setReduced(value) { preference.matches = value; changeListener?.({ matches: value }); },
     target
   };
