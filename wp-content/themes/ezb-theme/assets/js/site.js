@@ -59,17 +59,50 @@
 		});
 	}
 
-	function onMotionPreferenceChange(event) {
-		if (!event.matches) {
-			startAutoplayVideos();
+	// Motion preferences may change after page load. Initialise the scroll
+	// reveal observer only when first needed, never twice after toggling.
+	var targets = document.querySelectorAll([
+		'.ezb-card', '.ezb-proof', '.ezb-cta', '.ezb-product-media',
+		'.ezb-media-placeholder', '.ezb-map-placeholder', '.ezb-contact-aside',
+		'.ezb-split-panel', '.ezb-blog-card', '.ezb-project-gallery',
+		'.ezb-product-gallery-block'
+	].join(','));
+	var revealsInitialised = false;
+
+	function initialiseReveals() {
+		if (revealsInitialised) return;
+		revealsInitialised = true;
+		if (!('IntersectionObserver' in window)) {
+			targets.forEach(function (el) { el.classList.add('ezb-in-view'); });
 			return;
 		}
-		stopAutoplayVideos();
-		// Reveal all animated items when reduced motion is enabled mid-session.
-		document.documentElement.classList.remove('ezb-motion-ready');
+		var observer = new IntersectionObserver(function (entries, obs) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) return;
+				entry.target.classList.add('ezb-in-view');
+				obs.unobserve(entry.target);
+			});
+		}, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+		targets.forEach(function (el, index) {
+			el.style.setProperty('--ezb-reveal-delay', Math.min(index % 3, 2) * 55 + 'ms');
+			observer.observe(el);
+		});
 	}
 
-	// Visibility changes must never override the reduced-motion preference.
+	function syncMotionPreference() {
+		if (motionPreference.matches) {
+			stopAutoplayVideos();
+			// Removing the motion class immediately reveals all content,
+			// including items that have not yet entered the viewport.
+			document.documentElement.classList.remove('ezb-motion-ready');
+			return;
+		}
+		startAutoplayVideos();
+		initialiseReveals();
+		document.documentElement.classList.add('ezb-motion-ready');
+	}
+
+	// A hidden tab never resumes autoplay, even after a preference change.
 	if (videos.length && typeof document.addEventListener === 'function') {
 		document.addEventListener('visibilitychange', function () {
 			if (document.hidden || motionPreference.matches) {
@@ -79,55 +112,10 @@
 			}
 		});
 	}
-
 	if (motionPreference.addEventListener) {
-		motionPreference.addEventListener('change', onMotionPreferenceChange);
+		motionPreference.addEventListener('change', syncMotionPreference);
 	} else if (motionPreference.addListener) {
-		motionPreference.addListener(onMotionPreferenceChange);
+		motionPreference.addListener(syncMotionPreference);
 	}
-
-	if (motionPreference.matches) {
-		stopAutoplayVideos();
-		return;
-	}
-
-	startAutoplayVideos();
-	document.documentElement.classList.add('ezb-motion-ready');
-
-	var targets = document.querySelectorAll([
-		'.ezb-card',
-		'.ezb-proof',
-		'.ezb-cta',
-		'.ezb-product-media',
-		'.ezb-media-placeholder',
-		'.ezb-map-placeholder',
-		'.ezb-contact-aside',
-		'.ezb-split-panel',
-		'.ezb-blog-card',
-		'.ezb-project-gallery',
-		'.ezb-product-gallery-block'
-	].join(','));
-
-	if (!('IntersectionObserver' in window)) {
-		targets.forEach(function (el) {
-			el.classList.add('ezb-in-view');
-		});
-		return;
-	}
-
-	var observer = new IntersectionObserver(function (entries, obs) {
-		entries.forEach(function (entry) {
-			if (!entry.isIntersecting) return;
-			entry.target.classList.add('ezb-in-view');
-			obs.unobserve(entry.target);
-		});
-	}, {
-		rootMargin: '0px 0px -8% 0px',
-		threshold: 0.08
-	});
-
-	targets.forEach(function (el, index) {
-		el.style.setProperty('--ezb-reveal-delay', Math.min(index % 3, 2) * 55 + 'ms');
-		observer.observe(el);
-	});
+	syncMotionPreference();
 }());

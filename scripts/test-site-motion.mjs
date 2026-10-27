@@ -53,6 +53,19 @@ assert.equal(initiallyReduced.video.pauseCount, 1);
 assert.equal(initiallyReduced.video.playCount, 0, 'reduced motion must never autoplay');
 assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), false);
 assert.equal(initiallyReduced.observerInstance, undefined);
+initiallyReduced.setReduced(false);
+assert.equal(initiallyReduced.video.playCount, 1, 'lifting reduced motion starts video');
+assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), true,
+  'lifting reduced motion enables reveals without reloading');
+assert.equal(initiallyReduced.observerInstance.observed.length, 1,
+  'lifting reduced motion creates an observer');
+const firstObserver = initiallyReduced.observerInstance;
+initiallyReduced.setReduced(true);
+assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), false,
+  'reducing motion reveals unrevealed content');
+initiallyReduced.setReduced(false);
+assert.equal(initiallyReduced.observerInstance, firstObserver,
+  'repeated toggles must not create duplicate observers');
 
 const withoutObserver = simulate({ reduced: false, observerSupported: false });
 assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), true);
@@ -62,6 +75,11 @@ withoutObserver.setReduced(true);
 assert.equal(withoutObserver.video.autoplay, false);
 assert.equal(withoutObserver.video.pauseCount, 1);
 assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), false);
+withoutObserver.setReduced(false);
+assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), true,
+  'motion resumes without IntersectionObserver');
+assert.equal(withoutObserver.targetClasses.has('ezb-in-view'), true,
+  'fallback remains visible after toggling');
 
 const withObserver = simulate({ reduced: false, observerSupported: true });
 assert.equal(withObserver.observerInstance.observed.length, 1);
@@ -72,7 +90,7 @@ withObserver.setReduced(true);
 assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), false);
 assert.equal(withObserver.video.pauseCount, 1);
 withObserver.setReduced(false);
-assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), false);
+assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), true);
 assert.equal(withObserver.video.autoplay, true);
 assert.equal(withObserver.video.playCount, 2, 'autoplay resumes after motion preference allows it');
 
