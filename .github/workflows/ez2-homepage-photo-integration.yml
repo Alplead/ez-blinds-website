@@ -49,7 +49,7 @@ jobs:
           php -l scripts/test_ez2_media_loading.php
           php -l scripts/test_ez2_photo_readiness.php
           php scripts/test_ez2_media_loading.php | tee /tmp/ez2-media-loading.log
-          grep -Fxq 'EZ2_MEDIA_LOADING_PRIORITY_PASS cases=15' /tmp/ez2-media-loading.log
+          grep -Fxq 'EZ2_MEDIA_LOADING_PRIORITY_PASS cases=16' /tmp/ez2-media-loading.log
           php scripts/test_ez2_photo_readiness.php | tee /tmp/ez2-photo-readiness.log
           grep -Fxq 'EZ2_REAL_PHOTO_PREVIEW_GATE_PASS cases=12' /tmp/ez2-photo-readiness.log
           echo EZ2_OWNER_VISUAL_PREVIEW_GATE_PASS
