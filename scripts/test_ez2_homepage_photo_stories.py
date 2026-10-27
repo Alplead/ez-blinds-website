@@ -42,6 +42,14 @@ for label, (slug, slot) in products.items():
     must(f'<h3 class="wp-block-heading">{label}</h3>' in pattern,
          f'{label} heading/text hierarchy lost')
 must('href="/motorised-blinds/"' in pattern, 'Motorised Blinds link lost')
+for slug in ('roller-blinds', 'sheer-curtains', 'plantation-shutters',
+             'retractable-flyscreens', 'motorised-blinds'):
+    must(pattern.count(f'href="/contact/?quote_product={slug}"') == 1,
+         f'Missing or duplicated direct quote shortcut for {slug}')
+must('min-height: 48px' in css, 'Mobile quote buttons must meet tap target size')
+must('.ezb-feature-card__quote a:focus-visible' in css,
+     'Keyboard focus styling is required for quote shortcut')
+
 must('ezb-feature-card__image--illustrative' in pattern,
      'Motorised Blinds must not be misrepresented by another product photo')
 must('href="/products/"' in pattern, 'Original compare-all-products path lost')
