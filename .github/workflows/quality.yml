@@ -486,7 +486,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_wp_snapshot_capture.py scripts/test_ez2_wp_snapshot_capture.py
           python3 scripts/test_ez2_wp_snapshot_capture.py | tee /tmp/ez2-wp-private-capture.log
-          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=55 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
+          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=66 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
 
       - name: Validate isolated EZ2 rollback backup manifest and bytes (synthetic only)
         run: |
@@ -498,7 +498,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_archive_guard.py scripts/test_ez2_backup_archive_guard.py
           python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
-          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=29' /tmp/ez2-backup-archive-guard.log
+          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=33' /tmp/ez2-backup-archive-guard.log
 
       - name: Rehearse EZ2 rollback file extraction in disposable scratch (synthetic only)
         run: |
@@ -592,7 +592,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_snapshot_pack.py scripts/test_ez2_backup_snapshot_pack.py
           python3 scripts/test_ez2_backup_snapshot_pack.py | tee /tmp/ez2-backup-snapshot-pack.log
-          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=22 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
+          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=28 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
 
       - name: Guard isolated EZ2 delivery agent preview (no installation)
         run: |
