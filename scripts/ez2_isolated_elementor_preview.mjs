@@ -27,6 +27,15 @@ export function parseAuth(e){
  /[^\x21-\x7e]/.test(auth.value))throw Error('INVALID_SYNTHETIC_AUTH_COOKIE');
  return auth;
 }
+// Retry only a transient transport failure for read-only, local static assets.
+// HTTP 4xx/5xx still fail the strict browser response guard; never retry POST.
+export function shouldRetryLocalAsset(method,pathname,attempt){
+ return attempt===0 && (method==='GET'||method==='HEAD') &&
+  (pathname.startsWith('/wp-content/themes/ezb-theme/assets/')||
+   pathname.startsWith('/wp-content/plugins/elementor/assets/')||
+   pathname.startsWith('/wp-content/plugins/ezb-core/assets/')) &&
+  (pathname.endsWith('.js')||pathname.endsWith('.css'));
+}
 export function reviewEvidence(e){
  const errors=[];
  if(e.status!==200||e.host!==HOST||!e.loggedIn)errors.push('authenticated isolated preview');
@@ -51,17 +60,27 @@ export async function run(e=process.env){
     reducedMotion:vp.motion,serviceWorkers:'block'});
    try{
     await context.addCookies([{name:auth.name,value:auth.value,url:'http://'+HOST+'/',httpOnly:true,sameSite:'Lax'}]);
-    const blockedExternalRequests=[];
+    const blockedExternalRequests=[],retriedLocalAssets=[];
     await context.route('**/*',async route=>{
      const req=route.request(),u=new URL(req.url());
      if(u.protocol!=='http:'||u.hostname!==HOST||u.port||u.username||u.password){
       blockedExternalRequests.push(u.origin+u.pathname);return route.abort('blockedbyclient');
      }
-     try{
-      const response=await route.fetch({url:'http://127.0.0.1:8080'+u.pathname+u.search,
-       headers:{...req.headers(),host:HOST},maxRedirects:0});
-      return route.fulfill({response});
-     }catch{return route.abort('failed');}
+     // A one-off transport reset must not make synthetic CI flaky, but
+     // missing assets and repeated failures must remain visible and FAIL.
+     for(let attempt=0;attempt<2;attempt++){
+      try{
+       const response=await route.fetch({url:'http://127.0.0.1:8080'+u.pathname+u.search,
+        headers:{...req.headers(),host:HOST},maxRedirects:0});
+       if(attempt>0)retriedLocalAssets.push(u.pathname);
+       return route.fulfill({response});
+      }catch{
+       if(!shouldRetryLocalAsset(req.method(),u.pathname,attempt))
+        return route.abort('failed');
+       await new Promise(resolve=>setTimeout(resolve,150));
+      }
+     }
+     return route.abort('failed');
     });
     const page=await context.newPage(),pageErrors=[],failedLocalRequests=[],failedLocalResponses=[];
     page.on('pageerror',err=>pageErrors.push(err.message));
@@ -95,7 +114,7 @@ export async function run(e=process.env){
     },e.EZ2_CI_DRAFT_ID);
     const item={viewport:vp.name,status:response?.status()||0,loggedIn,...observed,
      expectedReducedMotion:vp.motion==='reduce',pageErrors,failedLocalRequests,
-     failedLocalResponses,blockedExternalRequests,syntheticMediaOnly:true,
+     failedLocalResponses,blockedExternalRequests,retriedLocalAssets,syntheticMediaOnly:true,
      localwpVerified:false,realMediaVerified:false,animationPlaybackVerified:false,
      deploymentAuthorized:false};
     item.failures=reviewEvidence(item);evidence.push(item);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {HOST,VIEWPORTS,validateScope,reviewEvidence} from './ez2_isolated_elementor_preview.mjs';
+import {HOST,VIEWPORTS,validateScope,reviewEvidence,shouldRetryLocalAsset} from './ez2_isolated_elementor_preview.mjs';
 let cases=0;
 const env={EZ2_ISOLATED_ELEMENTOR_PREVIEW:'YES_DISPOSABLE_AUTHENTICATED_ONLY',
  EZ2_SOURCE_SHA:'a'.repeat(40),EZ2_CI_DRAFT_ID:'42',EZ2_CI_AUTH_COOKIE_JSON:JSON.stringify({name:'wordpress_logged_in_abcdef123456',value:'x'.repeat(64)}),EZ2_PREVIEW_OUTPUT:'/tmp/ez2-ci-draft'};
@@ -27,5 +27,17 @@ for(const change of [{status:302},{host:'other.local'},{loggedIn:false},
  {failedLocalResponses:[{path:'/missing.png',status:404}]}]){
  assert.ok(reviewEvidence({...good,...change}).length);cases++;
 }
-assert.equal(cases,33);
+for(const [method,pathname,attempt,expected] of [
+ ['GET','/wp-content/themes/ezb-theme/assets/js/site.js',0,true],
+ ['GET','/wp-content/plugins/elementor/assets/css/frontend.css',0,true],
+ ['HEAD','/wp-content/themes/ezb-theme/assets/css/style.css',0,true],
+ ['POST','/wp-content/themes/ezb-theme/assets/js/site.js',0,false],
+ ['GET','/wp-content/themes/ezb-theme/assets/js/site.js',1,false],
+ ['GET','/wp-content/themes/ezb-theme/assets/js/site.php',0,false],
+ ['GET','/wp-content/plugins/other/assets/js/file.js',0,false],
+ ['GET','/wp-content/uploads/photo.png',0,false]
+]){
+ assert.equal(shouldRetryLocalAsset(method,pathname,attempt),expected);cases++;
+}
+assert.equal(cases,41);
 console.log('EZ2_ELEMENTOR_DRAFT_PREVIEW_GUARD_PASS cases='+cases);

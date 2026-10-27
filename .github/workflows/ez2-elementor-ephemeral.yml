@@ -317,7 +317,7 @@ jobs:
           node scripts/test_ez2_isolated_frontend_browser.mjs | tee /tmp/ez2-browser-guard.log
           node --check scripts/ez2_isolated_elementor_preview.mjs
           node scripts/test_ez2_isolated_elementor_preview.mjs | tee /tmp/ez2-elementor-preview-guard.log
-          grep -Fq 'EZ2_ELEMENTOR_DRAFT_PREVIEW_GUARD_PASS cases=33' /tmp/ez2-elementor-preview-guard.log
+          grep -Fq 'EZ2_ELEMENTOR_DRAFT_PREVIEW_GUARD_PASS cases=41' /tmp/ez2-elementor-preview-guard.log
           grep -Fq 'EZ2_ISOLATED_BROWSER_GUARD_PASS cases=59' /tmp/ez2-browser-guard.log
           ./node_modules/.bin/playwright install --with-deps chromium
       - name: Browser-preview authenticated synthetic Elementor draft
