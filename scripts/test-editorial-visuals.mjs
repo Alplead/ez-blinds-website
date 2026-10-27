@@ -87,7 +87,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const hero = {
     querySelectorAll() { return slides; },
     querySelector(selector) { return selectors[selector] || null; },
-    classList: { toggle() {}, add(name) { heroFlags.add(name); } }, addEventListener() {}
+    classList: { toggle() {}, add(name) { heroFlags.add(name); } },
+    handlers: {},
+    addEventListener(event, callback) { this.handlers[event] = callback; },
+    contains() { return false; }
   };
   let timerStarts = 0;
   let timerStops = 0;
@@ -120,6 +123,20 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
   assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
   assert.equal(observedHero, hero, 'Hero is watched for offscreen pause');
+  if (!initialReduced) {
+    const running = timerStarts;
+    hero.handlers.mouseenter();
+    hero.handlers.mouseleave();
+    assert.equal(timerStarts, running, 'Leaving hover must not restart a visitor-paused carousel');
+    assert.equal(toggle.textContent, 'Play slideshow', 'Hover exposes explicit Play control');
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 1, 'Explicit Play resumes after hover');
+    hero.handlers.focusin();
+    hero.handlers.focusout({ relatedTarget: null });
+    assert.equal(timerStarts, running + 1, 'Leaving keyboard focus must not restart rotation');
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 2, 'Explicit Play resumes after keyboard focus');
+  }
   const startsBeforeOffscreen = timerStarts;
   const stopsBeforeOffscreen = timerStops;
   observerCallback([{ target: hero, isIntersecting: false, intersectionRatio: 0 }]);
@@ -136,13 +153,20 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   // IntersectionObserver may report an edge-touching target with ratio 0.
   // isIntersecting is the authoritative visibility flag at threshold zero.
   observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0 }]);
-  assert.equal(timerStarts > startsBeforeOffscreen, !initialReduced, 'Autoplay resumes onscreen only when motion is allowed');
+  assert.equal(timerStarts, startsBeforeOffscreen,
+    'Returning onscreen must not override a manual photo selection');
+  if (!initialReduced) {
+    assert.equal(toggle.textContent, 'Play slideshow', 'Manual navigation leaves an explicit resume control');
+    toggle.handlers.click();
+    assert.ok(timerStarts > startsBeforeOffscreen, 'Only explicit Play resumes manual navigation');
+  }
   assert.equal(slides[0].active, true, 'First image must be visible');
   next.handlers.click();
   assert.equal(slides[1].active, true, 'Manual Next works without autoplay');
   previous.handlers.click();
   assert.equal(slides[0].active, true, 'Manual Previous works without autoplay');
   if (!initialReduced && !failImages) {
+    toggle.handlers.click(); // Explicitly resume after the second manual selection.
     const lastAnnouncement = status.textContent;
     lastTimerCallback();
     assert.equal(slides[1].active, true, 'Automatic rotation still changes the visible frame');
@@ -168,7 +192,9 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   media.change();
   assert.equal(toggle.disabled, !initialReduced, 'Control must react to live preference changes');
   if (initialReduced) {
-    assert.ok(timerStarts > 0, 'Autoplay can resume when reduced-motion preference is lifted');
+    assert.equal(timerStarts, 0, 'Manual selection while reduced motion must not auto-resume');
+    toggle.handlers.click();
+    assert.ok(timerStarts > 0, 'Explicit Play can resume after reduced motion is lifted');
   }
 }
 exerciseMotionPreference(true);

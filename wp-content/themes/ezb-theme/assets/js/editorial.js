@@ -94,10 +94,13 @@
     }
 
     if (previous) previous.addEventListener('click', function () {
+      // An intentional photo selection stops rotation until explicit Play.
+      paused = true;
       showSlide(current - 1, true);
       syncTimer();
     });
     if (next) next.addEventListener('click', function () {
+      paused = true;
       showSlide(current + 1, true);
       syncTimer();
     });
@@ -106,9 +109,10 @@
       syncTimer();
     });
 
-    hero.addEventListener('mouseenter', function () { hovering = true; syncTimer(); });
+    hero.addEventListener('mouseenter', function () { hovering = true; paused = true; syncTimer(); });
     hero.addEventListener('mouseleave', function () { hovering = false; syncTimer(); });
-    hero.addEventListener('focusin', function () { focusing = true; syncTimer(); });
+    hero.addEventListener('focusin', function () { focusing = true; paused = true; syncTimer(); });
+    // Leaving hover/focus does not silently undo the visitor's pause.
     hero.addEventListener('focusout', function (event) {
       if (!hero.contains(event.relatedTarget)) {
         focusing = false;
