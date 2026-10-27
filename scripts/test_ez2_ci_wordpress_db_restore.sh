@@ -36,4 +36,8 @@ grep -Fq 'restored WordPress schema differs' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'ADD COLUMN ez2_ci_schema_fault TINYINT NULL' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'schema fault injection was not detected' ez2_ci_wordpress_db_restore.sh
 grep -Fq 'recovery changed source schema' ez2_ci_wordpress_db_restore.sh
-printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=23'
+# A same-name CHECK expression change must not be mistaken for an unchanged schema.
+grep -Fq 'FROM information_schema.CHECK_CONSTRAINTS' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'FROM information_schema.REFERENTIAL_CONSTRAINTS' ez2_ci_wordpress_db_restore.sh
+grep -Fq 'same-name check-definition fault injection was not detected' ez2_ci_wordpress_db_restore.sh
+printf '%s\n' 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=26'

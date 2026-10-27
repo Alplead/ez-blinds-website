@@ -74,6 +74,10 @@ schema_fingerprint() {
     db -e "SELECT TABLE_NAME,ORDINAL_POSITION,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COALESCE(COLUMN_DEFAULT,'<SQL_NULL>'),EXTRA,COLUMN_KEY,COALESCE(CHARACTER_SET_NAME,''),COALESCE(COLLATION_NAME,'') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='${database}' ORDER BY TABLE_NAME,ORDINAL_POSITION"
     db -e "SELECT TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX,COALESCE(COLUMN_NAME,''),NON_UNIQUE,INDEX_TYPE,COALESCE(SUB_PART,0) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='${database}' ORDER BY TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX"
     db -e "SELECT CONSTRAINT_NAME,TABLE_NAME,CONSTRAINT_TYPE FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='${database}' ORDER BY TABLE_NAME,CONSTRAINT_NAME"
+    # TABLE_CONSTRAINTS alone does not describe a CHECK expression or the
+    # actions of a foreign key. Same-name definition drift must also fail.
+    db -e "SELECT CONSTRAINT_NAME,CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='${database}' ORDER BY CONSTRAINT_NAME"
+    db -e "SELECT CONSTRAINT_NAME,TABLE_NAME,REFERENCED_TABLE_NAME,UNIQUE_CONSTRAINT_NAME,UPDATE_RULE,DELETE_RULE,MATCH_OPTION FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='${database}' ORDER BY TABLE_NAME,CONSTRAINT_NAME"
     db -e "SELECT TRIGGER_NAME,EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_TIMING,ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='${database}' ORDER BY TRIGGER_NAME"
   } | sha256sum | cut -d ' ' -f1
 }
@@ -130,6 +134,19 @@ restored_data_sha="$(data_fingerprint "$restore_db")"
 [[ "$(db -e "SELECT COUNT(*) FROM \`${source_db}\`.wp_posts")" == "$source_posts" \
    && "$(db -e "SELECT COUNT(*) FROM \`${source_db}\`.wp_options")" == "$source_options" ]] \
   || { echo 'EZ2_CI_SQL_RESTORE_FAIL: source database changed' >&2; exit 1; }
+
+# Verify that changing a CHECK expression under the SAME constraint name
+# changes the schema fingerprint. Both variants accept the synthetic rows.
+# This probe touches only the disposable clone, never source WordPress.
+db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_id >= 0)" >/dev/null
+check_definition_before="$(schema_fingerprint "$restore_db")"
+db -e "ALTER TABLE \`${restore_db}\`.wp_options DROP CONSTRAINT ez2_ci_check_probe" >/dev/null
+db -e "ALTER TABLE \`${restore_db}\`.wp_options ADD CONSTRAINT ez2_ci_check_probe CHECK (option_id > 0)" >/dev/null
+[[ "$(schema_fingerprint "$restore_db")" != "$check_definition_before" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: same-name check-definition fault injection was not detected' >&2; exit 1; }
+db -e "ALTER TABLE \`${restore_db}\`.wp_options DROP CONSTRAINT ez2_ci_check_probe" >/dev/null
+[[ "$(schema_fingerprint "$restore_db")" == "$source_schema_sha" ]] \
+  || { echo 'EZ2_CI_SQL_RESTORE_FAIL: check-definition probe not cleaned up' >&2; exit 1; }
 
 # Inject count-preserving data AND schema faults ONLY into the disposable restore database.
 # Destroy and rebuild that clone from the SAME verified backup, then compare.
