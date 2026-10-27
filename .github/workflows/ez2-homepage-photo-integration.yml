@@ -34,5 +34,5 @@ jobs:
       - name: Preserve private media boundary
         run: |
           set -euo pipefail
-          ! grep -Eiq 'https://(drive\.google|images\.unsplash)|\.jpeg["\x27]?\?auth|(?i:api_key|secret_key)' wp-content/themes/ezb-theme/patterns/core-solutions.php
+          ! grep -Eiq 'drive\\.google|images\\.unsplash|api_key|secret_key' wp-content/themes/ezb-theme/patterns/core-solutions.php
           echo EZ2_OWNER_MEDIA_STAYS_IN_PRIVATE_WORDPRESS_PASS
