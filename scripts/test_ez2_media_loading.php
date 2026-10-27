@@ -21,6 +21,7 @@ ezb_assert_attr( 'rfs-hero', true, false, 'lazy', 'auto' );
 ezb_assert_attr( 'shutters-hero', true, false, 'lazy', 'auto' );
 ezb_assert_attr( 'sheer-hero', true, false, 'lazy', 'auto' );
 ezb_assert_attr( 'roller-hero', false, true, 'eager', 'high' );
+ezb_assert_attr( 'roller-hero', true, true, 'eager', 'high' );
 ezb_assert_attr( 'rfs-hero', false, true, 'eager', 'high' );
 ezb_assert_attr( 'shutters-hero', false, true, 'eager', 'high' );
 ezb_assert_attr( 'sheer-hero', false, true, 'eager', 'high' );
