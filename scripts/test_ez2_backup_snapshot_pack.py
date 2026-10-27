@@ -240,7 +240,10 @@ with tempfile.TemporaryDirectory() as temp:
 
     def tamper_after_tar_read(archive, member, fileobj=None):
         result = original_addfile(archive, member, fileobj)
-        rewrite_preserving_size_and_mtime(uploads / "file.txt")
+        # Explicit directory entries precede files; mutate only after the
+        # synthetic file bytes have been read, not after a directory header.
+        if member.isfile():
+            rewrite_preserving_size_and_mtime(uploads / "file.txt")
         return result
 
     with patch("ez2_backup_snapshot_pack.tarfile.TarFile.addfile",
