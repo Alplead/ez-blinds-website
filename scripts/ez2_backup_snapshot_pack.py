@@ -112,7 +112,7 @@ def _directory_inventory(root, role):
         relative = path.relative_to(root).as_posix()
         member = role if relative == "." else role + "/" + relative
         folded = safe_member(member, role, is_dir=True)
-        result.append((folded, info.st_dev, info.st_ino))
+        result.append((folded, member, info.st_dev, info.st_ino))
         for name in directories:
             child = path / name
             if child.is_symlink() or not child.is_dir():
@@ -127,8 +127,29 @@ def _file_identity(info):
 
 
 def _write_tar(destination, role, entries):
+    # Preserve empty directories as well as files. A rollback that omits an
+    # empty uploads/plugin directory is not a complete filesystem replay.
+    # Infer the component root from the first already-validated file entry.
+    first_path, first_member, _ = entries[0]
+    root = first_path
+    for _ in first_member.split("/")[1:]:
+        root = root.parent
+    directories = _directory_inventory(root, role)
+    if len(directories) + len(entries) > MAX_MEMBERS:
+        raise ValueError("Snapshot directories exceed archive member budget")
     with destination.open("xb") as output:
         with tarfile.open(fileobj=output, mode="w:gz") as archive:
+            for _, member, device, inode in directories:
+                path = root.joinpath(*member.split("/")[1:])
+                info = path.lstat()
+                if (not stat.S_ISDIR(info.st_mode) or path.is_symlink()
+                        or (info.st_dev, info.st_ino) != (device, inode)):
+                    raise ValueError("Snapshot directory changed during packaging")
+                entry = tarfile.TarInfo(member + "/")
+                entry.type = tarfile.DIRTYPE
+                entry.mode = 0o700
+                entry.mtime = 0
+                archive.addfile(entry)
             for path, member, initial in entries:
                 flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
                 with os.fdopen(os.open(path, flags), "rb") as source:

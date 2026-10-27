@@ -13,7 +13,7 @@ from unittest.mock import patch
 from ez2_backup_snapshot_pack import pack, _files, _write_tar, _write_sql
 from ez2_backup_preflight import verify
 from ez2_backup_archive_guard import inspect
-from ez2_backup_scratch_replay import replay
+from ez2_backup_scratch_replay import replay, _replay_archive
 
 SHA = "a" * 40
 cases = 0
@@ -50,6 +50,8 @@ with tempfile.TemporaryDirectory() as temp:
     base = Path(temp)
     source = base / "snapshot"
     fixture(source)
+    # Empty nested folders must survive a rollback archive and scratch replay.
+    (source / "uploads" / "empty" / "nested").mkdir(parents=True)
     destination = base / "private-backup"
     result = pack(source, destination, SHA)
     assert result["status"] == "BACKUP_ARCHIVES_CREATED_AND_VERIFIED_ONLY"
@@ -60,6 +62,17 @@ with tempfile.TemporaryDirectory() as temp:
     assert verify(destination, SHA)["status"] == "BACKUP_BYTES_VERIFIED_ONLY"
     assert inspect(destination, SHA)["status"] == "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY"
     assert replay(destination, SHA)["status"] == "SCRATCH_FILE_REPLAY_VERIFIED_ONLY"
+    with tarfile.open(destination / "uploads.tar.gz", "r:gz") as archive:
+        names = set(archive.getnames())
+        assert {"uploads/empty", "uploads/empty/nested"} <= {
+            name.rstrip("/") for name in names
+        }, "Empty directories missing from backup"
+    with tempfile.TemporaryDirectory() as scratch:
+        replayed, _ = _replay_archive(
+            destination / "uploads.tar.gz", "uploads", Path(scratch),
+            {"files": 50000, "bytes": 1024 * 1024})
+        assert replayed == 1
+        assert (Path(scratch) / "uploads" / "empty" / "nested").is_dir()
     assert (source / "database.sql").exists()
     assert all((source / role / "file.txt").exists()
                for role in ("uploads", "plugins", "theme"))
