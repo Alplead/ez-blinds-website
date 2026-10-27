@@ -27,7 +27,7 @@ def read_json(path, limit):
 def validate_media_map(mapping, expected_host):
     if not isinstance(mapping, dict) or set(mapping) != {"schema_version", "target_site", "host", "slots"}:
         raise ValueError("Invalid media map schema")
-    if type(mapping["schema_version"]) is not int or mapping["schema_version"] != 1:
+    if type(mapping["schema_version"]) is not int or mapping["schema_version"] != 2:
         raise ValueError("Invalid media map version")
     if mapping["target_site"] != "ez2-isolated-only":
         raise ValueError("Non-isolated media map target")
@@ -40,12 +40,13 @@ def validate_media_map(mapping, expected_host):
     for slot, media in slots.items():
         if not isinstance(slot, str) or not SLOT.fullmatch(slot):
             raise ValueError("Invalid media slot key")
-        if not isinstance(media, dict) or set(media) != {"id", "url", "mime"}:
+        if not isinstance(media, dict) or set(media) != {"id", "url", "mime", "sha256"}:
             raise ValueError("Invalid media record")
         if type(media["id"]) is not int or not 1 <= media["id"] <= 2**31 - 1:
             raise ValueError("Invalid attachment ID")
-        mime, url = media["mime"], media["url"]
-        if not isinstance(mime, str) or mime not in MIME or not isinstance(url, str):
+        mime, url, digest = media["mime"], media["url"], media["sha256"]
+        if (not isinstance(mime, str) or mime not in MIME or not isinstance(url, str)
+                or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)):
             raise ValueError("Unapproved image MIME or URL")
         if any(ord(c) < 33 or ord(c) > 126 for c in url) or "\\" in url or "%" in url:
             raise ValueError("Unsafe URL encoding")
@@ -62,9 +63,9 @@ def validate_media_map(mapping, expected_host):
                 or not all(SEGMENT.fullmatch(p) and p not in (".", "..") for p in parts[3:])
                 or not parts[-1].lower().endswith(MIME[mime])):
             raise ValueError("Invalid local WordPress media path")
-        previous_url = seen_ids.setdefault(media["id"], url)
-        previous_id = seen_urls.setdefault(url, media["id"])
-        if previous_url != url or previous_id != media["id"]:
+        previous = seen_ids.setdefault(media["id"], (url, digest))
+        reverse = seen_urls.setdefault(url, (media["id"], digest))
+        if previous != (url, digest) or reverse != (media["id"], digest):
             raise ValueError("Conflicting attachment ID and URL mapping")
     return slots
 
@@ -92,7 +93,8 @@ def compile_export(doc, mapping, expected_host):
     if SCHEME in json.dumps(compiled, ensure_ascii=False, allow_nan=False):
         raise ValueError("Unresolved symbolic media URL")
     return compiled, {"status": "COMPILED_OFFLINE_ONLY", "media_slots_resolved": len(used),
-                      "elementor_nodes": summary["nodes"], "wordpress_imported": False,
+                      "elementor_nodes": summary["nodes"], "media_integrity_verified": False,
+                      "wordpress_imported": False,
                       "plugin_installed": False, "site_modified": False,
                       "visual_qa_verified": False, "deployment_authorized": False}
 

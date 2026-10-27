@@ -15,15 +15,16 @@ def fixture():
                        "settings":{"background_slideshow_gallery":[{"url":"ez2-media://hero-one","id":""}]},
                        "elements":[{"id":"abcd1234","elType":"widget","widgetType":"image",
                                     "settings":{"image":{"url":"ez2-media://hero-one"}},"elements":[]}]}]}
-    mapping = {"schema_version":1,"target_site":"ez2-isolated-only","host":HOST,
-               "slots":{"hero-one":{"id":123,"url":URL,"mime":"image/webp"}}}
+    mapping = {"schema_version":2,"target_site":"ez2-isolated-only","host":HOST,
+               "slots":{"hero-one":{"id":123,"url":URL,"mime":"image/webp","sha256":"a"*64}}}
     return doc,mapping
 
 cases=0
 d,m=fixture()
 out,meta=compile_export(d,m,HOST)
 assert meta["status"]=="COMPILED_OFFLINE_ONLY" and meta["media_slots_resolved"]==1
-assert not any(meta[k] for k in ("wordpress_imported","site_modified","deployment_authorized"))
+assert not any(meta[k] for k in ("wordpress_imported","site_modified","deployment_authorized","media_integrity_verified"))
+assert "a"*64 not in json.dumps(meta)
 assert out["content"][0]["settings"]["background_slideshow_gallery"][0]=={"url":URL,"id":123}
 assert out["content"][0]["elements"][0]["settings"]["image"]=={"url":URL,"id":123}
 cases+=1
@@ -42,6 +43,11 @@ def reject(change,host=HOST):
 reject(lambda d,m:m.update(target_site="ez-bns-new-dev.local"))
 reject(lambda d,m:m.update(host="ezbns.com.au"))
 reject(lambda d,m:m.update(schema_version=True))
+reject(lambda d,m:m.update(schema_version=1))
+reject(lambda d,m:m["slots"]["hero-one"].pop("sha256"))
+reject(lambda d,m:m["slots"]["hero-one"].update(sha256="A"*64))
+reject(lambda d,m:m["slots"]["hero-one"].update(sha256="a"*63))
+reject(lambda d,m:m["slots"]["hero-one"].update(sha256=123))
 reject(lambda d,m:m["slots"]["hero-one"].update(id=True))
 reject(lambda d,m:m["slots"]["hero-one"].update(id=-1))
 reject(lambda d,m:m["slots"]["hero-one"].update(url="https://ezbns.com.au/wp-content/uploads/2026/10/photo.webp"))
@@ -61,7 +67,7 @@ reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/u
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/\\photo.webp"))
 
 def add_second_slot(doc, media_map, attachment_id, url):
-    media_map["slots"]["hero-two"] = {"id": attachment_id, "url": url, "mime": "image/webp"}
+    media_map["slots"]["hero-two"] = {"id": attachment_id, "url": url, "mime": "image/webp", "sha256": "a"*64}
     doc["content"][0]["settings"]["background_slideshow_gallery"].append(
         {"url": "ez2-media://hero-two", "id": ""})
 
@@ -69,6 +75,7 @@ def add_second_slot(doc, media_map, attachment_id, url):
 reject(lambda d,m:add_second_slot(d,m,123,
        f"http://{HOST}/wp-content/uploads/2026/10/other-photo.webp"))
 reject(lambda d,m:add_second_slot(d,m,124,URL))
+reject(lambda d,m:(add_second_slot(d,m,123,URL),m["slots"]["hero-two"].update(sha256="b"*64)))
 d_alias,m_alias=fixture()
 add_second_slot(d_alias,m_alias,123,URL)
 alias_export,alias_meta=compile_export(d_alias,m_alias,HOST)
@@ -117,7 +124,7 @@ with tempfile.TemporaryDirectory() as tmp:
             try:ensure_private_media_map(str(linked_dir/"media.json"))
             except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted map through in-checkout linked directory")
-assert cases==28,cases
+assert cases==34,cases
 assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
 print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
