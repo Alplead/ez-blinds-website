@@ -115,6 +115,19 @@ function check_live_evidence(array $initial, array $runs, array $sets,
     $cases++;
 }
 check_live_evidence($pr, $runs, $sets, [], true);
+// The GitHub head_sha filter is not an event/branch guarantee. A newer
+// unrelated run with the same display name must not shadow valid PR CI.
+$unrelated = $runs;
+$unrelated[] = array_merge($runs[0], ['id' => 900, 'event' => 'push']);
+check_live_evidence($pr, $unrelated, $sets, [], true);
+$unrelated[] = array_merge($runs[1], ['id' => 901, 'head_branch' => 'main']);
+check_live_evidence($pr, $unrelated, $sets, [], true);
+$unrelated[] = array_merge($runs[2], ['id' => 902, 'head_sha' => str_repeat('b', 40)]);
+check_live_evidence($pr, $unrelated, $sets, [], true);
+// A newer *matching* PR failure must still block the release.
+$unrelated[] = array_merge($runs[0], ['id' => 903, 'conclusion' => 'failure']);
+check_live_evidence($pr, $unrelated, $sets, [], false);
+
 check_live_evidence($pr, $runs, $sets, ['branch_sha' => str_repeat('b', 40)], false);
 $p = $pr; $p['head']['sha'] = str_repeat('c', 40);
 check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
@@ -127,5 +140,5 @@ $p = $pr; $p['base']['ref'] = 'release';
 check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
 check_live_evidence($pr, $runs, $sets, ['final_pr' => []], false);
 
-if ($cases !== 29) throw new RuntimeException('Unexpected case count');
+if ($cases !== 33) throw new RuntimeException('Unexpected case count');
 echo "EZ2_RELEASE_EVIDENCE_GUARD_PASS cases={$cases} apply_disabled=true\n";

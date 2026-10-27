@@ -172,7 +172,14 @@ final class EZ2_Release_Evidence {
             $selected = [];
             foreach ($runs['workflow_runs'] as $run) {
                 $name = $run['name'] ?? null;
-                if (!in_array($name, self::WORKFLOWS, true) || !is_int($run['id'] ?? null)) continue;
+                // The SHA query can include other events or unrelated runs. Select
+                // only the exact PR event and feature branch, just as evaluate()
+                // does; a newer push run must not shadow the valid PR run.
+                if (!in_array($name, self::WORKFLOWS, true)
+                    || !is_int($run['id'] ?? null) || $run['id'] < 1
+                    || ($run['head_sha'] ?? null) !== $sha
+                    || ($run['head_branch'] ?? null) !== self::BRANCH
+                    || ($run['event'] ?? null) !== 'pull_request') continue;
                 if (!isset($selected[$name]) || $run['id'] > $selected[$name]['id']) $selected[$name] = $run;
             }
             $sets = [];
