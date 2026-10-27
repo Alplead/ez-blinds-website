@@ -357,7 +357,7 @@ jobs:
           php -l scripts/ez2_ci_media_inventory.php
           php -l scripts/test_ez2_ci_media_inventory.php
           php scripts/test_ez2_ci_media_inventory.php | tee /tmp/ez2-media-inventory.log
-          grep -Fq 'EZ2_CI_MEDIA_INVENTORY_PASS cases=23' /tmp/ez2-media-inventory.log
+          grep -Fq 'EZ2_CI_MEDIA_INVENTORY_PASS cases=26' /tmp/ez2-media-inventory.log
 
       - name: Test isolated Elementor split Style-tab controls and missing overlay
         run: |

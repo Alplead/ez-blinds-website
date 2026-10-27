@@ -16,10 +16,10 @@ assert all(result[k] is False for k in ("elementor_version_runtime_verified",
     "deployment_authorized"))
 cases += 1
 
-mapping = {"schema_version": 1, "target_site": "ez2-isolated-only",
+mapping = {"schema_version": 2, "target_site": "ez2-isolated-only",
            "host": "ez2-review.local", "slots": {
                slot: {"id": n, "url": f"http://ez2-review.local/wp-content/uploads/2026/10/{slot}.webp",
-                      "mime": "image/webp"} for n, slot in enumerate(SLOTS, start=101)}}
+                      "mime": "image/webp", "sha256": "a" * 64} for n, slot in enumerate(SLOTS, start=101)}}
 compiled, report = compile_export(base, mapping, "ez2-review.local")
 assert report["status"] == "COMPILED_OFFLINE_ONLY"
 assert report["media_slots_resolved"] == 4 and report["site_modified"] is False
@@ -65,7 +65,7 @@ reject(lambda doc: doc["content"][0]["settings"].update(custom_css="body{display
 for changed in (
     lambda m: m.update(host="ez-bns-new-dev.local"),
     lambda m: m["slots"].pop(SLOTS[0]),
-    lambda m: m["slots"].update(extra={"id": 900, "url": "http://ez2-review.local/wp-content/uploads/2026/10/extra.webp", "mime": "image/webp"}),
+    lambda m: m["slots"].update(extra={"id": 900, "url": "http://ez2-review.local/wp-content/uploads/2026/10/extra.webp", "mime": "image/webp", "sha256": "a" * 64}),
 ):
     other = copy.deepcopy(mapping)
     changed(other)

@@ -6,17 +6,22 @@ if (!defined('EZ2_DISPOSABLE_IMPORT_LIBRARY_ONLY')) define('EZ2_DISPOSABLE_IMPOR
 require_once __DIR__ . '/ez2_disposable_import.php';
 require_once __DIR__ . '/ez2_ci_import_reuse.php';
 final class Ez2CiMediaInventory {
- public static function map(array $facts, array $snapshot, string $fingerprint): array {
+ public static function map(array $facts, array $snapshot, string $fingerprint, array $verifiedDigests): array {
   if ($bad = Ez2DisposableImport::gate($facts)) throw new RuntimeException('DISPOSABLE_GATE:' . implode(',', $bad));
   Ez2CiImportReuse::verify($snapshot, $fingerprint, $facts['expected_version']);
   $media = $snapshot['media'];
   if (count($media) !== count(Ez2DisposableImport::SLOTS)) throw new RuntimeException('MEDIA_COUNT');
+  if (count($verifiedDigests) !== count($media)) throw new RuntimeException('MEDIA_DIGEST_COUNT');
   $slots = [];
   foreach (Ez2DisposableImport::SLOTS as $i => $slot) {
    $entry = $media[$i];
-   $slots[$slot] = ['id' => $entry['id'], 'url' => $entry['url'], 'mime' => $entry['mime']];
+   $digest = $verifiedDigests[$entry['id']] ?? null;
+   if (!is_string($digest) || !preg_match('/\A[0-9a-f]{64}\z/', $digest)) {
+    throw new RuntimeException('MEDIA_DIGEST_MISSING_OR_INVALID');
+   }
+   $slots[$slot] = ['id' => $entry['id'], 'url' => $entry['url'], 'mime' => $entry['mime'], 'sha256' => $digest];
   }
-  return ['schema_version' => 1, 'target_site' => 'ez2-isolated-only',
+  return ['schema_version' => 2, 'target_site' => 'ez2-isolated-only',
    'host' => Ez2DisposableImport::HOST, 'slots' => $slots];
  }
 
@@ -25,7 +30,7 @@ final class Ez2CiMediaInventory {
   * inside the disposable WordPress uploads directory. This never exports
   * bytes, reads Owner media, or authorizes a LocalWP installation.
   */
- public static function verifyFiles(array $snapshot, string $uploadRoot, callable $resolve): void {
+ public static function verifyFiles(array $snapshot, string $uploadRoot, callable $resolve): array {
   $root=realpath($uploadRoot);
   if ($root===false || is_link($uploadRoot) || !is_dir($root) || basename($root)!=='uploads') {
    throw new RuntimeException('UNSAFE_UPLOAD_ROOT');
@@ -35,6 +40,7 @@ final class Ez2CiMediaInventory {
    throw new RuntimeException('UNEXPECTED_ATTACHMENT_COUNT');
   }
   $seen=[];
+  $digests=[];
   foreach (array_values($media) as $index=>$entry) {
    $id=$entry['id']??null;
    if (!is_int($id) || $id<1 || ($entry['parent']??null)!==($snapshot['post_id']??null)
@@ -67,8 +73,21 @@ final class Ez2CiMediaInventory {
        || ($image[0]??0)<1 || ($image[1]??0)<1) {
     throw new RuntimeException('INVALID_ATTACHMENT_IMAGE');
    }
+   $digest=hash_file('sha256',$real);
+   if (!is_string($digest) || !preg_match('/\A[0-9a-f]{64}\z/', $digest)) {
+    throw new RuntimeException('MEDIA_HASH_FAILED');
+   }
+   clearstatcache(true,$file);
+   $after=lstat($file);
+   if ($after===false || $after['dev']!==$stat['dev'] || $after['ino']!==$stat['ino']
+       || $after['size']!==$stat['size'] || $after['mtime']!==$stat['mtime']
+       || $after['ctime']!==$stat['ctime'] || $after['nlink']!==$stat['nlink']) {
+    throw new RuntimeException('ATTACHMENT_CHANGED_WHILE_HASHING');
+   }
+   $digests[$id]=$digest;
    $seen[$real]=true;
   }
+  return $digests;
  }
  public static function execute(): void {
   if (!defined('WP_CLI') || !WP_CLI || !function_exists('get_option')) throw new RuntimeException('NO_WORDPRESS');
@@ -92,9 +111,9 @@ final class Ez2CiMediaInventory {
   $id = (int) $found[0];
   $snapshot = Ez2CiImportReuse::capture($id);
   $fingerprint = (string) get_post_meta($id, '_ez2_ci_import_fingerprint', true);
-  $map = self::map($facts, $snapshot, $fingerprint);
-  self::verifyFiles($snapshot, (string)(wp_upload_dir()['basedir']??''),
+  $verifiedDigests = self::verifyFiles($snapshot, (string)(wp_upload_dir()['basedir']??''),
    static fn(int $attachmentId) => get_attached_file($attachmentId));
+  $map = self::map($facts, $snapshot, $fingerprint, $verifiedDigests);
   echo wp_json_encode($map, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
  }
 }

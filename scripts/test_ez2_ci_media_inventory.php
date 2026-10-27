@@ -18,14 +18,16 @@ $state=['post_id'=>10,'status'=>'draft','title'=>Ez2CiImportReuse::TITLE,'body'=
  'data'=>json_encode([['settings'=>['background_slideshow_gallery'=>$gallery]]],JSON_THROW_ON_ERROR),
  'media'=>$media,'source_sha256'=>str_repeat('a',64)];
 $stamp=Ez2CiImportReuse::digest($state);
-$map=Ez2CiMediaInventory::map($facts,$state,$stamp);
-if ($map['schema_version']!==1 || $map['host']!=='ez2-review.local'
+$digestFixture=array_fill_keys(range(1,4),str_repeat('a',64));
+$map=Ez2CiMediaInventory::map($facts,$state,$stamp,$digestFixture);
+if ($map['schema_version']!==2 || $map['host']!=='ez2-review.local'
  || array_keys($map['slots'])!==Ez2DisposableImport::SLOTS
- || $map['slots']['home-hero-four']['id']!==4) throw new RuntimeException('valid map');
+ || $map['slots']['home-hero-four']['id']!==4
+ || $map['slots']['home-hero-four']['sha256']!==str_repeat('a',64)) throw new RuntimeException('valid map');
 $cases=1;
-function rejectInventory($facts,$state,$stamp) {
- global $cases;
- try { Ez2CiMediaInventory::map($facts,$state,$stamp); }
+function rejectInventory($facts,$state,$stamp,$digests=null) {
+ global $cases,$digestFixture;
+ try { Ez2CiMediaInventory::map($facts,$state,$stamp,$digests??$digestFixture); }
  catch (RuntimeException $e) { $cases++; return; }
  throw new RuntimeException('Unsafe synthetic media inventory accepted');
 }
@@ -41,6 +43,8 @@ $edited=$state;$edited['media'][1]['id']=1;rejectInventory($facts,$edited,$stamp
 $edited=$state;array_pop($edited['media']);rejectInventory($facts,$edited,$stamp);
 $edited=$state;$edited['data']='[]';rejectInventory($facts,$edited,$stamp);
 $edited=$state;$edited['status']='publish';rejectInventory($facts,$edited,$stamp);
+rejectInventory($facts,$state,$stamp,[]);
+rejectInventory($facts,$state,$stamp,[1=>str_repeat('A',64),2=>str_repeat('a',64),3=>str_repeat('a',64),4=>str_repeat('a',64)]);
 
 /* Validate real synthetic bytes, upload containment and attachment integrity. */
 $tmp=sys_get_temp_dir().'/ez2-media-guard-'.bin2hex(random_bytes(8));
@@ -53,7 +57,12 @@ foreach(range(1,4) as $i) {
  file_put_contents($paths[$i],$pixel);
 }
 $resolve=static fn(int $id) => $paths[$id]??null;
-Ez2CiMediaInventory::verifyFiles($state,$root,$resolve);$cases++;
+$verified=Ez2CiMediaInventory::verifyFiles($state,$root,$resolve);
+if (count($verified)!==4 || $verified[1]!==hash('sha256',$pixel)) throw new RuntimeException('digest verification');
+$cases++;
+$verifiedMap=Ez2CiMediaInventory::map($facts,$state,$stamp,$verified);
+if ($verifiedMap['schema_version']!==2 || $verifiedMap['slots']['home-hero-one']['sha256']!==hash('sha256',$pixel)) throw new RuntimeException('verified digest map');
+$cases++;
 function rejectFiles($state,$root,$resolve) {
  global $cases;
  try { Ez2CiMediaInventory::verifyFiles($state,$root,$resolve); }
@@ -91,5 +100,5 @@ foreach($paths as $path)unlink($path);
 unlink($outside);
 rmdir($root.'/2026/10');rmdir($root.'/2026');rmdir($root);rmdir($tmp);
 
-if ($cases!==23) throw new RuntimeException('cases='.$cases);
+if ($cases!==26) throw new RuntimeException('cases='.$cases);
 echo 'EZ2_CI_MEDIA_INVENTORY_PASS cases='.$cases."\n";
