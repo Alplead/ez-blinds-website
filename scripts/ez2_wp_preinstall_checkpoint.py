@@ -90,6 +90,24 @@ def verify_receipt(receipt, backup, installed, candidate, installed_sha, candida
     canonical = (json.dumps(expected, sort_keys=True, separators=(",", ":")) + "\n").encode()
     if data != canonical:
         raise ValueError("Checkpoint receipt does not match exact source evidence")
+
+    # The receipt binds catalog and manifest fingerprints, not the payloads
+    # they describe. Re-check the actual installed release, candidate release
+    # and private backup on EVERY consumption; otherwise a later ZIP/archive
+    # mutation could leave the durable receipt looking valid.
+    installed_proof = bind_release(installed, backup, installed_sha)
+    if (installed_proof.get("status") != "EXACT_HEAD_RELEASE_AND_PRIVATE_BACKUP_VERIFIED_ONLY"
+            or installed_proof.get("private_backup_byte_integrity_verified") is not True
+            or installed_proof.get("private_scratch_file_replay_verified") is not True
+            or installed_proof.get("can_apply") is not False):
+        raise ValueError("Installed release or private backup no longer verified")
+    candidate_proof = verify_release("verify", candidate, candidate_sha)
+    if (candidate_proof.get("source_sha") != candidate_sha
+            or candidate_proof.get("target_site") != EXPECTED_SITE
+            or candidate_proof.get("scope") != "engineering-evidence-only"
+            or candidate_proof.get("deployment_authorized") is not False
+            or candidate_proof.get("one_click_complete") is not False):
+        raise ValueError("Candidate release no longer verified")
     return {
         "status": "PRIVATE_CHECKPOINT_RECEIPT_VERIFIED_ONLY",
         "installed_source_sha": installed_sha,
@@ -97,6 +115,11 @@ def verify_receipt(receipt, backup, installed, candidate, installed_sha, candida
         "durable_receipt_verified": True,
         "backup_manifest_bound": True,
         "both_release_catalogs_bound": True,
+        "installed_release_payload_verified": True,
+        "candidate_release_payload_verified": True,
+        "private_backup_payload_verified": True,
+        "private_scratch_replay_verified": True,
+        "installed_site_identity_attested": False,
         "can_apply": False,
         "one_click_complete": False,
     }

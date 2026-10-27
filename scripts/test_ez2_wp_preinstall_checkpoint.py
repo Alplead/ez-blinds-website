@@ -161,8 +161,14 @@ with tempfile.TemporaryDirectory() as temp:
     assert result["private_checkpoint_receipt_persisted"] is True
     assert result["private_checkpoint_receipt_verified"] is True
     assert result["receipt_authorizes_installation"] is False
-    assert verify_receipt(receipt_path, private / "ez2-backup-checkpoint",
-                          installed_release, release, INSTALLED_SHA, SHA)["durable_receipt_verified"]
+    verified = verify_receipt(receipt_path, private / "ez2-backup-checkpoint",
+                              installed_release, release, INSTALLED_SHA, SHA)
+    assert verified["durable_receipt_verified"]
+    for key in ("installed_release_payload_verified", "candidate_release_payload_verified",
+                "private_backup_payload_verified", "private_scratch_replay_verified"):
+        assert verified[key] is True, key
+    assert verified["installed_site_identity_attested"] is False
+    assert verified["can_apply"] is False
     CASES += 1
     reject(lambda: run(release, installed_release, wp, private, fake))  # Never overwrite.
     assert CASES == 2
@@ -274,5 +280,28 @@ for scenario in ("receipt-tampered", "backup-manifest-tampered",
         reject(lambda: verify_receipt(receipt, backup, installed_release,
                                       release, INSTALLED_SHA,
                                       "c" * 40 if scenario == "wrong-candidate-sha" else SHA))
-assert CASES == 26, CASES
+# A durable receipt must not remain valid after a payload is modified while
+# its catalog/manifest fingerprints are unchanged. These are distinct from
+# the catalog/manifest tamper tests above.
+for scenario in ("candidate-zip-tampered", "installed-zip-tampered",
+                 "backup-sql-tampered", "backup-undeclared-file"):
+    with tempfile.TemporaryDirectory() as temp:
+        release, installed_release, wp, private, fake = fixture(Path(temp))
+        run(release, installed_release, wp, private, fake)
+        backup = private / "ez2-backup-checkpoint"
+        receipt = private / ("ez2-backup-checkpoint" + RECEIPT_SUFFIX)
+        if scenario == "candidate-zip-tampered":
+            target = release / "ezb-core.zip"
+            target.write_bytes(target.read_bytes() + b"post-receipt-tamper")
+        elif scenario == "installed-zip-tampered":
+            target = installed_release / "ezb-theme.zip"
+            target.write_bytes(target.read_bytes() + b"post-receipt-tamper")
+        elif scenario == "backup-sql-tampered":
+            target = backup / "database.sql.gz"
+            target.write_bytes(target.read_bytes() + b"post-receipt-tamper")
+        else:
+            (backup / "undeclared.txt").write_text("not part of backup")
+        reject(lambda: verify_receipt(receipt, backup, installed_release,
+                                      release, INSTALLED_SHA, SHA))
+assert CASES == 30, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")
