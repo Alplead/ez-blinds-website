@@ -304,4 +304,47 @@ for scenario in ("candidate-zip-tampered", "installed-zip-tampered",
         reject(lambda: verify_receipt(receipt, backup, installed_release,
                                       release, INSTALLED_SHA, SHA))
 assert CASES == 30, CASES
+
+# A valid receipt can become stale if first-party files change after backup.
+# Revalidate actual current bytes at consumption time; never infer install authority.
+from ez2_checkpoint_revalidation import revalidate
+
+for scenario in ("valid", "unrelated-owner-file", "theme-drift", "core-drift",
+                 "linked-wp-content", "misplaced-receipt", "wrong-candidate-sha",
+                 "candidate-release-tampered"):
+    with tempfile.TemporaryDirectory() as temp:
+        release, installed_release, wp, private, fake = fixture(Path(temp))
+        run(release, installed_release, wp, private, fake)
+        backup = private / "ez2-backup-checkpoint"
+        receipt = private / ("ez2-backup-checkpoint" + RECEIPT_SUFFIX)
+        content = wp / "wp-content"
+        candidate_sha = SHA
+        if scenario == "unrelated-owner-file":
+            (content / "uploads" / "owner-note.txt").write_text("synthetic owner content")
+        elif scenario == "theme-drift":
+            (content / "themes/ezb-theme/style.css").write_text("changed after backup")
+        elif scenario == "core-drift":
+            (content / "plugins/ezb-core/ezb-core.php").write_text("changed after backup")
+        elif scenario == "linked-wp-content":
+            content.rename(wp / "actual-content")
+            content.symlink_to(wp / "actual-content", target_is_directory=True)
+        elif scenario == "misplaced-receipt":
+            receipt = private / "wrong.checkpoint.json"
+            receipt.write_bytes((private / ("ez2-backup-checkpoint" + RECEIPT_SUFFIX)).read_bytes())
+        elif scenario == "wrong-candidate-sha":
+            candidate_sha = "c" * 40
+        elif scenario == "candidate-release-tampered":
+            (release / "ezb-core.zip").write_bytes(b"tampered after receipt")
+        action = lambda: revalidate(receipt, backup, installed_release, release,
+                                    content, INSTALLED_SHA, candidate_sha)
+        if scenario in ("valid", "unrelated-owner-file"):
+            checked = action()
+            assert checked["status"] == "PRIVATE_CHECKPOINT_CURRENT_CODE_PARITY_VERIFIED_ONLY"
+            assert checked["current_theme_core_byte_parity_verified"] is True
+            assert checked["durable_receipt_verified"] is True
+            assert checked["can_apply"] is False
+            CASES += 1
+        else:
+            reject(action)
+assert CASES == 38, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")
