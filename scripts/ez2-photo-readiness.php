@@ -92,6 +92,28 @@ function ez2_photo_readiness() {
         }
         $resolved[] = $id;
     }
+    // The Owner's primary acceptance point is the full-bleed hero. Check
+    // ALL FOUR curated slideshow photos, not merely the five product slots.
+    if ( ! function_exists( 'ezb_editorial_image_id' )
+        || ! function_exists( 'ezb_editorial_image_choices' ) ) {
+        return new WP_Error( 'ez2_photo_editorial_missing', 'Four-slide EZ2 hero is not installed.' );
+    }
+    $editorial_choices = ezb_editorial_image_choices();
+    $editorial_ids = array();
+    foreach ( array( 'sheer', 'roller', 'flyscreen', 'shutters' ) as $hero_name ) {
+        if ( ! isset( $editorial_choices[ $hero_name ] ) ) {
+            return new WP_Error( 'ez2_photo_editorial_missing', 'A curated hero slide is undefined.' );
+        }
+        $hero_id = (int) ezb_editorial_image_id( $hero_name );
+        if ( ! $hero_id || ! in_array( $hero_id, $library, true )
+            || 'image/webp' !== get_post_mime_type( $hero_id ) ) {
+            return new WP_Error( 'ez2_photo_editorial_unresolved', 'A genuine EZ slideshow photo is missing.' );
+        }
+        $editorial_ids[] = $hero_id;
+    }
+    if ( count( array_unique( $editorial_ids ) ) !== 4 ) {
+        return new WP_Error( 'ez2_photo_editorial_duplicate', 'Four hero slides require four distinct photos.' );
+    }
     if ( count( array_unique( $resolved ) ) < 4 ) {
         return new WP_Error( 'ez2_photo_repeated_media', 'The five photo roles must not all reuse the same image.' );
     }
@@ -99,6 +121,7 @@ function ez2_photo_readiness() {
         'status' => 'READY_FOR_PRIVATE_VISUAL_REVIEW_ONLY',
         'media_library_webp_count' => count( $library ),
         'curated_photo_slots' => count( $required ),
+        'editorial_hero_slides' => count( $editorial_ids ),
         'distinct_curated_photos' => count( array_unique( $resolved ) ),
         'private_media_published' => false,
         'public_release_authorized' => false,
