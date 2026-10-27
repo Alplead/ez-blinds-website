@@ -102,6 +102,12 @@ python3 scripts/ez2_backup_scratch_replay.py "$scratch/verified-backup" "$exact_
 # rollback archive. The bridge cannot grant installation or LocalWP authority.
 python3 scripts/ez2_backup_release_binding.py .release "$scratch/verified-backup" "$exact_head" \
   | grep -Fq '"status": "EXACT_HEAD_RELEASE_AND_PRIVATE_BACKUP_VERIFIED_ONLY"'
+# Actual file rename/rollback rehearsal using this same checked four-part
+# backup. STRICT disposable-only: a new private temp directory is created,
+# six mid-swap faults + successful swap/restore are exercised and removed.
+EZ2_CI_VERIFIED_FILE_RESTORE=YES_DISPOSABLE_RELEASE_STACK \
+  python3 scripts/ez2_ci_verified_backup_file_restore.py "$scratch/verified-backup" "$exact_head" \
+  | grep -Fq '"status": "EZ2_CI_VERIFIED_BACKUP_FILE_RESTORE_PASS"'
 backup_sql="$scratch/verified-backup/database.sql.gz"
 gzip -t "$backup_sql"
 
