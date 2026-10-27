@@ -93,6 +93,33 @@ def _files(root, role, *, allow_empty=False):
     return sorted(result, key=lambda item: item[1])
 
 
+def _directory_inventory(root, role):
+    """Track even empty directories, which a file-only inventory misses.
+
+    A directory replaced under the same name can change the source tree
+    without changing the identity of any archived file. Refuse that drift.
+    This is a consistency guard, not a claim that empty dirs are restored.
+    """
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Snapshot component must be a real directory")
+    result = []
+    for base, directories, _files_in_dir in os.walk(
+            root, followlinks=False, onerror=_walk_error):
+        path = Path(base)
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or path.is_symlink():
+            raise ValueError("Snapshot directory changed during packaging")
+        relative = path.relative_to(root).as_posix()
+        member = role if relative == "." else role + "/" + relative
+        folded = safe_member(member, role, is_dir=True)
+        result.append((folded, info.st_dev, info.st_ino))
+        for name in directories:
+            child = path / name
+            if child.is_symlink() or not child.is_dir():
+                raise ValueError("Snapshot directory link or special entry")
+    return tuple(sorted(result))
+
+
 def _file_identity(info):
     """Include ctime/link count: size and restored mtime can conceal a rewrite."""
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
@@ -175,6 +202,10 @@ def pack(snapshot_dir, destination_dir, exact_sha):
         raise ValueError("Snapshot must contain only database.sql, uploads, plugins and theme")
     inventory = {role: _files(source / role, role)
                  for role in ("uploads", "plugins", "theme")}
+    directory_inventory = {
+        role: _directory_inventory(source / role, role)
+        for role in ("uploads", "plugins", "theme")
+    }
     sql_info = _regular(source / "database.sql")
     # Conservative upper bound: compressed output should never need more than
     # raw input plus this reserve. Refuse before creating any private output.
@@ -215,6 +246,8 @@ def pack(snapshot_dir, destination_dir, exact_sha):
                                 for _, member, info in final_entries)
             if final_state != initial_state:
                 raise ValueError("Snapshot inventory changed after packaging")
+            if _directory_inventory(source / role, role) != directory_inventory[role]:
+                raise ValueError("Snapshot directory inventory changed after packaging")
         result = inspect(destination, exact_sha)
         if result["status"] != "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY":
             raise ValueError("Generated rollback set failed structural inspection")

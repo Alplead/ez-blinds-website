@@ -331,5 +331,45 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("SQL changed after compression was accepted")
 
-assert cases == 31, cases
+# Empty directories are not archived by the current file-only packer, but
+# additions, removals and same-name replacements during capture must not
+# silently pass as a stable source snapshot.
+def check_late_directory_drift(change):
+    global cases
+    with tempfile.TemporaryDirectory() as temp:
+        base = Path(temp)
+        source = base / "snapshot"
+        fixture(source)
+        empty = source / "uploads" / "empty"
+        empty.mkdir()
+        destination = base / "backup"
+
+        def mutate_after_archive(archive_path, role, entries):
+            result = real_write_tar(archive_path, role, entries)
+            if role == "theme":
+                change(empty)
+            return result
+
+        with patch("ez2_backup_snapshot_pack._write_tar",
+                   side_effect=mutate_after_archive):
+            try:
+                pack(source, destination, SHA)
+            except ValueError as exc:
+                assert "directory inventory changed" in str(exc), str(exc)
+                assert not destination.exists(), "Unstable backup was not cleaned up"
+                cases += 1
+            else:
+                raise AssertionError("Late directory drift was accepted")
+
+
+def replace_empty_directory(path):
+    path.rename(path.with_name("old-empty"))
+    path.mkdir()
+
+
+check_late_directory_drift(lambda path: (path / "new-empty").mkdir())
+check_late_directory_drift(lambda path: path.rmdir())
+check_late_directory_drift(replace_empty_directory)
+
+assert cases == 34, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")

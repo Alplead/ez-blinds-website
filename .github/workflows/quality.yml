@@ -592,7 +592,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_backup_snapshot_pack.py scripts/test_ez2_backup_snapshot_pack.py
           python3 scripts/test_ez2_backup_snapshot_pack.py | tee /tmp/ez2-backup-snapshot-pack.log
-          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=31 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
+          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=34 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
 
       - name: Guard isolated EZ2 delivery agent preview (no installation)
         run: |
