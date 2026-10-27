@@ -516,7 +516,17 @@ jobs:
         run: |
           bash -n scripts/ez2_ci_wordpress_db_restore.sh
           bash scripts/test_ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-sql-restore-guard.log
-          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=23' /tmp/ez2-ci-sql-restore-guard.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=26' /tmp/ez2-ci-sql-restore-guard.log
+
+      - name: Rehearse verified snapshot file install and fault rollback (CI-only)
+        env:
+          GITHUB_ACTIONS: 'true'
+          EZ2_CI_VERIFIED_FILE_RESTORE: YES_DISPOSABLE_RELEASE_STACK
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ez2_ci_verified_backup_file_restore.py scripts/test_ez2_ci_verified_backup_file_restore.py
+          python3 scripts/test_ez2_ci_verified_backup_file_restore.py | tee /tmp/ez2-verified-file-restore.log
+          grep -Fxq 'EZ2_CI_VERIFIED_FILE_ROLLBACK_TEST_PASS cases=13' /tmp/ez2-verified-file-restore.log
 
       - name: Link installed backup and candidate delivery without applying (synthetic only)
         run: |
