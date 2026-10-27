@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          php -l tools/ez2-private-preview/photo-gallery.php
           node --check tools/ez2-private-preview/auth-proxy.mjs
           node --check scripts/test_ez2_private_preview.mjs
           node scripts/test_ez2_private_preview.mjs | tee /tmp/ez2-private-preview.log
