@@ -261,5 +261,75 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Same-size mid-SQL rewrite was accepted")
 
-assert cases == 28, cases
+# Packaging must reject a snapshot that changes *after* individual files
+# have been read. Otherwise a valid-looking archive can omit newly added files.
+from ez2_backup_snapshot_pack import _write_tar as real_write_tar
+from ez2_backup_snapshot_pack import _write_sql as real_write_sql
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "snapshot"
+    fixture(source)
+    destination = base / "backup"
+
+    def add_late_file(archive_path, role, entries):
+        result = real_write_tar(archive_path, role, entries)
+        if role == "uploads":
+            (source / "uploads" / "late.webp").write_bytes(b"synthetic late photo")
+        return result
+
+    with patch("ez2_backup_snapshot_pack._write_tar", side_effect=add_late_file):
+        try:
+            pack(source, destination, SHA)
+        except ValueError as exc:
+            assert "inventory changed after packaging" in str(exc)
+            assert not destination.exists(), "Stale archive was not cleaned up"
+            cases += 1
+        else:
+            raise AssertionError("New file added after archiving was accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "snapshot"
+    fixture(source)
+    destination = base / "backup"
+
+    def remove_late_file(archive_path, role, entries):
+        result = real_write_tar(archive_path, role, entries)
+        if role == "theme":
+            (source / "theme" / "file.txt").unlink()
+        return result
+
+    with patch("ez2_backup_snapshot_pack._write_tar", side_effect=remove_late_file):
+        try:
+            pack(source, destination, SHA)
+        except ValueError as exc:
+            assert "inventory changed after packaging" in str(exc)
+            assert not destination.exists(), "Stale archive was not cleaned up"
+            cases += 1
+        else:
+            raise AssertionError("File removed after archiving was accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "snapshot"
+    fixture(source)
+    destination = base / "backup"
+
+    def change_sql_after_compression(sql_path, archive_path):
+        result = real_write_sql(sql_path, archive_path)
+        rewrite_preserving_size_and_mtime(sql_path)
+        return result
+
+    with patch("ez2_backup_snapshot_pack._write_sql", side_effect=change_sql_after_compression):
+        try:
+            pack(source, destination, SHA)
+        except ValueError as exc:
+            assert "SQL changed after packaging" in str(exc)
+            assert not destination.exists(), "Stale archive was not cleaned up"
+            cases += 1
+        else:
+            raise AssertionError("SQL changed after compression was accepted")
+
+assert cases == 31, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")

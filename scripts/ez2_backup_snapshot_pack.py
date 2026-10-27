@@ -202,6 +202,19 @@ def pack(snapshot_dir, destination_dir, exact_sha):
         with manifest_path.open("x", encoding="utf-8") as output:
             json.dump(manifest, output, sort_keys=True, separators=(",", ":"))
         manifest_path.chmod(0o600)
+        # A per-file read check is not enough: new files may appear, old files
+        # may disappear, or SQL may change after its gzip stream has closed.
+        # Re-enumerate the entire snapshot before accepting this rollback set.
+        if _file_identity(_regular(source / "database.sql")) != _file_identity(sql_info):
+            raise ValueError("Snapshot SQL changed after packaging")
+        for role, initial_entries in inventory.items():
+            final_entries = _files(source / role, role)
+            initial_state = tuple((member, _file_identity(info))
+                                  for _, member, info in initial_entries)
+            final_state = tuple((member, _file_identity(info))
+                                for _, member, info in final_entries)
+            if final_state != initial_state:
+                raise ValueError("Snapshot inventory changed after packaging")
         result = inspect(destination, exact_sha)
         if result["status"] != "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY":
             raise ValueError("Generated rollback set failed structural inspection")
