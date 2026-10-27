@@ -62,6 +62,12 @@ def verify_bundle(archive: Path) -> dict:
         manifest = json.loads(raw_manifest)
         if not isinstance(manifest, list) or len(manifest) != EXPECTED_PHOTOS:
             raise BundleError("Expected exactly 23 manifest records.")
+        # Detect duplicate manifest filenames before any byte comparisons, so a
+        # reused photo cannot hide behind a misleading first SHA mismatch.
+        manifest_names = [record.get("file") for record in manifest
+                          if isinstance(record, dict) and isinstance(record.get("file"), str)]
+        if len(manifest_names) != len(set(manifest_names)):
+            raise BundleError("Duplicate WebP inventory record.")
         groups = {name: 0 for name in EXPECTED_GROUPS}
         seen = set()
         for item in manifest:
