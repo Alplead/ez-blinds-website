@@ -11,6 +11,8 @@ on:
       - 'scripts/ez2-photo-readiness.php'
       - 'scripts/test_ez2_photo_readiness.php'
       - 'scripts/test_ez2_media_loading.php'
+      - 'scripts/ez2_validate_private_webp_bundle.py'
+      - 'scripts/test_ez2_validate_private_webp_bundle.py'
       - 'wp-content/plugins/ezb-core/ezb-core.php'
       - 'wp-content/plugins/ezb-core/includes/ezb-media-priority.php'
       - '.github/workflows/ez2-homepage-photo-integration.yml'
@@ -49,6 +51,12 @@ jobs:
           php scripts/test_ez2_photo_readiness.php | tee /tmp/ez2-photo-readiness.log
           grep -Fxq 'EZ2_REAL_PHOTO_PREVIEW_GATE_PASS cases=10' /tmp/ez2-photo-readiness.log
           echo EZ2_OWNER_VISUAL_PREVIEW_GATE_PASS
+      - name: Prove safe SHA256 handoff of private Owner media
+        run: |
+          set -euo pipefail
+          python3 scripts/test_ez2_validate_private_webp_bundle.py | tee /tmp/ez2-private-webp.log
+          grep -Fxq 'EZ2_PRIVATE_WEBP_MANIFEST_TEST_PASS cases=9' /tmp/ez2-private-webp.log
+          echo EZ2_PRIVATE_PHOTOS_NEVER_IN_GITHUB_PASS
       - name: Preserve private media boundary
         run: |
           set -euo pipefail
