@@ -19,7 +19,7 @@
     <!-- wp:group {"className":"ezb-solutions__stories","layout":{"type":"default"}} -->
     <div class="wp-block-group ezb-solutions__stories">
 
-        <!-- wp:group {"className":"ezb-feature-card ezb-feature-card--normal","layout":{"type":"default"}} -->
+        <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--normal","layout":{"type":"default"}} -->
         <article class="wp-block-group ezb-feature-card ezb-feature-card--normal">
           <!-- wp:group {"className":"ezb-feature-card__image","layout":{"type":"default"}} -->
           <div class="wp-block-group ezb-feature-card__image"><!-- wp:shortcode -->[ezb_media_slot slot="roller-hero"]<!-- /wp:shortcode --></div>
@@ -33,7 +33,7 @@
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
-        <!-- wp:group {"className":"ezb-feature-card ezb-feature-card--reverse","layout":{"type":"default"}} -->
+        <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--reverse","layout":{"type":"default"}} -->
         <article class="wp-block-group ezb-feature-card ezb-feature-card--reverse">
           <!-- wp:group {"className":"ezb-feature-card__image","layout":{"type":"default"}} -->
           <div class="wp-block-group ezb-feature-card__image"><!-- wp:shortcode -->[ezb_media_slot slot="sheer-hero"]<!-- /wp:shortcode --></div>
@@ -47,7 +47,7 @@
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
-        <!-- wp:group {"className":"ezb-feature-card ezb-feature-card--normal","layout":{"type":"default"}} -->
+        <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--normal","layout":{"type":"default"}} -->
         <article class="wp-block-group ezb-feature-card ezb-feature-card--normal">
           <!-- wp:group {"className":"ezb-feature-card__image","layout":{"type":"default"}} -->
           <div class="wp-block-group ezb-feature-card__image"><!-- wp:shortcode -->[ezb_media_slot slot="shutters-hero"]<!-- /wp:shortcode --></div>
@@ -61,7 +61,7 @@
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
 
-        <!-- wp:group {"className":"ezb-feature-card ezb-feature-card--reverse","layout":{"type":"default"}} -->
+        <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--reverse","layout":{"type":"default"}} -->
         <article class="wp-block-group ezb-feature-card ezb-feature-card--reverse">
           <!-- wp:group {"className":"ezb-feature-card__image","layout":{"type":"default"}} -->
           <div class="wp-block-group ezb-feature-card__image"><!-- wp:shortcode -->[ezb_media_slot slot="rfs-hero"]<!-- /wp:shortcode --></div>
@@ -74,7 +74,7 @@
             <!-- wp:paragraph {"className":"ezb-feature-card__link"} --><p class="ezb-feature-card__link"><a href="/retractable-flyscreens/">Explore Retractable Flyscreens →</a></p><!-- /wp:paragraph -->
           </div><!-- /wp:group -->
         </article><!-- /wp:group -->
-      <!-- wp:group {"className":"ezb-feature-card ezb-feature-card--motorised","layout":{"type":"default"}} -->
+      <!-- wp:group {"tagName":"article","className":"ezb-feature-card ezb-feature-card--motorised","layout":{"type":"default"}} -->
       <article class="wp-block-group ezb-feature-card ezb-feature-card--motorised">
         <!-- wp:group {"className":"ezb-feature-card__image ezb-feature-card__image--illustrative","layout":{"type":"default"}} -->
         <div class="wp-block-group ezb-feature-card__image ezb-feature-card__image--illustrative">
