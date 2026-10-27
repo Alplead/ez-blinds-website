@@ -93,6 +93,12 @@ def _files(root, role):
     return sorted(result, key=lambda item: item[1])
 
 
+def _file_identity(info):
+    """Include ctime/link count: size and restored mtime can conceal a rewrite."""
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+            info.st_ctime_ns, info.st_nlink)
+
+
 def _write_tar(destination, role, entries):
     with destination.open("xb") as output:
         with tarfile.open(fileobj=output, mode="w:gz") as archive:
@@ -101,8 +107,7 @@ def _write_tar(destination, role, entries):
                 with os.fdopen(os.open(path, flags), "rb") as source:
                     before = os.fstat(source.fileno())
                     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-                            or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
-                            != (initial.st_dev, initial.st_ino, initial.st_size, initial.st_mtime_ns)):
+                            or _file_identity(before) != _file_identity(initial)):
                         raise ValueError("Snapshot file changed during packaging")
                     entry = tarfile.TarInfo(member)
                     entry.size = before.st_size
@@ -110,7 +115,7 @@ def _write_tar(destination, role, entries):
                     entry.mtime = 0
                     archive.addfile(entry, source)
                     after = os.fstat(source.fileno())
-                    if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
+                    if _file_identity(after) != _file_identity(before):
                         raise ValueError("Snapshot file changed while reading")
     destination.chmod(0o600)
 
@@ -120,8 +125,7 @@ def _write_sql(source_path, destination):
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     with os.fdopen(os.open(source_path, flags), "rb") as source:
         before = os.fstat(source.fileno())
-        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
-                initial.st_dev, initial.st_ino, initial.st_size, initial.st_mtime_ns):
+        if before.st_nlink != 1 or _file_identity(before) != _file_identity(initial):
             raise ValueError("SQL source changed before packaging")
         with destination.open("xb") as output:
             with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as compressed:
@@ -131,7 +135,7 @@ def _write_sql(source_path, destination):
                         break
                     compressed.write(block)
         after = os.fstat(source.fileno())
-        if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
+        if _file_identity(after) != _file_identity(before):
             raise ValueError("SQL source changed while reading")
     destination.chmod(0o600)
 
