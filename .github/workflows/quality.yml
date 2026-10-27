@@ -327,7 +327,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_wp_preinstall_checkpoint.py scripts/test_ez2_wp_preinstall_checkpoint.py
           python3 scripts/test_ez2_wp_preinstall_checkpoint.py | tee /tmp/ez2-private-checkpoint.log
-          grep -Fq 'EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases=19 private_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-private-checkpoint.log
+          grep -Fq 'EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases=26 private_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-private-checkpoint.log
 
       - name: Rehearse verified private checkpoint through candidate swap and rollback (synthetic only)
         run: |

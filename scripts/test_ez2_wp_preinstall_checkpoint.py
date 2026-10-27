@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from ez2_content_candidate_bundle import package
 from ez2_release_set import run as release_set
-from ez2_wp_preinstall_checkpoint import prepare
+from ez2_wp_preinstall_checkpoint import RECEIPT_SUFFIX, prepare, verify_receipt
 from ez2_wp_snapshot_capture import capture as real_capture
 
 SHA = "a" * 40
@@ -156,6 +156,13 @@ with tempfile.TemporaryDirectory() as temp:
                 "one_click_complete"):
         assert result[key] is False
     assert (private / "ez2-backup-checkpoint" / "backup-manifest.json").exists()
+    receipt_path = private / ("ez2-backup-checkpoint" + RECEIPT_SUFFIX)
+    assert receipt_path.is_file()
+    assert result["private_checkpoint_receipt_persisted"] is True
+    assert result["private_checkpoint_receipt_verified"] is True
+    assert result["receipt_authorizes_installation"] is False
+    assert verify_receipt(receipt_path, private / "ez2-backup-checkpoint",
+                          installed_release, release, INSTALLED_SHA, SHA)["durable_receipt_verified"]
     CASES += 1
     reject(lambda: run(release, installed_release, wp, private, fake))  # Never overwrite.
     assert CASES == 2
@@ -236,5 +243,36 @@ for scenario in ("installed-code-changed-during-capture",
             reject(lambda: run(release, installed_release, wp, private, fake), destination)
         assert not any(p.name.startswith("ez2-capture-") for p in private.iterdir())
 
-assert CASES == 19, CASES
+# Durable checkpoint evidence must reject tampering and must never be
+# mistaken for permission to install or a successful database restore.
+for scenario in ("receipt-tampered", "backup-manifest-tampered",
+                 "candidate-catalog-tampered", "installed-catalog-tampered",
+                 "wrong-candidate-sha", "receipt-symlink", "receipt-preexists"):
+    with tempfile.TemporaryDirectory() as temp:
+        release, installed_release, wp, private, fake = fixture(Path(temp))
+        backup = private / "ez2-backup-checkpoint"
+        receipt = private / ("ez2-backup-checkpoint" + RECEIPT_SUFFIX)
+        if scenario == "receipt-preexists":
+            receipt.write_text("untrusted")
+            reject(lambda: run(release, installed_release, wp, private, fake), backup)
+            assert receipt.read_text() == "untrusted"
+            continue
+        if scenario == "receipt-symlink":
+            receipt.symlink_to(private / "missing")
+            reject(lambda: run(release, installed_release, wp, private, fake), backup)
+            assert receipt.is_symlink()
+            continue
+        run(release, installed_release, wp, private, fake)
+        if scenario == "receipt-tampered":
+            receipt.write_text("{}")
+        elif scenario == "backup-manifest-tampered":
+            (backup / "backup-manifest.json").write_text("{}")
+        elif scenario == "candidate-catalog-tampered":
+            (release / "EZ2_RELEASE_SET.json").write_text("{}")
+        elif scenario == "installed-catalog-tampered":
+            (installed_release / "EZ2_RELEASE_SET.json").write_text("{}")
+        reject(lambda: verify_receipt(receipt, backup, installed_release,
+                                      release, INSTALLED_SHA,
+                                      "c" * 40 if scenario == "wrong-candidate-sha" else SHA))
+assert CASES == 26, CASES
 print(f"EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases={CASES} private_backup_verified=true localwp_touched=false can_apply=false")
