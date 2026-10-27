@@ -8,6 +8,11 @@ on:
       - 'wp-content/themes/ezb-theme/assets/css/editorial.css'
       - 'wp-content/themes/ezb-theme/templates/front-page.html'
       - 'scripts/test_ez2_homepage_photo_stories.py'
+      - 'scripts/ez2-photo-readiness.php'
+      - 'scripts/test_ez2_photo_readiness.php'
+      - 'scripts/test_ez2_media_loading.php'
+      - 'wp-content/plugins/ezb-core/ezb-core.php'
+      - 'wp-content/plugins/ezb-core/includes/ezb-media-priority.php'
       - '.github/workflows/ez2-homepage-photo-integration.yml'
 permissions:
   contents: read
@@ -30,7 +35,20 @@ jobs:
           set -euo pipefail
           php -l wp-content/themes/ezb-theme/patterns/core-solutions.php
           python3 scripts/test_ez2_homepage_photo_stories.py | tee /tmp/ez2-homepage-test.log
-          grep -Fxq 'EZ2_HOMEPAGE_PHOTO_STORIES_PASS cases=40' /tmp/ez2-homepage-test.log
+          grep -Fxq 'EZ2_HOMEPAGE_PHOTO_STORIES_PASS cases=47' /tmp/ez2-homepage-test.log
+      - name: Verify fast mobile images and block bare previews
+        run: |
+          set -euo pipefail
+          php -l wp-content/plugins/ezb-core/ezb-core.php
+          php -l wp-content/plugins/ezb-core/includes/ezb-media-priority.php
+          php -l scripts/ez2-photo-readiness.php
+          php -l scripts/test_ez2_media_loading.php
+          php -l scripts/test_ez2_photo_readiness.php
+          php scripts/test_ez2_media_loading.php | tee /tmp/ez2-media-loading.log
+          grep -Fxq 'EZ2_MEDIA_LOADING_PRIORITY_PASS cases=15' /tmp/ez2-media-loading.log
+          php scripts/test_ez2_photo_readiness.php | tee /tmp/ez2-photo-readiness.log
+          grep -Fxq 'EZ2_REAL_PHOTO_PREVIEW_GATE_PASS cases=10' /tmp/ez2-photo-readiness.log
+          echo EZ2_OWNER_VISUAL_PREVIEW_GATE_PASS
       - name: Preserve private media boundary
         run: |
           set -euo pipefail
