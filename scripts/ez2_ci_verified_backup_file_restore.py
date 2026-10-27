@@ -127,17 +127,18 @@ def run_one(master: Path, expected: dict[str, dict[str, str]],
             safe_move(installed / role, saved / role)
             backed_up.append(role)
             if scenario == "after-backup:" + role:
-                raise RuntimeError("INJECTED_DISPOSABLE_FAULT")
+                raise OSError("INJECTED_SYNTHETIC_RENAME_ERROR")
             safe_move(incoming / role, installed / role)
             candidates_installed.append(role)
             if scenario == "after-install:" + role:
-                raise RuntimeError("INJECTED_DISPOSABLE_FAULT")
+                raise OSError("INJECTED_SYNTHETIC_RENAME_ERROR")
         verify_role_set(installed, expected)
         verify_role_set(saved, original)
-    except RuntimeError as error:
-        if str(error) != "INJECTED_DISPOSABLE_FAULT":
-            raise
-        injected = True
+    except (OSError, ValueError, RuntimeError) as error:
+        # Real operating-system rename failures must trigger the SAME recovery
+        # as deliberately injected faults. After a verified rollback, propagate
+        # any unexpected error rather than pretending an install succeeded.
+        injected = str(error) == "INJECTED_SYNTHETIC_RENAME_ERROR"
         # Rollback last-touched component first; preserve the candidate for
         # inspection and restore old bytes to their exact original paths.
         for role in reversed(backed_up):
@@ -148,6 +149,8 @@ def run_one(master: Path, expected: dict[str, dict[str, str]],
         verify_role_set(incoming, expected)
         if list(saved.iterdir()):
             raise ValueError("Synthetic rollback left orphaned backups")
+        if not injected:
+            raise
     if scenario is not None:
         if not injected:
             raise ValueError("Requested synthetic fault was not exercised")
