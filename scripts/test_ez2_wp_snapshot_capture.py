@@ -284,5 +284,48 @@ with tempfile.TemporaryDirectory() as temp:
             raise AssertionError("Timestamp-restored rewrite during copy accepted")
 
 
-assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6 + 2, CASES
+# The private copy must match the original bytes, not merely report
+# that both file handles were successfully opened. Exercise both a short
+# write and a same-length corrupt write without touching any WordPress site.
+for scenario in ("short-write", "same-length-corruption"):
+    with tempfile.TemporaryDirectory() as temp:
+        base = Path(temp)
+        source = base / "uploads"
+        source.mkdir()
+        (source / "synthetic.txt").write_bytes(b"synthetic private image")
+        destination = base / "copy"
+        original_open = Path.open
+
+        class AlteredCopyWriter:
+            def __init__(self, wrapped):
+                self.wrapped = wrapped
+            def __enter__(self):
+                self.wrapped.__enter__()
+                return self
+            def __exit__(self, *args):
+                return self.wrapped.__exit__(*args)
+            def __getattr__(self, name):
+                return getattr(self.wrapped, name)
+            def write(self, data):
+                if scenario == "short-write":
+                    return self.wrapped.write(data[:max(1, len(data) // 2)])
+                return self.wrapped.write(bytes([data[0] ^ 1]) + data[1:])
+
+        def corrupt_copy(path, mode="r", *args, **kwargs):
+            opened = original_open(path, mode, *args, **kwargs)
+            if path == destination / "synthetic.txt" and mode == "xb":
+                return AlteredCopyWriter(opened)
+            return opened
+
+        with patch.object(Path, "open", new=corrupt_copy):
+            try:
+                _copy_component(source, destination, "uploads")
+            except ValueError as exc:
+                assert "Copied WordPress component differs from source" in str(exc), str(exc)
+                CASES += 1
+            else:
+                raise AssertionError("Corrupt or truncated private copy accepted")
+
+
+assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6 + 2 + 2, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

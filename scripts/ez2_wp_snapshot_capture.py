@@ -81,15 +81,34 @@ def _copy_component(source, destination, role):
                                   s.st_ctime_ns, s.st_nlink)
             if not stat.S_ISREG(current.st_mode) or current.st_nlink != 1 or identity(current) != identity(expected):
                 raise ValueError("WordPress component changed before capture")
+            source_digest = hashlib.sha256()
             with target.open("xb") as writer:
                 while True:
                     block = reader.read(CHUNK)
                     if not block:
                         break
+                    source_digest.update(block)
                     writer.write(block)
+                writer.flush()
+                os.fsync(writer.fileno())
             after = os.fstat(reader.fileno())
             if identity(after) != identity(current):
                 raise ValueError("WordPress component changed during capture")
+            # A successful write is not proof that the private copy matches
+            # the source. Detect truncated writes or same-size corruption
+            # BEFORE the copy is packaged as a valid rollback archive.
+            with os.fdopen(os.open(target, flags), "rb") as check:
+                copied_before = os.fstat(check.fileno())
+                if (not stat.S_ISREG(copied_before.st_mode)
+                        or copied_before.st_nlink != 1
+                        or copied_before.st_size != current.st_size):
+                    raise ValueError("Copied WordPress component differs from source")
+                copied_digest = hashlib.sha256()
+                for block in iter(lambda: check.read(CHUNK), b""):
+                    copied_digest.update(block)
+                if (identity(os.fstat(check.fileno())) != identity(copied_before)
+                        or copied_digest.digest() != source_digest.digest()):
+                    raise ValueError("Copied WordPress component differs from source")
             target.chmod(0o600)
 
 
