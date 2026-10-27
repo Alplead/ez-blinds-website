@@ -115,6 +115,21 @@ reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/Parent/child", b"x", "file"), ("uploads/parent", b"y", "file")]))
 
+# A portable archive must preserve the spelling of every implied directory,
+# even when different filenames avoid a direct file-path collision.
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/Photos/one.webp", b"x", "file"),
+    ("uploads/photos/two.webp", b"y", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/Photos", b"", "dir"),
+    ("uploads/photos/two.webp", b"y", "file")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/Photos/one.webp", b"x", "file"),
+    ("uploads/photos", b"", "dir")]))
+reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
+    ("uploads/Gallery", b"x", "file"),
+    ("uploads/gallery/one.webp", b"y", "file")]))
+
 # Windows LocalWP rejects device aliases, forbidden punctuation, bidi controls,
 # and non-normalised names even when no other archive entry collides.
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/COM¹.log", b"x", "file")]))
@@ -126,5 +141,5 @@ reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/name\"bad.w
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/part*name.webp", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/\u202ephoto.webp", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/cafe\u0301.webp", b"x", "file")]))
-assert cases == 29, cases
+assert cases == 33, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

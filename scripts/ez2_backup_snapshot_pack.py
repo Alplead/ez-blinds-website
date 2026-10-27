@@ -56,21 +56,28 @@ def _files(root, role):
         raise ValueError("Snapshot component must be a real directory")
     result = []
     seen = set()
+    # A Linux fixture may contain Photos/ and photos/ as distinct folders,
+    # but restoring both on Windows LocalWP would silently merge them.
+    # Track directory spelling as well as file spelling before writing ZIPs.
+    directory_spellings = {}
     total = 0
     for base, directories, files in os.walk(root, followlinks=False):
         for name in directories:
             directory = Path(base) / name
             if directory.is_symlink() or not directory.is_dir():
                 raise ValueError("Snapshot directory link or special entry")
-            relative = directory.relative_to(root).as_posix()
-            safe_member(role + "/" + relative, role, is_dir=True)
+            member = role + "/" + directory.relative_to(root).as_posix()
+            folded = safe_member(member, role, is_dir=True)
+            previous = directory_spellings.setdefault(folded, member)
+            if previous != member or folded in seen:
+                raise ValueError("Case-colliding snapshot directory or file")
         for name in files:
             path = Path(base) / name
             info = _regular(path)
             member = role + "/" + path.relative_to(root).as_posix()
             folded = safe_member(member, role)
-            if folded in seen:
-                raise ValueError("Case-colliding snapshot file")
+            if folded in seen or folded in directory_spellings:
+                raise ValueError("Case-colliding snapshot file or directory")
             seen.add(folded)
             result.append((path, member, info))
             total += info.st_size

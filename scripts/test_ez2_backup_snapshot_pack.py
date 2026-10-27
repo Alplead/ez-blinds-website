@@ -107,6 +107,24 @@ with tempfile.TemporaryDirectory() as temp:
     assert replay(base / "backup", SHA)["replayed_files"] == 4
     cases += 1
 
+# Windows LocalWP must not merge distinct Linux source directories.
+def collide_directories(src, dst):
+    for folder, filename in (("Photos", "one.webp"), ("photos", "two.webp")):
+        path = src / "uploads" / folder
+        path.mkdir()
+        (path / filename).write_bytes(b"synthetic image")
+
+
+def collide_file_directory(src, dst):
+    (src / "uploads" / "Gallery").write_bytes(b"synthetic file")
+    directory = src / "uploads" / "gallery"
+    directory.mkdir()
+    (directory / "photo.webp").write_bytes(b"synthetic image")
+
+
+reject(collide_directories)
+reject(collide_file_directory)
+
 # Normal checkout and linked-worktree markers both forbid private backups.
 reject(lambda src, dst: (src.parent / ".git").mkdir())
 reject(lambda src, dst: (src.parent / ".git").write_text("gitdir: elsewhere", encoding="utf-8"))
@@ -142,5 +160,5 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Low-space backup accepted")
 
-assert cases == 22, cases
+assert cases == 24, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")
