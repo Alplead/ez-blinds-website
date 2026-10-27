@@ -51,6 +51,11 @@ def _regular(path):
     return info
 
 
+def _walk_error(exc):
+    """Never silently omit an unreadable subtree from a private rollback set."""
+    raise ValueError("Cannot enumerate complete snapshot directory") from exc
+
+
 def _files(root, role):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Snapshot component must be a real directory")
@@ -61,7 +66,7 @@ def _files(root, role):
     # Track directory spelling as well as file spelling before writing ZIPs.
     directory_spellings = {}
     total = 0
-    for base, directories, files in os.walk(root, followlinks=False):
+    for base, directories, files in os.walk(root, followlinks=False, onerror=_walk_error):
         for name in directories:
             directory = Path(base) / name
             if directory.is_symlink() or not directory.is_dir():

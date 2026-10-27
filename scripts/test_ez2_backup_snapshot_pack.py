@@ -160,5 +160,33 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Low-space backup accepted")
 
-assert cases == 24, cases
+# os.walk normally ignores unreadable nested directories. A backup must not
+# succeed with missing private files, even if other files were packaged.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "snapshot"
+    fixture(source)
+    restricted = source / "uploads" / "restricted"
+    restricted.mkdir()
+    (restricted / "hidden.webp").write_bytes(b"synthetic private image")
+    destination = base / "private-backup"
+    import os
+    real_scandir = os.scandir
+
+    def deny_nested_scan(path):
+        if Path(path) == restricted:
+            raise PermissionError("synthetic unreadable nested directory")
+        return real_scandir(path)
+
+    with patch("ez2_backup_snapshot_pack.os.scandir", side_effect=deny_nested_scan):
+        try:
+            pack(source, destination, SHA)
+        except ValueError as exc:
+            assert "enumerate complete snapshot" in str(exc)
+            assert not destination.exists(), "Incomplete backup created"
+            cases += 1
+        else:
+            raise AssertionError("Unreadable nested snapshot was silently accepted")
+
+assert cases == 25, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")
