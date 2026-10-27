@@ -43,7 +43,8 @@ if (strpos($html, 'alt="Roller Blinds installation photograph"') === false ||
 $GLOBALS['mode'] = 'all_available';
 $html = $render();
 if (substr_count($html, 'data-ezb-slide') !== 4 ||
-    strpos($html, 'alt="Sheer Curtains installation photograph"') === false) {
+    strpos($html, 'alt="Sheer Curtains installation photograph"') === false ||
+    strpos($html, 'aria-pressed=') !== false) {
     throw new Exception('Complete gallery must describe its first sheer curtain photo.');
 }
 // A stale attachment row must not produce a broken image or the wrong first-slide label.

@@ -86,7 +86,8 @@
         // Manual navigation remains available when autoplay is disallowed.
         var motionBlocked = reduced.matches || slides.length < 2;
         toggle.disabled = motionBlocked;
-        toggle.setAttribute('aria-pressed', paused ? 'true' : 'false');
+        // The action label changes between Play and Pause. This is not a
+        // fixed-label ARIA toggle button, so aria-pressed must not be used.
         toggle.textContent = motionBlocked
           ? 'Automatic slideshow unavailable'
           : (paused ? 'Play slideshow' : 'Pause slideshow');
@@ -125,7 +126,9 @@
       var observer = new window.IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.target !== hero) return;
-          inView = entry.isIntersecting;
+          // IntersectionObserver can report isIntersecting=true when only
+          // the edge touches the viewport (zero visible pixels).
+          inView = entry.isIntersecting && entry.intersectionRatio > 0;
           syncTimer();
         });
       }, { threshold: 0 });

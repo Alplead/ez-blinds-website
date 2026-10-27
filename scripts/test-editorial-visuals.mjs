@@ -121,9 +121,18 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     return;
   }
   assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
+  assert.equal(toggle.attributes['aria-pressed'], undefined,
+    'Play/Pause action labels must not masquerade as a fixed-label ARIA toggle');
   assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
   assert.equal(observedHero, hero, 'Hero is watched for offscreen pause');
   if (!initialReduced) {
+    // A zero-pixel edge contact must not restart a slideshow offscreen.
+    observerCallback([{ target: hero, isIntersecting: false, intersectionRatio: 0 }]);
+    const beforeEdge = timerStarts;
+    observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0 }]);
+    assert.equal(timerStarts, beforeEdge, 'Edge-only intersection must remain paused');
+    observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.5 }]);
+    assert.equal(timerStarts, beforeEdge + 1, 'Visible pixels may resume autoplay');
     const running = timerStarts;
     hero.handlers.mouseenter();
     hero.handlers.mouseleave();
@@ -150,9 +159,9 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   assert.equal(status.textContent, 'Photo 1 of 4: Image 1', 'Manual Previous announces the selected photo');
   observerCallback([{ target: {}, isIntersecting: true, intersectionRatio: 0.5 }]);
   assert.equal(timerStarts, startsBeforeOffscreen, 'Unrelated observer entries cannot restart autoplay');
-  // IntersectionObserver may report an edge-touching target with ratio 0.
-  // isIntersecting is the authoritative visibility flag at threshold zero.
-  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0 }]);
+  // A real, nonzero intersection can restore visibility, but must never
+  // override a manual pause after photo selection.
+  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.5 }]);
   assert.equal(timerStarts, startsBeforeOffscreen,
     'Returning onscreen must not override a manual photo selection');
   if (!initialReduced) {
