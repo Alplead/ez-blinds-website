@@ -46,6 +46,7 @@ def inspect_tar(path, role):
     seen = set()
     regular_paths = set()
     implied_directories = set()
+    directory_spellings = {}
     members = files = size = 0
     try:
         with tarfile.open(path, mode="r:gz") as archive:
@@ -58,11 +59,21 @@ def inspect_tar(path, role):
                     raise ValueError("Duplicate or case-colliding archive member")
                 seen.add(key)
                 parts = key.split("/")
+                original_parts = item.name.rstrip("/").split("/")
                 for depth in range(1, len(parts)):
                     parent = "/".join(parts[:depth])
+                    spelling = "/".join(original_parts[:depth])
+                    previous = directory_spellings.setdefault(parent, spelling)
+                    if previous != spelling:
+                        raise ValueError("Case-colliding implicit archive directories")
                     if parent in regular_paths:
                         raise ValueError("File cannot contain a nested archive entry")
                     implied_directories.add(parent)
+                if item.isdir():
+                    spelling = "/".join(original_parts)
+                    previous = directory_spellings.setdefault(key, spelling)
+                    if previous != spelling:
+                        raise ValueError("Case-colliding explicit archive directory")
                 if item.isfile():
                     if key in implied_directories:
                         raise ValueError("File conflicts with an archive directory")
