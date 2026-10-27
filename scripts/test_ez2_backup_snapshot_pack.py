@@ -5,9 +5,12 @@ import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+import os
+import gzip
+import tarfile
 from unittest.mock import patch
 
-from ez2_backup_snapshot_pack import pack
+from ez2_backup_snapshot_pack import pack, _files, _write_tar, _write_sql
 from ez2_backup_preflight import verify
 from ez2_backup_archive_guard import inspect
 from ez2_backup_scratch_replay import replay
@@ -107,6 +110,24 @@ with tempfile.TemporaryDirectory() as temp:
     assert replay(base / "backup", SHA)["replayed_files"] == 4
     cases += 1
 
+# Windows LocalWP must not merge distinct Linux source directories.
+def collide_directories(src, dst):
+    for folder, filename in (("Photos", "one.webp"), ("photos", "two.webp")):
+        path = src / "uploads" / folder
+        path.mkdir()
+        (path / filename).write_bytes(b"synthetic image")
+
+
+def collide_file_directory(src, dst):
+    (src / "uploads" / "Gallery").write_bytes(b"synthetic file")
+    directory = src / "uploads" / "gallery"
+    directory.mkdir()
+    (directory / "photo.webp").write_bytes(b"synthetic image")
+
+
+reject(collide_directories)
+reject(collide_file_directory)
+
 # Normal checkout and linked-worktree markers both forbid private backups.
 reject(lambda src, dst: (src.parent / ".git").mkdir())
 reject(lambda src, dst: (src.parent / ".git").write_text("gitdir: elsewhere", encoding="utf-8"))
@@ -142,5 +163,103 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Low-space backup accepted")
 
-assert cases == 22, cases
+# os.walk normally ignores unreadable nested directories. A backup must not
+# succeed with missing private files, even if other files were packaged.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "snapshot"
+    fixture(source)
+    restricted = source / "uploads" / "restricted"
+    restricted.mkdir()
+    (restricted / "hidden.webp").write_bytes(b"synthetic private image")
+    destination = base / "private-backup"
+    import os
+    real_scandir = os.scandir
+
+    def deny_nested_scan(path):
+        if Path(path) == restricted:
+            raise PermissionError("synthetic unreadable nested directory")
+        return real_scandir(path)
+
+    with patch("ez2_backup_snapshot_pack.os.scandir", side_effect=deny_nested_scan):
+        try:
+            pack(source, destination, SHA)
+        except ValueError as exc:
+            assert "enumerate complete snapshot" in str(exc)
+            assert not destination.exists(), "Incomplete backup created"
+            cases += 1
+        else:
+            raise AssertionError("Unreadable nested snapshot was silently accepted")
+
+
+# A same-length rewrite with the original mtime restored must still fail.
+# Otherwise a stale snapshot can be accepted after an in-place file change.
+def rewrite_preserving_size_and_mtime(path):
+    before = path.stat()
+    original = path.read_bytes()
+    assert original and original[0] != ord("X")
+    path.write_bytes(b"X" + original[1:])
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert path.stat().st_size == before.st_size
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    uploads = base / "snapshot" / "uploads"
+    entries = _files(uploads, "uploads")
+    rewrite_preserving_size_and_mtime(uploads / "file.txt")
+    try:
+        _write_tar(base / "stale.tar.gz", "uploads", entries)
+    except ValueError as exc:
+        assert "changed during packaging" in str(exc)
+        cases += 1
+    else:
+        raise AssertionError("Same-size pre-packaging rewrite was accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    uploads = base / "snapshot" / "uploads"
+    entries = _files(uploads, "uploads")
+    original_addfile = tarfile.TarFile.addfile
+
+    def tamper_after_tar_read(archive, member, fileobj=None):
+        result = original_addfile(archive, member, fileobj)
+        rewrite_preserving_size_and_mtime(uploads / "file.txt")
+        return result
+
+    with patch("ez2_backup_snapshot_pack.tarfile.TarFile.addfile",
+               new=tamper_after_tar_read):
+        try:
+            _write_tar(base / "changed.tar.gz", "uploads", entries)
+        except ValueError as exc:
+            assert "changed while reading" in str(exc)
+            cases += 1
+        else:
+            raise AssertionError("Same-size mid-tar rewrite was accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    sql = base / "snapshot" / "database.sql"
+    original_write = gzip.GzipFile.write
+
+    def tamper_after_sql_read(writer, data):
+        result = original_write(writer, data)
+        rewrite_preserving_size_and_mtime(sql)
+        return result
+
+    with patch("ez2_backup_snapshot_pack.gzip.GzipFile.write",
+               new=tamper_after_sql_read):
+        try:
+            _write_sql(sql, base / "changed.sql.gz")
+        except ValueError as exc:
+            assert "changed while reading" in str(exc)
+            cases += 1
+        else:
+            raise AssertionError("Same-size mid-SQL rewrite was accepted")
+
+assert cases == 28, cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")
