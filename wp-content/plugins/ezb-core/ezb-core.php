@@ -2354,10 +2354,18 @@ add_shortcode(
 					? $owner_alt
 					: __( 'Window furnishings photograph', 'ezb-core' );
 			}
+			// Runtime smoke and local dev use a separate ?ezb_page= prototype
+			// renderer: the visible product hero must still be eagerly loaded.
+			$prototype_product = 'development' === wp_get_environment_type()
+				&& isset( $_GET['ezb_page'] ) && is_string( $_GET['ezb_page'] )
+				&& ! empty( $candidate['page_slug'] )
+				&& sanitize_key( wp_unslash( $_GET['ezb_page'] ) ) === $candidate['page_slug'];
+			$on_product_page = ! empty( $candidate['page_slug'] )
+				&& ( is_page( $candidate['page_slug'] ) || $prototype_product );
 			$fetch_attributes = ezb_media_slot_fetch_attributes(
 				$slot,
 				is_front_page(),
-				! empty( $candidate['page_slug'] ) && is_page( $candidate['page_slug'] )
+				$on_product_page
 			);
 			return wp_get_attachment_image(
 				$attachment_id,
