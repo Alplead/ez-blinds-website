@@ -15,7 +15,7 @@ from ez2_installed_code_parity import check as check_parity
 from ez2_wp_preinstall_checkpoint import RECEIPT_SUFFIX, _directory, verify_receipt
 from ez2_wp_snapshot_capture import NAME, _private_parent_outside_git
 
-SHA = re.compile(r"[0-9a-f]{40}\\Z")
+SHA = re.compile(r"[0-9a-f]{40}\Z")
 
 
 def revalidate(receipt_path, backup_dir, installed_release_dir,
