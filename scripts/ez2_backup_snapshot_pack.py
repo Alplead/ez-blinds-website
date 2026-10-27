@@ -56,7 +56,7 @@ def _walk_error(exc):
     raise ValueError("Cannot enumerate complete snapshot directory") from exc
 
 
-def _files(root, role):
+def _files(root, role, *, allow_empty=False):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Snapshot component must be a real directory")
     result = []
@@ -88,7 +88,7 @@ def _files(root, role):
             total += info.st_size
             if len(result) > MAX_MEMBERS or total > MAX_ARCHIVE_BYTES:
                 raise ValueError("Snapshot exceeds archive safety budget")
-    if not result:
+    if not result and not allow_empty:
         raise ValueError("Empty snapshot component")
     return sorted(result, key=lambda item: item[1])
 
@@ -208,7 +208,7 @@ def pack(snapshot_dir, destination_dir, exact_sha):
         if _file_identity(_regular(source / "database.sql")) != _file_identity(sql_info):
             raise ValueError("Snapshot SQL changed after packaging")
         for role, initial_entries in inventory.items():
-            final_entries = _files(source / role, role)
+            final_entries = _files(source / role, role, allow_empty=True)
             initial_state = tuple((member, _file_identity(info))
                                   for _, member, info in initial_entries)
             final_state = tuple((member, _file_identity(info))
