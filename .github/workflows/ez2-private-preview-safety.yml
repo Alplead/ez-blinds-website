@@ -1,0 +1,38 @@
+name: EZ2 Private Preview Gate (No Deployment)
+on:
+  pull_request:
+    branches:
+      - feature/vertical-slice-v1
+    paths:
+      - 'tools/ez2-private-preview/**'
+      - 'scripts/test_ez2_private_preview.mjs'
+      - '.github/workflows/ez2-private-preview-safety.yml'
+permissions:
+  contents: read
+jobs:
+  preview-auth-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and private access regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/ez2-private-preview/auth-proxy.mjs
+          node --check scripts/test_ez2_private_preview.mjs
+          node scripts/test_ez2_private_preview.mjs | tee /tmp/ez2-private-preview.log
+          grep -Eq '^EZ2_PRIVATE_PREVIEW_AUTH_PASS cases=[1-9][0-9]*$' /tmp/ez2-private-preview.log
+      - name: Confirm preview remains deployment-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f .vercel/project.json
+          ! grep -Eq 'vercel (deploy|--prod)|create_sandbox|sshpass' tools/ez2-private-preview/auth-proxy.mjs
+          grep -Fq 'YES_TEMPORARY_SANDBOX_ONLY' tools/ez2-private-preview/auth-proxy.mjs
+          echo EZ2_PRIVATE_PREVIEW_NO_DEPLOYMENT_PASS
