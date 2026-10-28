@@ -19,6 +19,24 @@ assert.ok(productSelect, 'contact form must contain product selector');
 const optionLabels = [...productSelect.matchAll(/selected\( \$selected_product, '([^']+)' \)/g)].map(match => match[1]);
 assert.deepEqual(optionLabels, approved.map(([, label]) => label),
   'contact form choices must follow D-017 Owner-approved product order');
+const quoteHandler = core.slice(core.indexOf('function ezb_handle_quote_form()'),
+  core.indexOf("add_action( 'admin_post_nopriv_ezb_quote'"));
+assert.match(core, /function ezb_quote_product_is_allowed\( \$product \)/,
+  'server must define a product allowlist');
+assert.match(core, /array_values\( ezb_quote_product_labels\(\) \)/,
+  'allowlist must derive from D-017 labels');
+assert.match(core, /array\( 'Other \/ Not sure' \)/,
+  'neutral enquiry must remain available');
+assert.match(quoteHandler, /if \( ! ezb_quote_product_is_allowed\( \$product \) \) \{[\s\S]*?quote_status=invalid/,
+  'POST must reject unapproved product values');
+assert.ok(quoteHandler.indexOf('ezb_quote_product_is_allowed( $product )') < quoteHandler.indexOf('wp_mail('),
+  'product validation must precede any mail call');
+assert.match(core, /wp_unique_id\( 'ezb-contact-method-note-' \)/,
+  'each form needs a distinct contact help ID');
+assert.equal((core.match(/esc_attr\( \$contact_note_id \)/g) || []).length, 3,
+  'phone, email and help text must reference the same unique ID');
+assert.doesNotMatch(core, /id="ezb-contact-method-note"/,
+  'do not render a duplicate static ID across forms');
 console.log('EZB_PRODUCT_QUOTE_STATIC_PASS routes=5');
 
 if (process.env.EZB_BASE_URL) {

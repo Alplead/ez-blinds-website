@@ -259,6 +259,14 @@ function ezb_quote_product_labels() {
 	);
 }
 
+/** Accept only the five approved products or the neutral enquiry choice. */
+function ezb_quote_product_is_allowed( $product ) {
+	return is_string( $product ) && (
+		'' === $product ||
+		in_array( $product, array_merge( array_values( ezb_quote_product_labels() ), array( 'Other / Not sure' ) ), true )
+	);
+}
+
 add_shortcode(
 	'ezb_quote_form',
 	function () {
@@ -267,6 +275,7 @@ add_shortcode(
 			: '';
 		$labels = ezb_quote_product_labels();
 		$selected_product = isset( $labels[ $slug ] ) ? $labels[ $slug ] : '';
+		$contact_note_id = wp_unique_id( 'ezb-contact-method-note-' );
 		$status = isset( $_GET['quote_status'] ) && is_string( $_GET['quote_status'] )
 			? sanitize_key( wp_unslash( $_GET['quote_status'] ) )
 			: '';
@@ -299,10 +308,10 @@ add_shortcode(
 				<div class="ezb-form-grid">
 					<p><label><?php esc_html_e( 'Name', 'ezb-core' ); ?><br><input type="text" name="name" autocomplete="name" maxlength="120" required></label></p>
 					<p><label><?php esc_html_e( 'Suburb / Postcode', 'ezb-core' ); ?><br><input type="text" name="suburb" maxlength="120"></label></p>
-					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" autocomplete="tel" maxlength="60" aria-describedby="ezb-contact-method-note"></label></p>
-					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" autocomplete="email" maxlength="254" aria-describedby="ezb-contact-method-note"></label></p>
+					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" autocomplete="tel" maxlength="60" aria-describedby="<?php echo esc_attr( $contact_note_id ); ?>"></label></p>
+					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" autocomplete="email" maxlength="254" aria-describedby="<?php echo esc_attr( $contact_note_id ); ?>"></label></p>
 				</div>
-				<p class="ezb-form-note" id="ezb-contact-method-note"><?php esc_html_e( 'Please enter a phone number or email address so we can reply.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-note" id="<?php echo esc_attr( $contact_note_id ); ?>"><?php esc_html_e( 'Please enter a phone number or email address so we can reply.', 'ezb-core' ); ?></p>
 
 				<p>
 					<label><?php esc_html_e( 'Product', 'ezb-core' ); ?><br>
@@ -406,6 +415,13 @@ function ezb_handle_quote_form() {
 	// Validate the supplied address BEFORE sanitisation can erase an invalid
 	// value; phone-only enquiries remain valid when email was truly left blank.
 	if ( '' === $name || ( '' !== $email_input && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) || ( '' === $phone && '' === $email ) ) {
+		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
+		exit;
+	}
+
+	// The public POST body must not invent a product category or inject an
+	// arbitrary subject label. Enforce the same choices server-side.
+	if ( ! ezb_quote_product_is_allowed( $product ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
 		exit;
 	}
