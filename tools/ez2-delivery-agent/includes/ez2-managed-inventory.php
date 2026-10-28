@@ -72,6 +72,11 @@ final class EZ2_Managed_Inventory {
                         'title' => $row['title'], 'slug' => $row['slug'],
                         'status' => $row['status'], 'body' => $row['body'],
                         'elementor_data' => $nodes,
+                        // PHP JSON decoding collapses duplicate keys. Preserve a
+                        // digest of the original bytes so local edits cannot hide
+                        // behind equivalent decoded Elementor structures.
+                        // Harmless reserialization deliberately counts as drift.
+                        'elementor_data_raw_sha256' => hash('sha256', $row['elementor_data']),
                         'page_settings' => $row['page_settings'],
                         'elementor_version' => $row['elementor_version'],
                     ]),
