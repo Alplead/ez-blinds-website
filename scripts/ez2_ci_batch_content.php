@@ -34,7 +34,8 @@ final class EZ2_CI_Batch_Content {
     static function apply(array $ops, string $token, string $fault=''): int {
         if (!preg_match('/^[a-f0-9]{32}$/D',$token) || count($ops)<1 || count($ops)>20
             || !array_is_list($ops)
-            || !in_array($fault,['','AFTER_FIRST','AFTER_SECOND','AFTER_LAST'],true))
+            || !in_array($fault,['','AFTER_FIRST','AFTER_SECOND','AFTER_LAST'],true)
+            || ($fault==='AFTER_SECOND' && count($ops)<2))
             throw new RuntimeException('INVALID_BATCH');
         $before=[]; $seen=[];
         foreach ($ops as $op) {
