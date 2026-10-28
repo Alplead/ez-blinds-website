@@ -191,14 +191,19 @@ def reject_post_preflight_fifo_swap(filename):
         fixture(root)
         target = root / filename
         swapped = False
+        target_reads = 0
 
         def swap_before_open(path):
-            nonlocal swapped
+            nonlocal swapped, target_reads
             info = regular_file(path)
-            if Path(path) == target and not swapped:
-                target.unlink()
-                os.mkfifo(target)
-                swapped = True
+            if Path(path) == target:
+                target_reads += 1
+                # First read pins the post-preflight inventory. Swap only
+                # after the structural inspector performs its own lstat.
+                if target_reads == 2 and not swapped:
+                    target.unlink()
+                    os.mkfifo(target)
+                    swapped = True
             return info
 
         with patch("ez2_backup_archive_guard.regular_file",
