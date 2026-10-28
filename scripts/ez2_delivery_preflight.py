@@ -7,10 +7,10 @@ this public-repository contract.
 """
 import json
 import re
-import stat
 import sys
 from pathlib import Path
 
+from ez2_backup_preflight import checked_read, regular_file, _identity
 from ez2_content_guard import plan as content_plan
 from ez2_elementor_export_check import check as check_elementor, unique, reject_nonfinite
 from ez2_plugin_dependency_check import check as check_plugins
@@ -21,14 +21,16 @@ SLOT = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
 FILE = re.compile(r"[a-z0-9][a-z0-9_-]{0,70}\.json\Z")
 
 
-def load(root, filename, limit):
+def load(root, filename, limit, pinned=None):
     if not isinstance(filename, str) or not FILE.fullmatch(filename):
         raise ValueError("Unsafe JSON filename")
-    path = root / filename
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= limit:
-        raise ValueError("Unsafe, linked, empty or oversized JSON file")
-    return json.loads(path.read_text(encoding="utf-8"),
+    # Bind the JSON bytes to a verified regular-file descriptor. A plain
+    # lstat() followed by read_text() can follow a replacement symlink or
+    # silently consume another file after the initial validation.
+    info, _, raw = checked_read(root / filename, max_bytes=limit, collect=True)
+    if pinned is not None:
+        pinned[filename] = _identity(info)
+    return json.loads(raw.decode("utf-8"),
                       object_pairs_hook=unique, parse_constant=reject_nonfinite)
 
 
@@ -105,14 +107,16 @@ def run(root, expected_sha):
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Unsafe contract directory")
-    contract = load(root, "delivery.json", 32768)
+    root_identity = _identity(root.lstat())
+    pinned = {}
+    contract = load(root, "delivery.json", 32768, pinned)
     if not isinstance(contract, dict):
         raise ValueError("Invalid contract")
     lock = contract.get("plugin_lock")
     if not isinstance(lock, str) or not FILE.fullmatch(lock):
         raise ValueError("Invalid plugin lock filename")
-    plugin_doc = load(root, lock, 32768)
-    installed = load(root, "installed.json", 32768)
+    plugin_doc = load(root, lock, 32768, pinned)
+    installed = load(root, "installed.json", 32768, pinned)
     templates = contract.get("templates")
     if not isinstance(templates, list) or len(templates) > 20:
         raise ValueError("Invalid templates")
@@ -123,12 +127,22 @@ def run(root, expected_sha):
             raise ValueError("Invalid template file")
         name = entry["file"]
         declared.add(name)
-        exports[name] = load(root, name, 256000)
+        exports[name] = load(root, name, 256000, pinned)
     # The delivery contract is a closed inventory. Never silently accept
     # undeclared private files, nested folders, or extra deployment inputs.
     if {entry.name for entry in root.iterdir()} != declared:
         raise ValueError("Unexpected or missing delivery contract entries")
-    return check(contract, installed, plugin_doc, exports, expected_sha)
+    result = check(contract, installed, plugin_doc, exports, expected_sha)
+    # A valid conflict plan must describe the SAME files that were parsed.
+    # Re-check the complete inventory after validation, including same-byte
+    # replacements and additions that occur while the plan is computed.
+    if (root.is_symlink() or not root.is_dir()
+            or _identity(root.lstat()) != root_identity
+            or {entry.name for entry in root.iterdir()} != declared
+            or any(_identity(regular_file(root / name)) != identity
+                   for name, identity in pinned.items())):
+        raise ValueError("Delivery contract inputs changed during preflight")
+    return result
 
 
 if __name__ == "__main__":
@@ -138,6 +152,6 @@ if __name__ == "__main__":
         result = run(sys.argv[1], sys.argv[2])
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["status"] == "BLOCKED_PREFLIGHT" else 0)
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError) as exc:
         print("EZ2_DELIVERY_PREFLIGHT_FAIL: " + str(exc), file=sys.stderr)
         sys.exit(1)

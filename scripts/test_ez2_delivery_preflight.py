@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from ez2_content_guard import digest
 from ez2_delivery_preflight import check, run
@@ -136,5 +137,54 @@ with tempfile.TemporaryDirectory() as tmp:
     assert subprocess.run(cmd, capture_output=True).returncode == 1
     cases += 1
 
-assert cases == 29, cases
+    # A same-byte replacement between lstat and open must not pass as the
+    # original trusted template. The read must bind to the initial inode.
+    (root/"home.json").write_text(json.dumps(e["home.json"]))
+    original_open = os.open
+    def swap_before_open(path, flags, *args, **kwargs):
+        if Path(path) == root/"home.json":
+            replacement = root/"replacement.json"
+            replacement.write_bytes((root/"home.json").read_bytes())
+            os.replace(replacement, root/"home.json")
+        return original_open(path, flags, *args, **kwargs)
+    with patch("ez2_backup_preflight.os.open", side_effect=swap_before_open):
+        try:
+            run(root, SHA)
+        except ValueError:
+            cases += 1
+        else:
+            raise AssertionError("Pre-open template replacement accepted")
+
+    # An identical replacement AFTER all JSON parsing is equally unsafe:
+    # the returned plan would no longer describe the files at its path.
+    original_check = check
+    def swap_after_plan(*args):
+        result = original_check(*args)
+        replacement = root/"replacement.json"
+        replacement.write_bytes((root/"home.json").read_bytes())
+        os.replace(replacement, root/"home.json")
+        return result
+    with patch("ez2_delivery_preflight.check", side_effect=swap_after_plan):
+        try:
+            run(root, SHA)
+        except ValueError:
+            cases += 1
+        else:
+            raise AssertionError("Post-plan template replacement accepted")
+
+    # Newly introduced undeclared input after inventory checking must fail.
+    def add_after_plan(*args):
+        result = original_check(*args)
+        (root/"undeclared-private.json").write_text("{}")
+        return result
+    with patch("ez2_delivery_preflight.check", side_effect=add_after_plan):
+        try:
+            run(root, SHA)
+        except ValueError:
+            cases += 1
+        else:
+            raise AssertionError("Post-plan inventory mutation accepted")
+    (root/"undeclared-private.json").unlink()
+
+assert cases == 32, cases
 print(f"EZ2_DELIVERY_PREFLIGHT_PASS cases={cases}")
