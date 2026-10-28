@@ -151,7 +151,8 @@ def _write_tar(destination, role, entries):
                 entry.mtime = 0
                 archive.addfile(entry)
             for path, member, initial in entries:
-                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0))
                 with os.fdopen(os.open(path, flags), "rb") as source:
                     before = os.fstat(source.fileno())
                     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
@@ -170,10 +171,12 @@ def _write_tar(destination, role, entries):
 
 def _write_sql(source_path, destination):
     initial = _regular(source_path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(os.open(source_path, flags), "rb") as source:
         before = os.fstat(source.fileno())
-        if before.st_nlink != 1 or _file_identity(before) != _file_identity(initial):
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or _file_identity(before) != _file_identity(initial)):
             raise ValueError("SQL source changed before packaging")
         with destination.open("xb") as output:
             with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as compressed:

@@ -387,5 +387,50 @@ check_late_directory_drift(lambda path: (path / "new-empty").mkdir())
 check_late_directory_drift(lambda path: path.rmdir())
 check_late_directory_drift(replace_empty_directory)
 
-assert cases == 34, cases
+
+# A source can change between lstat() and open(). Replacing it with a FIFO
+# must fail immediately rather than block forever waiting for a writer.
+# The test uses synthetic files and never touches a live WordPress site.
+def reject_fifo_swap(component):
+    global cases
+    with tempfile.TemporaryDirectory() as temp:
+        base = Path(temp)
+        source = base / "snapshot"
+        fixture(source)
+        if component == "sql":
+            target = source / "database.sql"
+        else:
+            target = source / "uploads" / "file.txt"
+            entries = _files(source / "uploads", "uploads")
+        real_open = os.open
+        swapped = False
+
+        def swap_before_open(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if os.fspath(path) == os.fspath(target) and not swapped:
+                assert flags & os.O_NONBLOCK, "FIFO open must not block"
+                target.unlink()
+                os.mkfifo(target)
+                swapped = True
+            return real_open(path, flags, *args, **kwargs)
+
+        with patch("ez2_backup_snapshot_pack.os.open", side_effect=swap_before_open):
+            try:
+                if component == "sql":
+                    _write_sql(target, base / "unsafe.sql.gz")
+                else:
+                    _write_tar(base / "unsafe.tar.gz", "uploads", entries)
+            except ValueError as exc:
+                assert swapped, "Synthetic race was not exercised"
+                assert "changed" in str(exc), str(exc)
+                cases += 1
+            else:
+                raise AssertionError("FIFO replacement accepted")
+
+
+if hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"):
+    reject_fifo_swap("sql")
+    reject_fifo_swap("uploads")
+
+assert cases == 34 + (2 if hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK") else 0), cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")
