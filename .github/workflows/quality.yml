@@ -131,7 +131,7 @@ jobs:
           php -l wp-content/plugins/ezb-core/includes/ezb-quote-receipt.php
           php -l scripts/test-quote-receipt.php
           php scripts/test-quote-receipt.php | tee /tmp/quote-receipt.log
-          grep -q 'EZB_QUOTE_RECEIPT_PASS cases=14' /tmp/quote-receipt.log
+          grep -q 'EZB_QUOTE_RECEIPT_PASS cases=21' /tmp/quote-receipt.log
 
       - name: Test quote contact-method pre-submit validation
         run: |

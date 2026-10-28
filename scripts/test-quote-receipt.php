@@ -32,4 +32,17 @@ expect_receipt( ezb_quote_receipt_valid( strtoupper( $receipt ), $now ), false, 
 expect_receipt( ezb_quote_receipt_valid( $receipt . 'junk', $now ), false, 'suffix rejected' );
 expect_receipt( ezb_quote_receipt_valid( array( $receipt ), $now ), false, 'array receipt rejected' );
 expect_receipt( ezb_quote_receipt_valid( str_repeat( 'x', 100000 ), $now ), false, 'oversized receipt rejected' );
+// The original timestamp-only HMAC produced identical receipts for every
+// successful enquiry in a single second. Test independent send identities.
+$second_receipt = ezb_quote_receipt_issue( $now );
+expect_receipt( $second_receipt !== $receipt, true, 'same-second sends have unique receipts' );
+expect_receipt( ezb_quote_receipt_valid( $second_receipt, $now ), true, 'second signed receipt is valid' );
+expect_receipt( (bool) preg_match( '/\A[0-9]{10}\.[a-f0-9]{32}\.[a-f0-9]{64}\z/D', $receipt ), true, 'receipt has opaque random nonce' );
+$nonce_offset = 11;
+$changed_nonce = substr( $receipt, 0, $nonce_offset ) . ( $receipt[ $nonce_offset ] === 'a' ? 'b' : 'a' ) . substr( $receipt, $nonce_offset + 1 );
+expect_receipt( ezb_quote_receipt_valid( $changed_nonce, $now ), false, 'tampered nonce rejected' );
+expect_receipt( ezb_quote_receipt_valid( substr( $receipt, 0, $nonce_offset ) . 'A' . substr( $receipt, $nonce_offset + 1 ), $now ), false, 'noncanonical nonce rejected' );
+expect_receipt( ezb_quote_receipt_valid( substr( $receipt, 0, $nonce_offset ) . substr( $receipt, $nonce_offset + 1 ), $now ), false, 'truncated nonce rejected' );
+$legacy = $now . '.' . hash_hmac( 'sha256', 'ezb-quote-sent:' . $now, wp_salt( 'auth' ) );
+expect_receipt( ezb_quote_receipt_valid( $legacy, $now ), false, 'legacy timestamp-only receipt rejected' );
 echo 'EZB_QUOTE_RECEIPT_PASS cases=' . $cases . PHP_EOL;
