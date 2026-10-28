@@ -6,6 +6,8 @@ live-site identity check or deployment occurs. Never commit actual backups.
 """
 import gzip
 import json
+import os
+from contextlib import contextmanager
 import re
 import unicodedata
 import sys
@@ -42,6 +44,25 @@ def safe_member(name, role, is_dir=False):
     return unicodedata.normalize("NFC", "/".join(parts)).casefold()
 
 
+@contextmanager
+def _safe_archive_input(path):
+    """Pin the verified regular-file descriptor before gzip/tar decoding.
+
+    An archive swapped for a FIFO after preflight must never block on open.
+    This also refuses same-byte inode replacement during inspection.
+    """
+    initial = regular_file(path)
+    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
+    with os.fdopen(os.open(path, flags), "rb") as source:
+        if _identity(os.fstat(source.fileno())) != _identity(initial):
+            raise ValueError("Backup archive replaced before inspection")
+        yield source
+        if (_identity(os.fstat(source.fileno())) != _identity(initial)
+                or _identity(regular_file(path)) != _identity(initial)):
+            raise ValueError("Backup archive changed during inspection")
+
+
 def inspect_tar(path, role):
     seen = set()
     regular_paths = set()
@@ -49,7 +70,7 @@ def inspect_tar(path, role):
     directory_spellings = {}
     members = files = size = 0
     try:
-        with tarfile.open(path, mode="r:gz") as archive:
+        with _safe_archive_input(path) as source, tarfile.open(fileobj=source, mode="r:gz") as archive:
             for item in archive:
                 members += 1
                 if members > MAX_MEMBERS:
@@ -108,7 +129,7 @@ def inspect_tar(path, role):
 def inspect_sql(path):
     total = 0
     try:
-        with gzip.open(path, "rb") as stream:
+        with _safe_archive_input(path) as source, gzip.GzipFile(fileobj=source, mode="rb") as stream:
             while True:
                 chunk = stream.read(CHUNK)
                 if not chunk:

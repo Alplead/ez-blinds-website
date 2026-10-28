@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ez2_backup_archive_guard import inspect, inspect_tar as real_inspect_tar
-from ez2_backup_preflight import ROLES
+from ez2_backup_preflight import ROLES, regular_file
 
 SHA = "a" * 40
 cases = 0
@@ -182,5 +182,38 @@ def reject_late_archive_mutation(kind):
 reject_late_archive_mutation("sql-bytes")
 reject_late_archive_mutation("same-byte-replacement")
 
-assert cases == 35, cases
+# After the initial byte-verification pass, a swapped archive path must
+# fail immediately instead of blocking on a newly-created named pipe.
+def reject_post_preflight_fifo_swap(filename):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        fixture(root)
+        target = root / filename
+        swapped = False
+
+        def swap_before_open(path):
+            nonlocal swapped
+            info = regular_file(path)
+            if Path(path) == target and not swapped:
+                target.unlink()
+                os.mkfifo(target)
+                swapped = True
+            return info
+
+        with patch("ez2_backup_archive_guard.regular_file",
+                   side_effect=swap_before_open):
+            try:
+                inspect(root, SHA)
+            except (OSError, ValueError, TypeError):
+                assert swapped
+                cases += 1
+            else:
+                raise AssertionError("Post-preflight FIFO archive swap was accepted")
+
+
+reject_post_preflight_fifo_swap(ROLES["database"])
+reject_post_preflight_fifo_swap(ROLES["uploads"])
+
+assert cases == 37, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")
