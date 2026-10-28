@@ -279,8 +279,12 @@ jobs:
           python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
           grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=27' /tmp/release-scope-regression.log
 
-      - name: Syntax-check executable CI-only managed Elementor batch transaction
-        run: php -l scripts/ez2_ci_batch_content.php
+      - name: Verify bounded disposable Elementor batch transaction and owner-edit safety
+        run: |
+          php -l scripts/ez2_ci_batch_content.php
+          php -l scripts/test_ez2_ci_batch_content.php
+          php scripts/test_ez2_ci_batch_content.php | tee /tmp/ez2-ci-batch-guard.log
+          grep -Fq 'EZ2_CI_BATCH_GUARD_PASS cases=13 max_pages=20 faults=3' /tmp/ez2-ci-batch-guard.log
 
       - name: Guard disposable release-installed Elementor roundtrip
         run: |

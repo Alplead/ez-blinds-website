@@ -23,7 +23,8 @@ final class EZ2_CI_Batch_Content {
         $mark = get_post_meta($id,self::MARK,false);
         $data = get_post_meta($id,'_elementor_data',false);
         if (!$post || $post->post_type!=='page' || $post->post_status!=='draft'
-            || $post->post_title!==self::TITLE || count($mark)!==1
+            || $post->post_title!==self::TITLE || $post->post_content!==''
+            || $post->post_excerpt!=='' || count($mark)!==1
             || $mark[0]!==$token || count($data)!==1 || !is_string($data[0]))
             throw new RuntimeException('UNMANAGED_DRAFT_OR_METADATA');
         return $data[0];
@@ -31,9 +32,9 @@ final class EZ2_CI_Batch_Content {
 
     /** Preflight ALL pages, then write; reverse rollback on any failure. */
     static function apply(array $ops, string $token, string $fault=''): int {
-        if (!preg_match('/^[a-f0-9]{32}$/D',$token) || count($ops)!==2
+        if (!preg_match('/^[a-f0-9]{32}$/D',$token) || count($ops)<1 || count($ops)>20
             || !array_is_list($ops)
-            || !in_array($fault,['','AFTER_FIRST','AFTER_SECOND'],true))
+            || !in_array($fault,['','AFTER_FIRST','AFTER_SECOND','AFTER_LAST'],true))
             throw new RuntimeException('INVALID_BATCH');
         $before=[]; $seen=[];
         foreach ($ops as $op) {
@@ -65,7 +66,8 @@ final class EZ2_CI_Batch_Content {
                 if (self::read($id,$token)!==$next)
                     throw new RuntimeException('POSTINSTALL_CONTENT_MISMATCH');
                 if (($fault==='AFTER_FIRST' && count($written)===1)
-                    || ($fault==='AFTER_SECOND' && count($written)===2))
+                    || ($fault==='AFTER_SECOND' && count($written)===2)
+                    || ($fault==='AFTER_LAST' && count($written)===count($ops)))
                     throw new RuntimeException('INJECTED_CI_BATCH_FAULT');
             }
         } catch (Throwable $error) {
@@ -114,9 +116,9 @@ final class EZ2_CI_Batch_Content {
         $frontPost=get_post($front);
         if (!$frontPost || $frontPost->post_status!=='publish')
             throw new RuntimeException('PUBLISHED_FRONT_PAGE_REQUIRED');
-        $token=bin2hex(random_bytes(16)); $ids=[]; $before=[];
+        $token=bin2hex(random_bytes(16)); $ids=[]; $before=[]; $candidates=[];
         try {
-            for ($i=1;$i<=2;$i++) {
+            for ($i=1;$i<=3;$i++) {
                 $id=wp_insert_post(['post_type'=>'page','post_status'=>'draft',
                     'post_title'=>self::TITLE,'post_content'=>''],true);
                 if (is_wp_error($id)||!is_int($id)||$id<1)
@@ -130,11 +132,18 @@ final class EZ2_CI_Batch_Content {
                     || !update_post_meta($id,'_elementor_data',wp_slash($raw)))
                     throw new RuntimeException('SYNTHETIC_DRAFT_META');
                 $before[$id]=self::read($id,$token);
+                // Page one uses the exact-head release candidate. Additional
+                // drafts use distinct CI-only derivatives to prove a batch
+                // can update different pages without publishing either.
+                $variant=$doc['content'];
+                if ($i>1) $variant[0]['id']=sprintf('e2a1b%03d',$i);
+                $candidates[$id]=$i===1 ? $next
+                    : wp_json_encode($variant,JSON_THROW_ON_ERROR);
             }
             $plan=[];
             foreach ($ids as $id) $plan[]=['id'=>$id,
-                'expected'=>hash('sha256',$before[$id]),'next'=>$next];
-            foreach (['AFTER_FIRST','AFTER_SECOND'] as $fault) {
+                'expected'=>hash('sha256',$before[$id]),'next'=>$candidates[$id]];
+            foreach (['AFTER_FIRST','AFTER_SECOND','AFTER_LAST'] as $fault) {
                 $failed=false;
                 try { self::apply($plan,$token,$fault); }
                 catch (RuntimeException $e) {
@@ -160,20 +169,20 @@ final class EZ2_CI_Batch_Content {
                 || self::read($ids[1],$token)!==$owner)
                 throw new RuntimeException('OWNER_EDIT_NOT_PRESERVED');
             update_post_meta($ids[1],'_elementor_data',wp_slash($before[$ids[1]]));
-            if (self::apply($plan,$token)!==2)
+            if (self::apply($plan,$token)!==3)
                 throw new RuntimeException('BATCH_APPLY_FAILED');
             foreach ($ids as $id)
-                if (self::read($id,$token)!==$next)
+                if (self::read($id,$token)!==$candidates[$id])
                     throw new RuntimeException('EXACT_CANDIDATE_NOT_INSTALLED');
             $same=[];
             foreach ($ids as $id) $same[]=['id'=>$id,
-                'expected'=>hash('sha256',$next),'next'=>$next];
+                'expected'=>hash('sha256',$candidates[$id]),'next'=>$candidates[$id]];
             if (self::apply($same,$token)!==0)
                 throw new RuntimeException('BATCH_NOT_IDEMPOTENT');
             $restore=[];
             foreach ($ids as $id) $restore[]=['id'=>$id,
-                'expected'=>hash('sha256',$next),'next'=>$before[$id]];
-            if (self::apply($restore,$token)!==2)
+                'expected'=>hash('sha256',$candidates[$id]),'next'=>$before[$id]];
+            if (self::apply($restore,$token)!==3)
                 throw new RuntimeException('BATCH_RESTORE_FAILED');
             foreach ($ids as $id)
                 if (self::read($id,$token)!==$before[$id])
@@ -188,7 +197,7 @@ final class EZ2_CI_Batch_Content {
                     throw new RuntimeException('SYNTHETIC_CLEANUP_FAILED');
             }
         }
-        echo "EZ2_CI_BATCH_CONTENT_PASS pages=2 faults=2 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true publication=false localwp_touched=false one_click_complete=false\n";
+        echo "EZ2_CI_BATCH_CONTENT_PASS pages=3 faults=3 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true distinct_synthetic_pages=true publication=false localwp_touched=false one_click_complete=false\n";
     }
 }
 if (!defined('EZ2_CI_BATCH_CONTENT_LIBRARY_ONLY')) {

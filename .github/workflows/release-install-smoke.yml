@@ -433,7 +433,7 @@ jobs:
             --entrypoint wp release-bootstrap \
             eval-file /opt/ezb-ci-scripts/ez2_ci_batch_content.php --allow-root \
             | tee /tmp/ez2-ci-batch-content.log
-          grep -Fq 'EZ2_CI_BATCH_CONTENT_PASS pages=2 faults=2 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true' /tmp/ez2-ci-batch-content.log
+          grep -Fq 'EZ2_CI_BATCH_CONTENT_PASS pages=3 faults=3 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true distinct_synthetic_pages=true' /tmp/ez2-ci-batch-content.log
 
       - name: Verify real WordPress post-install state and synthetic candidate cleanup
         env:
