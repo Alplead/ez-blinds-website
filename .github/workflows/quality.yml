@@ -137,7 +137,7 @@ jobs:
         run: |
           node --check scripts/test-quote-contact-method.mjs
           node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
-          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=8' /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=12' /tmp/quote-contact-method.log
 
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs
