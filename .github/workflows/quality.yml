@@ -486,7 +486,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_wp_snapshot_capture.py scripts/test_ez2_wp_snapshot_capture.py
           python3 scripts/test_ez2_wp_snapshot_capture.py | tee /tmp/ez2-wp-private-capture.log
-          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=70 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
+          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=76 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
 
       - name: Validate isolated EZ2 rollback backup manifest and bytes (synthetic only)
         run: |

@@ -43,6 +43,21 @@ if "eval-file" in args:
             pathlib.Path(args[0].split("=", 1)[1]) / "wp-content" / ".exported").exists():
         gate["expected_release_sha"] = "b" * 40
     print(json.dumps(gate))
+elif "db" in args and "query" in args:
+    required = ("--skip-column-names", "--skip-plugins", "--skip-themes")
+    if any(flag not in args for flag in required): sys.exit(4)
+    root = pathlib.Path(args[0].split("=", 1)[1])
+    if mode == "engine_query_error": sys.exit(5)
+    if mode == "engine_empty": pass
+    elif mode == "engine_nontransactional": print("wp_options\\tMyISAM")
+    elif mode == "engine_malformed": print("wp_options InnoDB")
+    elif mode == "engine_drift_after_export" and (
+            root / "wp-content" / ".exported").exists():
+        print("wp_options\\tInnoDB\\nwp_late\\tInnoDB")
+    elif mode == "engine_drift_after_pack" and (
+            root / "wp-content" / ".engine-drift").exists():
+        print("wp_options\\tInnoDB\\nwp_late\\tInnoDB")
+    else: print("wp_options\\tInnoDB\\nwp_posts\\tInnoDB")
 elif "db" in args and "export" in args:
     # Assert the actual WP-CLI argv rather than only checking a helper.
     # The capture must fail closed when its InnoDB snapshot flags are missing
@@ -53,7 +68,7 @@ elif "db" in args and "export" in args:
     if mode in ("db_error", "transaction_not_supported"): sys.exit(1)
     path = pathlib.Path(args[args.index("export") + 1])
     root = pathlib.Path(args[0].split("=", 1)[1])
-    if mode == "gate_drift_after_export":
+    if mode in ("gate_drift_after_export", "engine_drift_after_export"):
         (root / "wp-content" / ".exported").write_text("synthetic")
     if mode == "config_modified":
         (root / "wp-config.php").write_text("<?php // changed synthetic configuration")
@@ -141,6 +156,8 @@ with tempfile.TemporaryDirectory() as temp:
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
              "gate_missing_issues", "db_error", "transaction_not_supported", "empty_sql", "missing_sql",
              "symlink_sql", "hardlink_sql", "gate_drift_after_export",
+             "engine_query_error", "engine_empty", "engine_nontransactional",
+             "engine_malformed", "engine_drift_after_export",
              "config_modified", "bootstrap_modified", "file_drift_modify", "file_drift_add",
              "file_drift_delete"):
     reject(mode=mode)
@@ -243,6 +260,27 @@ for scenario in ("upload-drift", "plugin-drift", "theme-addition",
                 CASES += 1
             else:
                 raise AssertionError("Post-packaging WordPress drift was accepted")
+
+# Detect a table created or converted after packaging, even if all captured
+# WordPress files and the runtime identity remain unchanged.
+with tempfile.TemporaryDirectory() as temp:
+    root, parent, fake = fixture(Path(temp))
+
+    def pack_then_engine_drift(*args, **kwargs):
+        result = real_pack(*args, **kwargs)
+        (root / "wp-content" / ".engine-drift").write_text("synthetic")
+        return result
+
+    with patch("ez2_wp_snapshot_capture.pack", side_effect=pack_then_engine_drift):
+        try:
+            run(root, parent, fake, mode="engine_drift_after_pack")
+        except ValueError as exc:
+            assert "Database table inventory changed after archive packaging" in str(exc)
+            assert not (parent / "ez2-backup-test").exists()
+            CASES += 1
+        else:
+            raise AssertionError("Post-packaging database engine drift accepted")
+
 
 # A private file copy must reject same-length source rewrites even when
 # mtime is restored. These two races previously evaded size/mtime checks.
@@ -371,5 +409,5 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Directory drift during private copy was accepted")
 
-assert CASES == 1 + 1 + 17 + 7 + 5 + 4 + 11 + 7 + 4 + 8 + 2 + 2 + 1, CASES
+assert CASES == 1 + 1 + 22 + 7 + 5 + 4 + 11 + 7 + 4 + 8 + 1 + 2 + 2 + 1, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

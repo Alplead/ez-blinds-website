@@ -168,6 +168,44 @@ def _wp(wp_executable, root, args, env):
     return process.stdout
 
 
+def _transactional_table_inventory(wp_executable, root, env):
+    """Fail closed if a transactional SQL export cannot cover every base table.
+
+    --single-transaction protects InnoDB reads, not MyISAM or other engines.
+    Inspect the complete current database without printing table names or
+    credentials. Compare the inventory before and after the private capture;
+    this is not a guarantee against concurrent row changes or DDL races.
+    """
+    query = ("SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES "
+             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
+             "ORDER BY TABLE_NAME")
+    output = _wp(wp_executable, root, ["db", "query", query,
+                                     "--skip-column-names", "--skip-plugins",
+                                     "--skip-themes"], env)
+    if len(output.encode("utf-8")) > 1024 * 1024:
+        raise ValueError("Database engine inventory exceeds safety budget")
+    inventory = []
+    seen = set()
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 2:
+            raise ValueError("Malformed database engine inventory")
+        name, engine = parts
+        if (not name or name.strip() != name
+                or any(ord(char) < 32 or ord(char) == 127 for char in name)
+                or name.casefold() in seen):
+            raise ValueError("Invalid or duplicate database table")
+        if engine.casefold() != "innodb":
+            raise ValueError("Non-transactional database table blocks snapshot")
+        seen.add(name.casefold())
+        inventory.append(name)
+        if len(inventory) > 10000:
+            raise ValueError("Database engine inventory exceeds safety budget")
+    if not inventory:
+        raise ValueError("No transactional database tables verified")
+    return tuple(sorted(inventory))
+
+
 def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp_executable="wp"):
     if not isinstance(host, str) or not HOST.fullmatch(host):
         raise ValueError("Only isolated EZ2 .local hostnames are allowed")
@@ -224,6 +262,7 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     # after the post-capture runtime gate prevents silent file-set drift.
     initial_inventory = {role: _inventory(source, role)
                          for role, source in components.items()}
+    tables_before = _transactional_table_inventory(wp_executable, root, env)
     # All writes remain in a private directory outside the WordPress root.
     with tempfile.TemporaryDirectory(prefix="ez2-capture-", dir=parent) as scratch:
         staged = Path(scratch) / "snapshot"
@@ -254,6 +293,8 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
         post_gate = json.loads(_wp(wp_executable, root, ["eval-file", str(gate_file)], env))
         if post_gate != gate:
             raise ValueError("WordPress runtime identity changed during capture")
+        if _transactional_table_inventory(wp_executable, root, env) != tables_before:
+            raise ValueError("Database table inventory changed during capture")
         if any(_inventory(source, role) != initial_inventory[role]
                for role, source in components.items()):
             raise ValueError("WordPress source file inventory changed during capture")
@@ -274,6 +315,8 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
                                       ["eval-file", str(gate_file)], env))
             if final_gate != gate:
                 raise ValueError("WordPress runtime identity changed after archive packaging")
+            if _transactional_table_inventory(wp_executable, root, env) != tables_before:
+                raise ValueError("Database table inventory changed after archive packaging")
             if any(_inventory(source, role) != initial_inventory[role]
                    for role, source in components.items()):
                 raise ValueError("WordPress source file inventory changed after archive packaging")
