@@ -1,6 +1,7 @@
 """No WordPress or private media: fake WP-CLI plus synthetic directory fixture."""
 import json
 import os
+import tarfile
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -113,6 +114,7 @@ def reject(mutate=lambda root, parent, fake: None, **kwargs):
 
 with tempfile.TemporaryDirectory() as temp:
     root, parent, fake = fixture(Path(temp))
+    (root / "wp-content" / "uploads" / "empty" / "nested").mkdir(parents=True)
     result = run(root, parent, fake)
     assert result["status"] == "EZ2_PRIVATE_CAPTURE_ARCHIVED_AND_SCRATCH_FILE_REPLAYED_ONLY"
     assert result["backup_created"] and result["file_replay_verified"]
@@ -120,6 +122,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert result["database_export_generated"] and not result["database_restore_rehearsed"]
     assert not result["consistent_snapshot_verified"] and not result["deployment_authorized"]
     assert (parent / "ez2-backup-test" / "backup-manifest.json").is_file()
+    with tarfile.open(parent / "ez2-backup-test" / "uploads.tar.gz", "r:gz") as archive:
+        archived = {name.rstrip("/") for name in archive.getnames()}
+        assert {"uploads/empty", "uploads/empty/nested"} <= archived
     assert (root / "wp-content" / "uploads" / "synthetic.txt").exists()
     assert not any(x.name.startswith("ez2-capture-") for x in parent.iterdir())
     CASES += 1
@@ -189,9 +194,12 @@ reject(lambda root, parent, fake: (parent.parent / ".git").symlink_to("missing-g
 # the potentially lengthy packaging/replay phase. Only the newly created
 # private backup is deleted; the WordPress source is never rolled back here.
 for scenario in ("upload-drift", "plugin-drift", "theme-addition",
-                 "config-drift", "bootstrap-drift", "config-same-mtime"):
+                 "config-drift", "bootstrap-drift", "config-same-mtime",
+                 "empty-dir-added", "empty-dir-replaced"):
     with tempfile.TemporaryDirectory() as temp:
         root, parent, fake = fixture(Path(temp))
+        if scenario == "empty-dir-replaced":
+            (root / "wp-content/uploads/empty").mkdir()
 
         def pack_then_drift(*args, **kwargs):
             result = real_pack(*args, **kwargs)
@@ -201,6 +209,12 @@ for scenario in ("upload-drift", "plugin-drift", "theme-addition",
                 (root / "wp-content/plugins/synthetic.txt").write_text("late plugin change")
             elif scenario == "theme-addition":
                 (root / "wp-content/themes/late.txt").write_text("late theme addition")
+            elif scenario == "empty-dir-added":
+                (root / "wp-content/uploads/late-empty").mkdir()
+            elif scenario == "empty-dir-replaced":
+                empty = root / "wp-content/uploads/empty"
+                empty.rename(root / "wp-content/old-empty-stashed")
+                empty.mkdir()
             elif scenario == "config-drift":
                 (root / "wp-config.php").write_text("<?php // late config change")
             elif scenario == "bootstrap-drift":
@@ -327,5 +341,29 @@ for scenario in ("short-write", "same-length-corruption"):
                 raise AssertionError("Corrupt or truncated private copy accepted")
 
 
-assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 6 + 2 + 2, CASES
+# A directory added while a private component is being copied must fail,
+# even when every archived file remains unchanged.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    source = base / "uploads"
+    source.mkdir()
+    (source / "synthetic.txt").write_bytes(b"synthetic private image")
+    destination = base / "copy"
+    original_open = Path.open
+
+    def add_empty_during_copy(path, mode="r", *args, **kwargs):
+        if path == destination / "synthetic.txt" and mode == "xb":
+            (source / "late-empty").mkdir()
+        return original_open(path, mode, *args, **kwargs)
+
+    with patch.object(Path, "open", new=add_empty_during_copy):
+        try:
+            _copy_component(source, destination, "uploads")
+        except ValueError as exc:
+            assert "directories changed during capture" in str(exc), str(exc)
+            CASES += 1
+        else:
+            raise AssertionError("Directory drift during private copy was accepted")
+
+assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 8 + 2 + 2 + 1, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

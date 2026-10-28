@@ -16,7 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ez2_backup_snapshot_pack import _files, _regular, pack
+from ez2_backup_snapshot_pack import _directory_inventory, _files, _regular, pack
 from ez2_backup_scratch_replay import replay
 
 HOST = re.compile(r"ez2(?:-[a-z0-9]+)*\.local\Z")
@@ -58,16 +58,32 @@ def _inventory(source, role):
 
     Detect additions, removals and metadata changes across WP-CLI export/copy.
     """
-    return tuple(
+    files = tuple(
         (member, info.st_dev, info.st_ino, info.st_size,
          info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
         for _, member, info in _files(source, role)
     )
+    # Empty directories matter too: a file-only inventory cannot detect a
+    # missing directory or a same-name replacement during SQL export/replay.
+    return (_directory_inventory(source, role), files)
 
 
 def _copy_component(source, destination, role):
     entries = _files(source, role)
+    directories = _directory_inventory(source, role)
     destination.mkdir(mode=0o700)
+    # Recreate every source directory, including empty nested directories,
+    # before copying files. The packer can only archive directories that
+    # survive this private staging copy.
+    for _, member, device, inode in directories:
+        relative = member.split("/", 1)[1] if "/" in member else ""
+        original = source / relative
+        info = original.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or original.is_symlink()
+                or (info.st_dev, info.st_ino) != (device, inode)):
+            raise ValueError("WordPress component directory changed before capture")
+        if relative:
+            (destination / relative).mkdir(parents=True, exist_ok=True, mode=0o700)
     for path, member, expected in entries:
         relative = member.split("/", 1)[1]
         target = destination / relative
@@ -110,6 +126,8 @@ def _copy_component(source, destination, role):
                         or copied_digest.digest() != source_digest.digest()):
                     raise ValueError("Copied WordPress component differs from source")
             target.chmod(0o600)
+    if _directory_inventory(source, role) != directories:
+        raise ValueError("WordPress component directories changed during capture")
 
 
 def _bootstrap_fingerprint(path):
