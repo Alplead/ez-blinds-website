@@ -44,7 +44,13 @@ if "eval-file" in args:
         gate["expected_release_sha"] = "b" * 40
     print(json.dumps(gate))
 elif "db" in args and "export" in args:
-    if mode == "db_error": sys.exit(1)
+    # Assert the actual WP-CLI argv rather than only checking a helper.
+    # The capture must fail closed when its InnoDB snapshot flags are missing
+    # or unsupported by the installed mysqldump implementation.
+    required = ("--add-drop-table", "--single-transaction", "--quick",
+                "--skip-lock-tables", "--skip-plugins", "--skip-themes")
+    if any(flag not in args for flag in required): sys.exit(4)
+    if mode in ("db_error", "transaction_not_supported"): sys.exit(1)
     path = pathlib.Path(args[args.index("export") + 1])
     root = pathlib.Path(args[0].split("=", 1)[1])
     if mode == "gate_drift_after_export":
@@ -133,7 +139,7 @@ with tempfile.TemporaryDirectory() as temp:
     else: raise AssertionError("Existing backup overwritten")
 
 for mode in ("gate_error", "gate_wrong_site", "gate_wrong_sha", "gate_apply",
-             "gate_missing_issues", "db_error", "empty_sql", "missing_sql",
+             "gate_missing_issues", "db_error", "transaction_not_supported", "empty_sql", "missing_sql",
              "symlink_sql", "hardlink_sql", "gate_drift_after_export",
              "config_modified", "bootstrap_modified", "file_drift_modify", "file_drift_add",
              "file_drift_delete"):
@@ -365,5 +371,5 @@ with tempfile.TemporaryDirectory() as temp:
         else:
             raise AssertionError("Directory drift during private copy was accepted")
 
-assert CASES == 1 + 1 + 16 + 7 + 5 + 4 + 11 + 7 + 4 + 8 + 2 + 2 + 1, CASES
+assert CASES == 1 + 1 + 17 + 7 + 5 + 4 + 11 + 7 + 4 + 8 + 2 + 2 + 1, CASES
 print(f"EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases={CASES} fake_wp_cli=true live_wp_touched=false")

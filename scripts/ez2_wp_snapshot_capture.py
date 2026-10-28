@@ -228,8 +228,15 @@ def capture(wp_root, backup_parent, backup_name, host, version, exact_sha, *, wp
     with tempfile.TemporaryDirectory(prefix="ez2-capture-", dir=parent) as scratch:
         staged = Path(scratch) / "snapshot"
         staged.mkdir(mode=0o700)
+        # InnoDB tables must be exported from one transactional read view,
+        # without blocking the isolated test site with table locks. WP-CLI
+        # forwards these documented mysqldump flags. Non-transactional tables
+        # and simultaneous file changes are NOT covered by this guarantee.
+        # If the local mysqldump cannot honour the flags, fail closed.
         _wp(wp_executable, root, ["db", "export", str(staged / "database.sql"),
-                                    "--add-drop-table", "--skip-plugins", "--skip-themes"], env)
+                                    "--add-drop-table", "--single-transaction",
+                                    "--quick", "--skip-lock-tables",
+                                    "--skip-plugins", "--skip-themes"], env)
         sql = staged / "database.sql"
         # WP-CLI output is untrusted until its file type, link count and
         # bounded size are checked. Never package a linked SQL export.
