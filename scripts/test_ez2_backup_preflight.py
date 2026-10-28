@@ -7,8 +7,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from ez2_backup_preflight import ROLES, verify
+from ez2_backup_preflight import ROLES, verify, regular_file
 
 SHA = "a" * 40
 cases = 0
@@ -114,5 +115,39 @@ def nonfinite(root, m):
     (root / "backup-manifest.json").write_text('{"schema_version":NaN}')
 reject(nonfinite)
 
-assert cases == 26, cases
+# Simulate a symlink substitution immediately AFTER lstat, preserving
+# identical bytes. Old path-based reads would silently accept this race.
+def reject_post_stat_symlink_swap(filename):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "backup"
+        root.mkdir()
+        fixture(root)
+        target = root / filename
+        external = root.parent / ("outside-" + filename)
+        swapped = False
+
+        def swap_after_stat(path):
+            nonlocal swapped
+            info = regular_file(path)
+            if Path(path) == target and not swapped:
+                target.rename(external)
+                target.symlink_to(external)
+                swapped = True
+            return info
+
+        with patch("ez2_backup_preflight.regular_file", side_effect=swap_after_stat):
+            try:
+                verify(root, SHA)
+            except (OSError, ValueError, TypeError):
+                assert swapped
+                cases += 1
+            else:
+                raise AssertionError("Post-stat symlink substitution was accepted")
+
+
+reject_post_stat_symlink_swap("backup-manifest.json")
+reject_post_stat_symlink_swap(ROLES["uploads"])
+
+assert cases == 28, cases
 print(f"EZ2_BACKUP_PREFLIGHT_PASS cases={cases}")
