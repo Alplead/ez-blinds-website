@@ -695,10 +695,12 @@ jobs:
           grep -q 'name="name"' /tmp/contact.html
           grep -q 'name="phone"' /tmp/contact.html
           grep -q 'name="email"' /tmp/contact.html
-          grep -q 'id="ezb-contact-method-note"' /tmp/contact.html
+          # Each shortcode instance must have its own accessible help ID.
+          note_id="$(sed -n 's/.*id="\\(ezb-contact-method-note-[0-9][0-9]*\\)".*/\\1/p' /tmp/contact.html)"
+          test -n "$note_id"
+          test "$(grep -oF "aria-describedby=\"$note_id\"" /tmp/contact.html | wc -l)" -eq 2
           grep -Fq 'We can discuss how to share photos after your enquiry.' /tmp/contact.html
           ! grep -Fqi 'Photo upload will be added' /tmp/contact.html
-          grep -q 'aria-describedby="ezb-contact-method-note"' /tmp/contact.html
           grep -q 'name="product"' /tmp/contact.html
           grep -q 'name="message"' /tmp/contact.html
 
