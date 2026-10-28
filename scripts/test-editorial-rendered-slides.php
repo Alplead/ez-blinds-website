@@ -11,8 +11,14 @@ function ezb_find_attachment_by_basename($name) {
 }
 function get_post_mime_type($id) { return 'image/webp'; }
 $GLOBALS['missing_ids'] = array();
+$GLOBALS['file_overrides'] = array();
+$GLOBALS['uploads_override'] = null;
+function wp_get_upload_dir() {
+    return $GLOBALS['uploads_override'] ?? array('basedir' => __DIR__, 'error' => false);
+}
 function get_attached_file($id) {
-    return in_array($id, $GLOBALS['missing_ids'], true) ? '/nonexistent/ez2-stale-media.webp' : __FILE__;
+    if (in_array($id, $GLOBALS['missing_ids'], true)) return '/nonexistent/ez2-stale-media.webp';
+    return $GLOBALS['file_overrides'][$id] ?? __FILE__;
 }
 function wp_get_attachment_image($id, $size, $icon, $attributes) {
     $mode = $GLOBALS['mode'];
@@ -71,4 +77,39 @@ if (strpos($html, 'ezb-cinema--missing-media') === false ||
     strpos($html, 'data-ezb-toggle') !== false) {
     throw new Exception('No images must display the safe text-only hero.');
 }
-echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=5\n";
+// An attachment row pointing outside this site's uploads must not appear.
+$GLOBALS['mode'] = 'all_available';
+$GLOBALS['file_overrides'][1] = dirname(__DIR__) . '/wp-content/plugins/ezb-core/ezb-core.php';
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 3 ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('An outside-uploads attachment must not render.');
+}
+unset($GLOBALS['file_overrides'][1]);
+
+// Even an in-uploads symlink is not an approved physical media file.
+$link = __DIR__ . '/.ezb-editorial-link-' . getmypid();
+if (file_exists($link) || is_link($link) || !symlink(__FILE__, $link)) {
+    throw new Exception('Cannot create synthetic media symlink fixture.');
+}
+try {
+    $GLOBALS['file_overrides'][1] = $link;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('An in-uploads symlink must not render.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    unlink($link);
+}
+
+// A failed WordPress upload-directory lookup must fail closed.
+$GLOBALS['uploads_override'] = array('basedir' => __DIR__, 'error' => 'unavailable');
+$html = $render();
+if (strpos($html, 'ezb-cinema--missing-media') === false ||
+    strpos($html, 'data-ezb-slide') !== false) {
+    throw new Exception('Upload-directory errors must not render media.');
+}
+$GLOBALS['uploads_override'] = null;
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=8\n";

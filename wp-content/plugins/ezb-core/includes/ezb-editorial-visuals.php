@@ -47,9 +47,20 @@ function ezb_editorial_image_id( $selection ) {
 	if ( ! $id || 0 !== strpos( (string) get_post_mime_type( $id ), 'image/' ) ) {
 		return 0;
 	}
-	// Reject stale Media Library records whose local image is missing.
-	$file = get_attached_file( $id );
-	return is_string( $file ) && is_file( $file ) && is_readable( $file ) ? $id : 0;
+	// A Media Library record is not proof that its bytes belong to this site's
+	// private uploads. Never render an out-of-root path or a linked file.
+	$file    = get_attached_file( $id );
+	$uploads = wp_get_upload_dir();
+	$base    = is_array( $uploads ) && empty( $uploads['error'] ) &&
+		isset( $uploads['basedir'] ) && is_string( $uploads['basedir'] )
+		? realpath( $uploads['basedir'] ) : false;
+	$actual  = is_string( $file ) ? realpath( $file ) : false;
+	if ( ! $base || ! $actual || is_link( $file ) ||
+		0 !== strpos( $actual, rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR ) ||
+		! is_file( $actual ) || ! is_readable( $actual ) ) {
+		return 0;
+	}
+	return $id;
 }
 
 add_shortcode(
