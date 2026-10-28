@@ -6,6 +6,7 @@ import re
 import sys
 from pathlib import Path
 
+from ez2_backup_preflight import checked_read
 from ez2_content_candidate_bundle import verify as verify_candidate
 from ez2_elementor_export_check import unique, reject_nonfinite
 from verify_release_scope import check as verify_release
@@ -18,10 +19,11 @@ CATALOG = "EZ2_RELEASE_SET.json"
 
 
 def safe_read(root, name):
-    path = root / name
-    if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 32 * 1024 * 1024:
-        raise ValueError("Missing, linked or oversized release component: " + name)
-    return path.read_bytes()
+    # Bind verification to one regular-file descriptor, including its identity
+    # before and after reading. A path check followed by Path.read_bytes()
+    # can follow a swapped link/FIFO or accept changed release bytes.
+    _, _, raw = checked_read(root / name, max_bytes=32 * 1024 * 1024, collect=True)
+    return raw
 
 
 def expected_catalog(root, sha):

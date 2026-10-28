@@ -399,7 +399,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_release_set.py scripts/test_ez2_release_set.py
           python3 scripts/test_ez2_release_set.py | tee /tmp/ez2-release-set.log
-          grep -q 'EZ2_RELEASE_SET_TEST_PASS cases=22' /tmp/ez2-release-set.log
+          grep -q 'EZ2_RELEASE_SET_TEST_PASS cases=23' /tmp/ez2-release-set.log
 
       - name: Guard exact-head release candidate runtime input (offline only)
         run: |

@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 from ez2_content_candidate_bundle import package as candidate_package
-from ez2_release_set import CATALOG, run
+from ez2_release_set import CATALOG, run, safe_read
 
 SHA = "a" * 40
 CASES = 0
@@ -124,6 +124,19 @@ def linked_component(root):
     (root / "ez2-content-candidate.zip").unlink()
     (root / "ez2-content-candidate.zip").symlink_to(root / "RELEASE_CONTENTS.json")
 reject(linked_component, "symlink component")
+# A hard-linked component has two names for the same bytes and must not be
+# trusted as an immutable release input, even when its checksum still matches.
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    fixture(root)
+    (root / "synthetic-alias").hardlink_to(root / "ezb-theme.zip")
+    try:
+        safe_read(root, "ezb-theme.zip")
+    except ValueError:
+        CASES += 1
+    else:
+        raise AssertionError("Hard-linked release component accepted")
+
 reject(lambda r: None, "invalid mode", mode="install")
-assert CASES == 22, CASES
+assert CASES == 23, CASES
 print(f"EZ2_RELEASE_SET_TEST_PASS cases={CASES}")
