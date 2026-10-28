@@ -5,6 +5,7 @@ import stat
 import tempfile
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 from ez2_ci_file_upgrade import exercise
 
 CASES = 0
@@ -93,5 +94,37 @@ def symlink_archive(root, a, b):
     a.unlink()
     a.symlink_to(b)
 reject(symlink_archive, "linked ZIP")
-assert CASES == 18, CASES
-print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=18")
+# Fail closed if an installed file is altered, removed, or added after swap.
+for damage in ("alter", "delete", "extra"):
+    with tempfile.TemporaryDirectory() as tmp:
+        a, b = fixtures(Path(tmp))
+        original_replace = os.replace
+        touched = [False]
+
+        def replace_and_tamper(src, dst):
+            original_replace(src, dst)
+            source, target = Path(src), Path(dst)
+            if (not touched[0] and source.name == "ezb-theme"
+                    and source.parent.name == "themes"
+                    and source.parent.parent.name == "stage"
+                    and target.parent.parent.name == "live"):
+                touched[0] = True
+                if damage == "alter":
+                    (target / "style.css").write_bytes(b"modified after install")
+                elif damage == "delete":
+                    (target / "style.css").unlink()
+                else:
+                    (target / "unexpected.php").write_bytes(b"<?php // unexpected")
+
+        with patch("ez2_ci_file_upgrade.os.replace", side_effect=replace_and_tamper):
+            try:
+                exercise((a, b))
+            except ValueError:
+                if not touched[0]:
+                    raise AssertionError("Install fault was not injected: " + damage)
+                CASES += 1
+            else:
+                raise AssertionError("Modified scratch installation accepted: " + damage)
+
+assert CASES == 21, CASES
+print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=21")

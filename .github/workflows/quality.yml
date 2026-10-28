@@ -516,7 +516,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_ci_file_upgrade.py scripts/test_ez2_ci_file_upgrade.py
           python3 scripts/test_ez2_ci_file_upgrade.py | tee /tmp/ez2-file-upgrade-regression.log
-          grep -Fq 'EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=18' /tmp/ez2-file-upgrade-regression.log
+          grep -Fq 'EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=21' /tmp/ez2-file-upgrade-regression.log
 
       - name: Guard disposable WordPress database restore rehearsal (offline only)
         run: |

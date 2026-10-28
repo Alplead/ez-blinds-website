@@ -109,6 +109,15 @@ def exercise(archives, inject_failure=False, failure_phase=None):
             unpack(Path(archive), destination, folder)
             if not (destination / folder / required).is_file():
                 raise ValueError("Missing required release entrypoint")
+        # Verify every installed scratch byte, not only the two entrypoints.
+        # Preserve unrelated existing files such as uploads without mutation.
+        staged_files = snapshot(stage)
+        expected_live = {
+            name: digest for name, digest in original.items()
+            if not any(name.startswith(f"{category}/{folder}/")
+                       for _, category, folder, _ in COMPONENTS)
+        }
+        expected_live.update(staged_files)
         moved, fault_seen = [], False
         try:
             for index, (_, category, folder, _) in enumerate(COMPONENTS):
@@ -126,8 +135,8 @@ def exercise(archives, inject_failure=False, failure_phase=None):
             for (_, category, folder, required), archive in zip(COMPONENTS, archives):
                 if not (live / category / folder / required).is_file():
                     raise ValueError("Staged release not installed in scratch")
-            if (live / "uploads" / "2026" / "synthetic-private-placeholder.txt").read_bytes() != b"preserve unrelated files":
-                raise ValueError("Unrelated scratch upload changed")
+            if snapshot(live) != expected_live:
+                raise ValueError("Installed scratch bytes differ from release or preserved files")
         except RuntimeError as exc:
             if str(exc) != "INJECTED_SCRATCH_UPGRADE_FAILURE":
                 raise
