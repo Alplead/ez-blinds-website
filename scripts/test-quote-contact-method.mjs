@@ -6,6 +6,7 @@ const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/si
 
 function simulate({ reduced = false, formPresent = true, fieldsPresent = true } = {}) {
   const handlers = {};
+  const windowHandlers = {};
   const phone = {
     value: '', error: '', reportCount: 0, focusCount: 0, attributes: {},
     setAttribute(key, value) { this.attributes[key] = value; },
@@ -20,6 +21,9 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
     addEventListener(name, fn) { handlers['email:' + name] = fn; }
   };
   const form = {
+    attributes: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
     querySelector(selector) {
       if (!fieldsPresent) return null;
       return selector === 'input[name="phone"]' ? phone :
@@ -34,7 +38,8 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
     documentElement: { classList: { add() {}, remove() {} } }
   };
   const window = {
-    matchMedia() { return { matches: reduced, addEventListener() {} }; }
+    matchMedia() { return { matches: reduced, addEventListener() {} }; },
+    addEventListener(name, callback) { windowHandlers[name] = callback; }
   };
   runInNewContext(script, { window, document });
 
@@ -42,6 +47,8 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
     phone,
     email,
     handlers,
+    form,
+    pageShow() { windowHandlers.pageshow?.(); },
     send() {
       let prevented = false;
       handlers['form:submit']?.({ preventDefault() { prevented = true; } });
@@ -70,15 +77,26 @@ assert.equal(empty.phone.error, '', 'email input must clear stale phone error');
 assert.equal(empty.phone.attributes['aria-invalid'], undefined, 'corrected contact info clears assistive error state');
 assert.equal(empty.send(), false, 'email-only enquiry must submit');
 
+assert.equal(empty.form.attributes['aria-busy'], 'true', 'valid email submission marks the form busy');
+assert.equal(empty.send(), true, 'rapid second email submission is blocked');
+empty.pageShow();
+assert.equal(empty.form.attributes['aria-busy'], undefined, 'back/forward restoration clears busy state');
+assert.equal(empty.send(), false, 'restored form permits a fresh submission');
+
 const phoneOnly = simulate();
 phoneOnly.enterPhone('0400 123 456');
 assert.equal(phoneOnly.send(), false, 'phone-only enquiry must submit');
+assert.equal(phoneOnly.send(), true, 'rapid second phone submission is blocked');
 
 const whitespace = simulate();
 whitespace.enterPhone('   ');
 whitespace.enterEmail('   ');
 assert.equal(whitespace.send(), true, 'whitespace is not a contact method');
 assert.equal(whitespace.phone.reportCount, 1);
+assert.equal(whitespace.form.attributes['aria-busy'], undefined,
+  'invalid submission never locks the form');
+whitespace.enterEmail('visitor@example.com');
+assert.equal(whitespace.send(), false, 'corrected contact method can submit after validation error');
 
 const reduced = simulate({ reduced: true });
 assert.equal(reduced.send(), true, 'reduced-motion setting must not disable form validation');
@@ -89,4 +107,4 @@ const noFields = simulate({ fieldsPresent: false });
 assert.equal(noFields.handlers['form:submit'], undefined, 'missing markup must degrade safely');
 simulate({ formPresent: false });
 
-console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=8');
+console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=12');
