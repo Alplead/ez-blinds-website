@@ -44,7 +44,9 @@ function ezb_editorial_image_id( $selection ) {
 		return 0;
 	}
 	$id = (int) ezb_find_attachment_by_basename( $choices[ $selection ]['file'] );
-	if ( ! $id || 0 !== strpos( (string) get_post_mime_type( $id ), 'image/' ) ) {
+	// Curated photographs must be raster image attachments; an image/* prefix
+	// would also admit SVG or other formats that were never approved.
+	if ( ! $id || ! in_array( get_post_mime_type( $id ), array( 'image/webp', 'image/jpeg', 'image/png' ), true ) ) {
 		return 0;
 	}
 	// A Media Library record is not proof that its bytes belong to this site's
@@ -52,12 +54,35 @@ function ezb_editorial_image_id( $selection ) {
 	$file    = get_attached_file( $id );
 	$uploads = wp_get_upload_dir();
 	$base    = is_array( $uploads ) && empty( $uploads['error'] ) &&
-		isset( $uploads['basedir'] ) && is_string( $uploads['basedir'] )
+		isset( $uploads['basedir'] ) && is_string( $uploads['basedir'] ) &&
+		! is_link( $uploads['basedir'] )
 		? realpath( $uploads['basedir'] ) : false;
 	$actual  = is_string( $file ) ? realpath( $file ) : false;
 	if ( ! $base || ! $actual || is_link( $file ) ||
 		0 !== strpos( $actual, rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR ) ||
 		! is_file( $actual ) || ! is_readable( $actual ) ) {
+		return 0;
+	}
+	// A final-file is_link() check misses a linked parent directory. Walk
+	// the declared path back to the verified uploads root; reject any linked
+	// ancestor, including aliases pointing back inside the same uploads tree.
+	$parent = dirname( $file );
+	$within_root_without_links = false;
+	for ( $depth = 0; $depth < 32; $depth++ ) {
+		if ( is_link( $parent ) ) {
+			return 0;
+		}
+		if ( realpath( $parent ) === $base ) {
+			$within_root_without_links = true;
+			break;
+		}
+		$above = dirname( $parent );
+		if ( $above === $parent ) {
+			break;
+		}
+		$parent = $above;
+	}
+	if ( ! $within_root_without_links ) {
 		return 0;
 	}
 	return $id;

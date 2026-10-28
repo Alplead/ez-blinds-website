@@ -9,7 +9,8 @@ function ezb_find_attachment_by_basename($name) {
     if (!isset($ids[$name])) { $ids[$name] = count($ids) + 1; }
     return $ids[$name];
 }
-function get_post_mime_type($id) { return 'image/webp'; }
+$GLOBALS['mime_overrides'] = array();
+function get_post_mime_type($id) { return $GLOBALS['mime_overrides'][$id] ?? 'image/webp'; }
 $GLOBALS['missing_ids'] = array();
 $GLOBALS['file_overrides'] = array();
 $GLOBALS['uploads_override'] = null;
@@ -104,6 +105,44 @@ try {
     unlink($link);
 }
 
+// An image/* MIME prefix is insufficient: reject unapproved vector and
+// animated formats even if a stale Media Library lookup supplies their ID.
+foreach (array('image/svg+xml', 'image/gif') as $unsupported_mime) {
+    $GLOBALS['mime_overrides'][1] = $unsupported_mime;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('Unapproved image MIME must not render in curated hero.');
+    }
+}
+unset($GLOBALS['mime_overrides'][1]);
+
+// A directory symlink can point back INSIDE uploads: checking only the final
+// file for is_link() would incorrectly accept this aliased private image.
+$linked_parent = __DIR__ . '/.ezb-editorial-parent-' . getmypid();
+if (file_exists($linked_parent) || is_link($linked_parent) || !symlink(__DIR__, $linked_parent)) {
+    throw new Exception('Cannot create synthetic parent-directory symlink fixture.');
+}
+try {
+    $GLOBALS['file_overrides'][1] = $linked_parent . '/test-editorial-rendered-slides.php';
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('A symlinked ancestor within uploads must not render.');
+    }
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = array('basedir' => $linked_parent, 'error' => false);
+    $html = $render();
+    if (strpos($html, 'ezb-cinema--missing-media') === false ||
+        strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('A symlinked uploads root must not render media.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = null;
+    unlink($linked_parent);
+}
+
 // A failed WordPress upload-directory lookup must fail closed.
 $GLOBALS['uploads_override'] = array('basedir' => __DIR__, 'error' => 'unavailable');
 $html = $render();
@@ -112,4 +151,4 @@ if (strpos($html, 'ezb-cinema--missing-media') === false ||
     throw new Exception('Upload-directory errors must not render media.');
 }
 $GLOBALS['uploads_override'] = null;
-echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=8\n";
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=12\n";
