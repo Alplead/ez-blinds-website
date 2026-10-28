@@ -7,18 +7,23 @@ const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/si
 function simulate({ reduced, observerSupported }) {
   const rootClasses = new Set();
   const targetClasses = new Set();
-  const video = { autoplay: false, pauseCount: 0, playCount: 0, pause() { this.pauseCount++; }, play() { this.playCount++; return Promise.resolve(); } };
+  const video = { autoplay: false, paused: true, pauseCount: 0, playCount: 0,
+    pause() { this.pauseCount++; this.paused = true; },
+    play() { this.playCount++; this.paused = false; return Promise.resolve(); } };
   const target = {
     classList: { add(name) { targetClasses.add(name); } },
     style: { setProperty() {} }
   };
   let changeListener;
+  let visibilityListener;
   let observerInstance;
   const preference = {
     matches: reduced,
     addEventListener(name, listener) { if (name === 'change') changeListener = listener; }
   };
   const document = {
+    hidden: false,
+    addEventListener(name, listener) { if (name === 'visibilitychange') visibilityListener = listener; },
     documentElement: { classList: {
       add(name) { rootClasses.add(name); },
       remove(name) { rootClasses.delete(name); }
@@ -43,6 +48,7 @@ function simulate({ reduced, observerSupported }) {
   return {
     rootClasses, targetClasses, video, get observerInstance() { return observerInstance; },
     setReduced(value) { preference.matches = value; changeListener?.({ matches: value }); },
+    setHidden(value) { document.hidden = value; visibilityListener?.(); },
     target
   };
 }
@@ -94,10 +100,35 @@ assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), true);
 assert.equal(withObserver.video.autoplay, true);
 assert.equal(withObserver.video.playCount, 2, 'autoplay resumes after motion preference allows it');
 
+// Native controls can pause a video without changing the motion preference.
+// Returning to a tab must not silently override that explicit user choice.
+const manuallyPaused = simulate({ reduced: false, observerSupported: true });
+assert.equal(manuallyPaused.video.playCount, 1);
+manuallyPaused.video.pause();
+manuallyPaused.setHidden(true);
+manuallyPaused.setHidden(false);
+assert.equal(manuallyPaused.video.playCount, 1,
+  'a manually paused video must stay paused after tab visibility changes');
+assert.equal(manuallyPaused.video.autoplay, false);
+manuallyPaused.setReduced(true);
+manuallyPaused.setReduced(false);
+assert.equal(manuallyPaused.video.playCount, 1,
+  'a manually paused video must stay paused after motion preference changes');
+
+// An actually playing video may resume after an interruption; repeated
+// hidden-state notifications must not erase its prior playing state.
+const interrupted = simulate({ reduced: false, observerSupported: true });
+interrupted.setHidden(true);
+interrupted.setHidden(true);
+assert.equal(interrupted.video.autoplay, false);
+interrupted.setHidden(false);
+assert.equal(interrupted.video.playCount, 2,
+  'previously playing video resumes after tab becomes visible');
+
 const plugin = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
 const videoTag = plugin.match(/<video data-ezb-autoplay-video[^>]*>/)?.[0] || '';
 assert.ok(videoTag, 'development video shortcode must be present');
 assert.match(videoTag, /\scontrols(?:\s|>)/, 'manual video controls are required');
 assert.doesNotMatch(videoTag, /\sautoplay(?:\s|>)/, 'HTML must not start playing before JS checks preference');
 
-console.log('EZB_SITE_MOTION_TEST_PASS cases=4');
+console.log('EZB_SITE_MOTION_TEST_PASS cases=6');

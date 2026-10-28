@@ -31,7 +31,21 @@
 	var motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 	var videos = document.querySelectorAll('[data-ezb-autoplay-video]');
 
+	// A visitor who paused the native video controls must not have playback
+	// restarted merely by switching tabs or changing motion preferences.
+	// Capture eligibility only on the first interruption, before our own pause.
+	var videosInitialised = false;
+	var videosSuspended = false;
+	var resumeEligible = new WeakMap();
+	videos.forEach(function (video) { resumeEligible.set(video, true); });
+
 	function stopAutoplayVideos() {
+		if (videosInitialised && !videosSuspended) {
+			videos.forEach(function (video) {
+				resumeEligible.set(video, video.paused === false);
+			});
+		}
+		videosSuspended = true;
 		videos.forEach(function (video) {
 			video.autoplay = false;
 			video.pause();
@@ -45,7 +59,11 @@
 			stopAutoplayVideos();
 			return;
 		}
+		if (videosInitialised && !videosSuspended) return;
+		videosInitialised = true;
+		videosSuspended = false;
 		videos.forEach(function (video) {
+			if (!resumeEligible.get(video)) return;
 			video.autoplay = true;
 			if (typeof video.play !== 'function') return;
 			try {
