@@ -149,5 +149,38 @@ def reject_post_stat_symlink_swap(filename):
 reject_post_stat_symlink_swap("backup-manifest.json")
 reject_post_stat_symlink_swap(ROLES["uploads"])
 
-assert cases == 28, cases
+# A post-stat regular-file-to-FIFO swap must fail immediately, rather than
+# block indefinitely in os.open(). The verifier never reads the FIFO.
+def reject_post_stat_fifo_swap(filename):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "backup"
+        root.mkdir()
+        fixture(root)
+        target = root / filename
+        swapped = False
+
+        def swap_after_stat(path):
+            nonlocal swapped
+            info = regular_file(path)
+            if Path(path) == target and not swapped:
+                target.unlink()
+                os.mkfifo(target)
+                swapped = True
+            return info
+
+        with patch("ez2_backup_preflight.regular_file", side_effect=swap_after_stat):
+            try:
+                verify(root, SHA)
+            except (OSError, ValueError, TypeError):
+                assert swapped
+                cases += 1
+            else:
+                raise AssertionError("Post-stat FIFO substitution was accepted")
+
+
+reject_post_stat_fifo_swap("backup-manifest.json")
+reject_post_stat_fifo_swap(ROLES["uploads"])
+
+assert cases == 30, cases
 print(f"EZ2_BACKUP_PREFLIGHT_PASS cases={cases}")

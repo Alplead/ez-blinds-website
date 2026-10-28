@@ -59,7 +59,11 @@ def checked_read(path, *, max_bytes=None, collect=False):
     initial = regular_file(path)
     if max_bytes is not None and not 0 < initial.st_size <= max_bytes:
         raise ValueError("Invalid backup manifest size")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    # A regular file can be replaced with a FIFO between lstat and open.
+    # O_NONBLOCK prevents that substitution from hanging the verifier; the
+    # descriptor identity check below rejects the changed file type.
+    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
     fd = os.open(path, flags)
     with os.fdopen(fd, "rb") as source:
         before = os.fstat(source.fileno())
