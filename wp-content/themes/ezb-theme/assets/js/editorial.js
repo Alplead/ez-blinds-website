@@ -82,11 +82,16 @@
     }
 
     function syncTimer() {
-      stopTimer();
-      hero.classList.toggle('is-paused', shouldStop());
-      if (!shouldStop()) {
+      // IntersectionObserver, visibility and preference events can repeat
+      // without a state change. Keep the running interval in that case:
+      // resetting it on every event can postpone the next photo indefinitely.
+      var stopped = shouldStop();
+      if (stopped) {
+        stopTimer();
+      } else if (interval === null) {
         interval = window.setInterval(function () { showSlide(current + 1); }, intervalMs);
       }
+      hero.classList.toggle('is-paused', stopped);
       if (toggle) {
         // Manual navigation remains available when autoplay is disallowed.
         var motionBlocked = reduced.matches || slides.length < 2;

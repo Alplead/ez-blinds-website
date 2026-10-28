@@ -111,7 +111,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   };
   const document = {
     hidden: false, querySelector() { return hero; },
-    querySelectorAll() { return []; }, addEventListener() {}
+    querySelectorAll() { return []; },
+    addEventListener(event, callback) {
+      if (event === 'visibilitychange') this.visibility = callback;
+    }
   };
   runInNewContext(js, { window, document });
   if (missingImage) {
@@ -125,6 +128,18 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     'Play/Pause action labels must not masquerade as a fixed-label ARIA toggle');
   assert.equal(timerStarts > 0, !initialReduced, 'Autoplay timer must honour reduced motion');
   assert.equal(observedHero, hero, 'Hero is watched for offscreen pause');
+  // Duplicate visibility/intersection/preference events must not restart the
+  // 7.7-second countdown while the same slide is already playing.
+  const startsBeforeRepeatedEvents = timerStarts;
+  const stopsBeforeRepeatedEvents = timerStops;
+  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.75 }]);
+  observerCallback([{ target: hero, isIntersecting: true, intersectionRatio: 0.5 }]);
+  document.visibility();
+  media.change();
+  assert.equal(timerStarts, startsBeforeRepeatedEvents,
+    'Repeated visible-state notifications must not restart the slide interval');
+  assert.equal(timerStops, stopsBeforeRepeatedEvents,
+    'Repeated visible-state notifications must not cancel the slide interval');
   if (!initialReduced) {
     // A zero-pixel edge contact must not restart a slideshow offscreen.
     observerCallback([{ target: hero, isIntersecting: false, intersectionRatio: 0 }]);
