@@ -79,10 +79,16 @@ final class EZ2_Private_Media_Readiness {
                 || !self::safeUrl($item['url'], $host, self::MIME[$item['mime']]))
                 return self::blocked('INVALID_PRIVATE_MEDIA_SLOT', $count, $verified);
             $id = $item['id']; $url = $item['url'];
-            if ((isset($seenIds[$id]) && $seenIds[$id] !== $url)
-                || (isset($seenUrls[$url]) && $seenUrls[$url] !== $id))
+            // A single attachment may legitimately fill several design slots,
+            // but all aliases must agree on its URL and pinned image bytes.
+            // Reject conflicting declarations BEFORE any attachment lookup;
+            // sequential file reads must not turn an inconsistent map into PASS.
+            $identity = ['url' => $url, 'sha256' => $item['sha256']];
+            $reverse = ['id' => $id, 'sha256' => $item['sha256']];
+            if ((isset($seenIds[$id]) && $seenIds[$id] !== $identity)
+                || (isset($seenUrls[$url]) && $seenUrls[$url] !== $reverse))
                 return self::blocked('CONFLICTING_PRIVATE_MEDIA_MAPPING', $count, $verified);
-            $seenIds[$id] = $url; $seenUrls[$url] = $id;
+            $seenIds[$id] = $identity; $seenUrls[$url] = $reverse;
             try {
                 $actual = $attachment($id);
             } catch (Throwable $e) {
