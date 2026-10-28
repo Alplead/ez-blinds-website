@@ -126,6 +126,26 @@ try {
     $check($run()['issues'] === ['PRIVATE_MEDIA_BYTES_MISMATCH'],
         'valid image header but modified private image bytes');
     file_put_contents($file, $pixel);
+    // One private image can fill multiple Elementor slots, but every alias
+    // must agree on the same pinned digest. A contradictory map must fail
+    // before attempting to read the second attachment.
+    $alias = $map;
+    $alias['slots']['second-slot'] = $map['slots']['home-hero-one'];
+    $goodAlias = $run(null, $alias);
+    $check($goodAlias['status'] === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
+        && $goodAlias['slot_count'] === 2 && $goodAlias['verified_count'] === 2,
+        'consistent private media alias accepted');
+    $alias['slots']['second-slot']['sha256'] = str_repeat('f', 64);
+    $lookups = 0;
+    $badAlias = $run(null, $alias, null, null,
+        static function (int $id) use ($meta, &$lookups): array {
+            ++$lookups;
+            return $meta;
+        });
+    $check($badAlias['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING']
+        && $badAlias['verified_count'] === 1 && $lookups === 1
+        && $badAlias['byte_integrity_verified'] === false && $badAlias['can_apply'] === false,
+        'conflicting alias digest rejected before second file read');
     $duplicate = $map;
     $duplicate['slots']['second-slot'] = ['id' => 18, 'url' => $url, 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)];
     $check($run(null, $duplicate)['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING'], 'duplicate URL');
