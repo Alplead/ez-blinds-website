@@ -3,13 +3,15 @@ import gzip
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tarfile
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from ez2_backup_archive_guard import inspect
+from ez2_backup_archive_guard import inspect, inspect_tar as real_inspect_tar
 from ez2_backup_preflight import ROLES
 
 SHA = "a" * 40
@@ -141,5 +143,44 @@ reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/name\"bad.w
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/part*name.webp", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/\u202ephoto.webp", b"x", "file")]))
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [("uploads/cafe\u0301.webp", b"x", "file")]))
-assert cases == 33, cases
+# A backup can change AFTER the first byte hash, but before the structural
+# inspector returns. Neither valid gzip nor identical replacement bytes
+# should be allowed to escape as a verified, stable rollback set.
+def reject_late_archive_mutation(kind):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        fixture(root)
+        changed = False
+
+        def inspect_then_change(path, role):
+            nonlocal changed
+            result = real_inspect_tar(path, role)
+            if role == "uploads" and not changed:
+                if kind == "sql-bytes":
+                    with gzip.open(root / ROLES["database"], "wb") as stream:
+                        stream.write(b"-- changed synthetic SQL after inspection\\n")
+                else:
+                    target = root / ROLES["uploads"]
+                    replacement = root / "replacement.tar.gz"
+                    replacement.write_bytes(target.read_bytes())
+                    os.replace(replacement, target)
+                changed = True
+            return result
+
+        with patch("ez2_backup_archive_guard.inspect_tar",
+                   side_effect=inspect_then_change):
+            try:
+                inspect(root, SHA)
+            except ValueError:
+                assert changed
+                cases += 1
+            else:
+                raise AssertionError("Post-hash backup mutation was accepted")
+
+
+reject_late_archive_mutation("sql-bytes")
+reject_late_archive_mutation("same-byte-replacement")
+
+assert cases == 35, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

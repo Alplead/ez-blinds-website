@@ -12,7 +12,7 @@ import sys
 import tarfile
 from pathlib import Path
 
-from ez2_backup_preflight import ROLES, verify
+from ez2_backup_preflight import ROLES, verify, regular_file, _identity
 
 MAX_MEMBERS = 50000
 MAX_MEMBER_BYTES = 2 * 1024 ** 3
@@ -126,9 +126,22 @@ def inspect_sql(path):
 def inspect(root, exact_sha):
     integrity = verify(root, exact_sha)
     root = Path(root)
+    # The first hash pass must describe the SAME file objects subsequently
+    # inspected. Rechecking only archive structure is insufficient if a backup
+    # changes after byte verification (including same-byte inode replacement).
+    pinned = {"backup-manifest.json": _identity(regular_file(root / "backup-manifest.json"))}
+    pinned.update({name: _identity(regular_file(root / name)) for name in ROLES.values()})
+    directory_identity = _identity(root.lstat())
     summaries = {"database": inspect_sql(root / ROLES["database"])}
     for role in ("uploads", "plugins", "theme"):
         summaries[role] = inspect_tar(root / ROLES[role], role)
+    # Verify again AFTER structural inspection. Otherwise the report could
+    # certify archive bytes that were never covered by the first digest pass.
+    verify(root, exact_sha)
+    if (_identity(root.lstat()) != directory_identity or
+            any(_identity(regular_file(root / name)) != identity
+                for name, identity in pinned.items())):
+        raise ValueError("Backup inputs changed during archive inspection")
     return {
         "status": "BACKUP_ARCHIVE_STRUCTURE_VERIFIED_ONLY",
         "source_sha": exact_sha,
