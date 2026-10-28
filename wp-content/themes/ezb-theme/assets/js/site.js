@@ -55,6 +55,7 @@
 	// Capture eligibility only on the first interruption, before our own pause.
 	var videosInitialised = false;
 	var videosSuspended = false;
+	var pageSuspended = false;
 	var resumeEligible = new WeakMap();
 	videos.forEach(function (video) { resumeEligible.set(video, true); });
 
@@ -74,7 +75,7 @@
 	// Never autoplay from HTML before reduced-motion preference is known.
 	function startAutoplayVideos() {
 		// A background tab must not start or resume autoplay.
-		if (document.hidden) {
+		if (document.hidden || pageSuspended) {
 			stopAutoplayVideos();
 			return;
 		}
@@ -137,6 +138,19 @@
 		startAutoplayVideos();
 		initialiseReveals();
 		document.documentElement.classList.add('ezb-motion-ready');
+	}
+
+	// Back/forward-cache transitions need their own pause/resume handling.
+	if (videos.length && typeof window.addEventListener === 'function') {
+		window.addEventListener('pagehide', function () {
+			pageSuspended = true;
+			stopAutoplayVideos();
+		});
+		window.addEventListener('pageshow', function () {
+			pageSuspended = false;
+			if (document.hidden || motionPreference.matches) stopAutoplayVideos();
+			else startAutoplayVideos();
+		});
 	}
 
 	// A hidden tab never resumes autoplay, even after a preference change.

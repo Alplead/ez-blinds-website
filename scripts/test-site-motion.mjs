@@ -33,7 +33,11 @@ function simulate({ reduced, observerSupported }) {
       return selector === '[data-ezb-autoplay-video]' ? [video] : [target];
     }
   };
-  const window = { matchMedia() { return preference; } };
+  const lifecycle = {};
+  const window = {
+    matchMedia() { return preference; },
+    addEventListener(name, callback) { lifecycle[name] = callback; }
+  };
   const context = { window, document };
   if (observerSupported) {
     class FakeObserver {
@@ -49,6 +53,8 @@ function simulate({ reduced, observerSupported }) {
     rootClasses, targetClasses, video, get observerInstance() { return observerInstance; },
     setReduced(value) { preference.matches = value; changeListener?.({ matches: value }); },
     setHidden(value) { document.hidden = value; visibilityListener?.(); },
+    pagehide() { lifecycle.pagehide?.(); },
+    pageshow() { lifecycle.pageshow?.(); },
     target
   };
 }
@@ -125,10 +131,37 @@ interrupted.setHidden(false);
 assert.equal(interrupted.video.playCount, 2,
   'previously playing video resumes after tab becomes visible');
 
+// BFCache restore must respect manual pause, background tabs and reduced motion.
+const restored = simulate({ reduced: false, observerSupported: true });
+restored.pagehide();
+restored.pagehide();
+assert.equal(restored.video.playCount, 1);
+restored.pageshow();
+assert.equal(restored.video.playCount, 2);
+const pausedRestored = simulate({ reduced: false, observerSupported: true });
+pausedRestored.video.pause();
+pausedRestored.pagehide();
+pausedRestored.pageshow();
+assert.equal(pausedRestored.video.playCount, 1, 'manual pause survives page cache');
+const hiddenRestored = simulate({ reduced: false, observerSupported: true });
+hiddenRestored.pagehide();
+hiddenRestored.setHidden(true);
+hiddenRestored.pageshow();
+assert.equal(hiddenRestored.video.playCount, 1, 'background page must not autoplay');
+hiddenRestored.setHidden(false);
+assert.equal(hiddenRestored.video.playCount, 2);
+const reducedRestored = simulate({ reduced: false, observerSupported: true });
+reducedRestored.pagehide();
+reducedRestored.setReduced(true);
+reducedRestored.pageshow();
+assert.equal(reducedRestored.video.playCount, 1, 'reduced motion blocks restored autoplay');
+reducedRestored.setReduced(false);
+assert.equal(reducedRestored.video.playCount, 2);
+
 const plugin = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
 const videoTag = plugin.match(/<video data-ezb-autoplay-video[^>]*>/)?.[0] || '';
 assert.ok(videoTag, 'development video shortcode must be present');
 assert.match(videoTag, /\scontrols(?:\s|>)/, 'manual video controls are required');
 assert.doesNotMatch(videoTag, /\sautoplay(?:\s|>)/, 'HTML must not start playing before JS checks preference');
 
-console.log('EZB_SITE_MOTION_TEST_PASS cases=6');
+console.log('EZB_SITE_MOTION_TEST_PASS cases=10');

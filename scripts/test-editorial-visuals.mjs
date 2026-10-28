@@ -97,8 +97,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   let lastTimerCallback = null;
   let observerCallback = null;
   let observedHero = null;
+  const lifecycle = {};
   const window = {
     matchMedia() { return media; },
+    addEventListener(event, callback) { lifecycle[event] = callback; },
     setInterval(callback) { lastTimerCallback = callback; return ++timerStarts; },
     clearInterval() { timerStops++; },
     IntersectionObserver: class {
@@ -140,6 +142,28 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     'Repeated visible-state notifications must not restart the slide interval');
   assert.equal(timerStops, stopsBeforeRepeatedEvents,
     'Repeated visible-state notifications must not cancel the slide interval');
+  // BFCache navigation must pause the timer and preserve the motion gate.
+  const startsBeforePagehide = timerStarts;
+  const stopsBeforePagehide = timerStops;
+  lifecycle.pagehide();
+  lifecycle.pagehide();
+  assert.equal(timerStarts, startsBeforePagehide, 'pagehide cannot start autoplay');
+  assert.equal(timerStops, stopsBeforePagehide + (initialReduced ? 0 : 1),
+    'repeated pagehide stops the interval only once');
+  lifecycle.pageshow();
+  assert.equal(timerStarts, startsBeforePagehide + (initialReduced ? 0 : 1),
+    'pageshow resumes only if motion is permitted');
+  if (!initialReduced) {
+    lifecycle.pagehide();
+    document.hidden = true;
+    lifecycle.pageshow();
+    assert.equal(timerStarts, startsBeforePagehide + 1,
+      'pageshow cannot resume autoplay in a background tab');
+    document.hidden = false;
+    document.visibility();
+    assert.equal(timerStarts, startsBeforePagehide + 2,
+      'visible eligible page may resume autoplay');
+  }
   if (!initialReduced) {
     // A zero-pixel edge contact must not restart a slideshow offscreen.
     observerCallback([{ target: hero, isIntersecting: false, intersectionRatio: 0 }]);
