@@ -16,6 +16,10 @@
     var current = 0;
     var interval = null;
     var paused = false;
+    // Explicit Play overrides the hover/focus pause for this interaction.
+    // Without this, clicking Play with the pointer or focus still on the
+    // control misleadingly labels it Pause while no timer can start.
+    var explicitPlay = false;
     var hovering = false;
     var focusing = false;
     var inView = true;
@@ -72,7 +76,8 @@
     }
 
     function shouldStop() {
-      return slides.length < 2 || paused || hovering || focusing ||
+      return slides.length < 2 || paused ||
+        ((hovering || focusing) && !explicitPlay) ||
         reduced.matches || document.hidden || !inView;
     }
 
@@ -97,22 +102,29 @@
     if (previous) previous.addEventListener('click', function () {
       // An intentional photo selection stops rotation until explicit Play.
       paused = true;
+      explicitPlay = false;
       showSlide(current - 1, true);
       syncTimer();
     });
     if (next) next.addEventListener('click', function () {
       paused = true;
+      explicitPlay = false;
       showSlide(current + 1, true);
       syncTimer();
     });
     if (toggle) toggle.addEventListener('click', function () {
       paused = !paused;
+      explicitPlay = !paused;
       syncTimer();
     });
 
-    hero.addEventListener('mouseenter', function () { hovering = true; paused = true; syncTimer(); });
+    hero.addEventListener('mouseenter', function () {
+      hovering = true; paused = true; explicitPlay = false; syncTimer();
+    });
     hero.addEventListener('mouseleave', function () { hovering = false; syncTimer(); });
-    hero.addEventListener('focusin', function () { focusing = true; paused = true; syncTimer(); });
+    hero.addEventListener('focusin', function () {
+      focusing = true; paused = true; explicitPlay = false; syncTimer();
+    });
     // Leaving hover/focus does not silently undo the visitor's pause.
     hero.addEventListener('focusout', function (event) {
       if (!hero.contains(event.relatedTarget)) {

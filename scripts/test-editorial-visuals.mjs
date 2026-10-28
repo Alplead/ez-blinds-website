@@ -135,16 +135,27 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     assert.equal(timerStarts, beforeEdge + 1, 'Visible pixels may resume autoplay');
     const running = timerStarts;
     hero.handlers.mouseenter();
-    hero.handlers.mouseleave();
-    assert.equal(timerStarts, running, 'Leaving hover must not restart a visitor-paused carousel');
     assert.equal(toggle.textContent, 'Play slideshow', 'Hover exposes explicit Play control');
     toggle.handlers.click();
-    assert.equal(timerStarts, running + 1, 'Explicit Play resumes after hover');
-    hero.handlers.focusin();
-    hero.handlers.focusout({ relatedTarget: null });
-    assert.equal(timerStarts, running + 1, 'Leaving keyboard focus must not restart rotation');
+    assert.equal(timerStarts, running + 1,
+      'Explicit Play must work while the pointer is still over the control');
+    assert.equal(toggle.textContent, 'Pause slideshow',
+      'A running carousel must not advertise an ineffective Play/Pause action');
     toggle.handlers.click();
-    assert.equal(timerStarts, running + 2, 'Explicit Play resumes after keyboard focus');
+    hero.handlers.mouseleave();
+    assert.equal(timerStarts, running + 1, 'Leaving hover must not restart a visitor-paused carousel');
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 2, 'Explicit Play resumes after hover');
+    hero.handlers.focusin();
+    assert.equal(toggle.textContent, 'Play slideshow', 'Keyboard focus pauses autoplay');
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 3,
+      'Explicit Play must work while the control still has keyboard focus');
+    toggle.handlers.click();
+    hero.handlers.focusout({ relatedTarget: null });
+    assert.equal(timerStarts, running + 3, 'Leaving keyboard focus must not restart rotation');
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 4, 'Explicit Play resumes after keyboard focus');
   }
   const startsBeforeOffscreen = timerStarts;
   const stopsBeforeOffscreen = timerStops;
