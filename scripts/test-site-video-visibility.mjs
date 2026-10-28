@@ -11,9 +11,9 @@ function simulate({ reduced = false, hidden = false, hasVideo = true } = {}) {
     addEventListener(event, fn) { listeners['motion-' + event] = fn; }
   };
   const video = {
-    autoplay: false, playCount: 0, pauseCount: 0,
-    play() { this.playCount++; return Promise.resolve(); },
-    pause() { this.pauseCount++; }
+    autoplay: false, paused: true, playCount: 0, pauseCount: 0,
+    play() { this.playCount++; this.paused = false; return Promise.resolve(); },
+    pause() { this.pauseCount++; this.paused = true; }
   };
   const target = { classList: { add() {} }, style: { setProperty() {} } };
   const document = {
