@@ -35,6 +35,11 @@ if "eval-file" in args:
         "can_apply": False, "site_modified": False,
         "deployment_authorized": False
     }))
+elif "db" in args and "query" in args:
+    # Match the transactional-engine inventory that the capture now requires.
+    required = ("--skip-column-names", "--skip-plugins", "--skip-themes")
+    if any(flag not in args for flag in required): sys.exit(4)
+    print("wp_options\\tInnoDB\\nwp_posts\\tInnoDB")
 elif "db" in args and "export" in args:
     if os.environ.get("FAKE_WP_FAIL") == "export": sys.exit(2)
     pathlib.Path(args[args.index("export") + 1]).write_bytes(
