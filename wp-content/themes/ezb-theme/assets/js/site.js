@@ -14,16 +14,35 @@
 			phone.removeAttribute('aria-invalid');
 		}
 
+		// A rapid second click or Enter keypress must not submit the same
+		// enquiry twice. This is a browser-side guard, not server-side dedup.
+		var submissionPending = false;
+		function resetSubmission() {
+			submissionPending = false;
+			form.removeAttribute('aria-busy');
+		}
+		if (typeof window.addEventListener === 'function') {
+			// Browsers can restore a submitted form from the back/forward cache.
+			window.addEventListener('pageshow', resetSubmission);
+		}
 		phone.addEventListener('input', clearContactError);
 		email.addEventListener('input', clearContactError);
 		form.addEventListener('submit', function (event) {
 			clearContactError();
-			if (phone.value.trim() || email.value.trim()) return;
-			phone.setCustomValidity('Please enter a phone number or email address so we can reply.');
-			phone.setAttribute('aria-invalid', 'true');
-			event.preventDefault();
-			phone.focus();
-			phone.reportValidity();
+			if (!phone.value.trim() && !email.value.trim()) {
+				phone.setCustomValidity('Please enter a phone number or email address so we can reply.');
+				phone.setAttribute('aria-invalid', 'true');
+				event.preventDefault();
+				phone.focus();
+				phone.reportValidity();
+				return;
+			}
+			if (submissionPending) {
+				event.preventDefault();
+				return;
+			}
+			submissionPending = true;
+			form.setAttribute('aria-busy', 'true');
 		});
 	});
 
