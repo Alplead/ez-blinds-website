@@ -419,6 +419,22 @@ jobs:
             | tee /tmp/ez2-release-candidate-roundtrip.log
           grep -Fq 'EZ2_RELEASE_ELEMENTOR_ROUNDTRIP_PASS exact_head=true gallery=4 draft_cleaned=true uploads_cleaned=true publication=false localwp_touched=false one_click_complete=false' /tmp/ez2-release-candidate-roundtrip.log
 
+      - name: Exercise exact-head two-page Elementor content batch, conflict and rollback in disposable WordPress
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          digest="$(sha256sum design/ez2-home-hero-candidate.json | cut -d" " -f1)"
+          docker compose -f .github/release-install/docker-compose.yml run --rm \\
+            -e EZ2_CI_BATCH=YES_DISPOSABLE_RELEASE_ONLY \\
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \\
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \\
+            --entrypoint wp release-bootstrap \\
+            eval-file /opt/ezb-ci-scripts/ez2_ci_batch_content.php --allow-root \\
+            | tee /tmp/ez2-ci-batch-content.log
+          grep -Fq 'EZ2_CI_BATCH_CONTENT_PASS pages=2 faults=2 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true' /tmp/ez2-ci-batch-content.log
+
       - name: Verify real WordPress post-install state and synthetic candidate cleanup
         env:
           EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
