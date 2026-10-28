@@ -267,6 +267,27 @@ function ezb_quote_product_is_allowed( $product ) {
 	);
 }
 
+
+/**
+ * Require a real name and at least one usable contact method on the server.
+ * HTML required fields and browser-side trimming are not security boundaries.
+ * A supplied but invalid email must not be ignored even when phone is present.
+ */
+function ezb_quote_contact_fields_valid( $name, $phone, $email_input, $email ) {
+	if ( ! is_string( $name ) || ! is_string( $phone ) ||
+		! is_string( $email_input ) || ! is_string( $email ) ) {
+		return false;
+	}
+	if ( '' === trim( $name ) ) {
+		return false;
+	}
+	$has_email = '' !== trim( $email_input );
+	if ( $has_email && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) {
+		return false;
+	}
+	return '' !== trim( $phone ) || $has_email;
+}
+
 add_shortcode(
 	'ezb_quote_form',
 	function () {
@@ -389,9 +410,9 @@ function ezb_handle_quote_form() {
 		}
 	}
 
-	$name    = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+	$name    = isset( $_POST['name'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['name'] ) ) ) : '';
 	$suburb  = isset( $_POST['suburb'] ) ? sanitize_text_field( wp_unslash( $_POST['suburb'] ) ) : '';
-	$phone   = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
+	$phone   = isset( $_POST['phone'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['phone'] ) ) ) : '';
 	// Keep the unsanitised (but unslashed and trimmed) value for validation.
 	// sanitize_email() can turn a malformed supplied address into an empty string.
 	$email_input = isset( $_POST['email'] ) && is_string( $_POST['email'] ) ? trim( wp_unslash( $_POST['email'] ) ) : '';
@@ -414,7 +435,7 @@ function ezb_handle_quote_form() {
 
 	// Validate the supplied address BEFORE sanitisation can erase an invalid
 	// value; phone-only enquiries remain valid when email was truly left blank.
-	if ( '' === $name || ( '' !== $email_input && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) || ( '' === $phone && '' === $email ) ) {
+	if ( ! ezb_quote_contact_fields_valid( $name, $phone, $email_input, $email ) ) {
 		wp_safe_redirect( home_url( '/contact/?quote_status=invalid' ) );
 		exit;
 	}

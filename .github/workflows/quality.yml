@@ -133,6 +133,12 @@ jobs:
           php scripts/test-quote-receipt.php | tee /tmp/quote-receipt.log
           grep -q 'EZB_QUOTE_RECEIPT_PASS cases=21' /tmp/quote-receipt.log
 
+      - name: Reject whitespace-only contact details in the real PHP validator
+        run: |
+          php -l scripts/test-quote-server-contact.php
+          php scripts/test-quote-server-contact.php | tee /tmp/quote-server-contact.log
+          grep -Fq 'EZB_QUOTE_SERVER_CONTACT_VALIDATION_PASS cases=15' /tmp/quote-server-contact.log
+
       - name: Test quote contact-method pre-submit validation
         run: |
           node --check scripts/test-quote-contact-method.mjs
