@@ -107,4 +107,29 @@ const noFields = simulate({ fieldsPresent: false });
 assert.equal(noFields.handlers['form:submit'], undefined, 'missing markup must degrade safely');
 simulate({ formPresent: false });
 
-console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=12');
+const lettersOnly = simulate();
+lettersOnly.enterPhone('call me');
+assert.equal(lettersOnly.send(), true, 'letters without digits cannot be a phone-only contact');
+assert.equal(lettersOnly.phone.attributes['aria-invalid'], 'true');
+lettersOnly.enterPhone('0400 123 456');
+assert.equal(lettersOnly.phone.error, '', 'correcting the phone clears custom validity');
+assert.equal(lettersOnly.send(), false, 'corrected phone-only enquiry can submit');
+
+const shortPhone = simulate();
+shortPhone.enterPhone('12345');
+assert.equal(shortPhone.send(), true, 'fewer than six digits cannot be a phone-only contact');
+const minPhone = simulate();
+minPhone.enterPhone('123456');
+assert.equal(minPhone.send(), false, 'six-digit local callback remains valid');
+const international = simulate();
+international.enterPhone('+61 (0) 400 123 456');
+assert.equal(international.send(), false, 'international callback formatting remains valid');
+const tooLongPhone = simulate();
+tooLongPhone.enterPhone('123456789012345678901');
+assert.equal(tooLongPhone.send(), true, 'overlong callback numbers are rejected');
+const emailFallback = simulate();
+emailFallback.enterPhone('call me');
+emailFallback.enterEmail('visitor@example.com');
+assert.equal(emailFallback.send(), false, 'a valid email remains a contact method even without a usable phone');
+
+console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=18');

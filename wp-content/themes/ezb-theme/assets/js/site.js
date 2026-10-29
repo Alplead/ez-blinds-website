@@ -37,6 +37,19 @@
 				phone.reportValidity();
 				return;
 			}
+			// A phone-only enquiry must contain enough digits to be a
+			// plausible callback number. Email remains a valid alternative.
+			if (!email.value.trim()) {
+				var digits = (phone.value.match(/[0-9]/g) || []).length;
+				if (digits < 6 || digits > 20) {
+					phone.setCustomValidity('Please enter a phone number with 6 to 20 digits, or provide an email address.');
+					phone.setAttribute('aria-invalid', 'true');
+					event.preventDefault();
+					phone.focus();
+					phone.reportValidity();
+					return;
+				}
+			}
 			if (submissionPending) {
 				event.preventDefault();
 				return;

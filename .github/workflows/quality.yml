@@ -143,13 +143,13 @@ jobs:
         run: |
           php -l scripts/test-quote-server-contact.php
           php scripts/test-quote-server-contact.php | tee /tmp/quote-server-contact.log
-          grep -Fq 'EZB_QUOTE_SERVER_CONTACT_VALIDATION_PASS cases=15' /tmp/quote-server-contact.log
+          grep -Fq 'EZB_QUOTE_SERVER_CONTACT_VALIDATION_PASS cases=23' /tmp/quote-server-contact.log
 
       - name: Test quote contact-method pre-submit validation
         run: |
           node --check scripts/test-quote-contact-method.mjs
           node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
-          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=12' /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=18' /tmp/quote-contact-method.log
 
       - name: Check link crawler JavaScript syntax
         run: node --check scripts/link-check.mjs

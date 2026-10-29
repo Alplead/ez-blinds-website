@@ -285,7 +285,14 @@ function ezb_quote_contact_fields_valid( $name, $phone, $email_input, $email ) {
 	if ( $has_email && ( ! is_email( $email_input ) || ! is_email( $email ) ) ) {
 		return false;
 	}
-	return '' !== trim( $phone ) || $has_email;
+	// A phone-only enquiry with no usable digits leaves no way to reply.
+	// Count digits rather than enforcing an Australian-only prefix: local,
+	// interstate and international numbers can all be entered naturally.
+	if ( ! $has_email ) {
+		$digits = preg_match_all( '/[0-9]/', $phone );
+		return false !== $digits && $digits >= 6 && $digits <= 20;
+	}
+	return true;
 }
 
 add_shortcode(
@@ -310,7 +317,7 @@ add_shortcode(
 			<?php elseif ( 'preview' === $status ) : ?>
 				<p class="ezb-form-message" role="status"><?php esc_html_e( 'Preview only — no enquiry was sent.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'invalid' === $status ) : ?>
-				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please enter your name and a phone number or valid email address. Check any email address you provide.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Please enter your name and a phone number with 6–20 digits or a valid email address. Check any email address you provide.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'too_long' === $status ) : ?>
 				<p class="ezb-form-message ezb-form-message--error" role="alert"><?php esc_html_e( 'Your enquiry is too long. Please shorten it and try again.', 'ezb-core' ); ?></p>
 			<?php elseif ( 'error' === $status ) : ?>
@@ -332,7 +339,7 @@ add_shortcode(
 					<p><label><?php esc_html_e( 'Phone', 'ezb-core' ); ?><br><input type="tel" name="phone" autocomplete="tel" maxlength="60" aria-describedby="<?php echo esc_attr( $contact_note_id ); ?>"></label></p>
 					<p><label><?php esc_html_e( 'Email', 'ezb-core' ); ?><br><input type="email" name="email" autocomplete="email" maxlength="254" aria-describedby="<?php echo esc_attr( $contact_note_id ); ?>"></label></p>
 				</div>
-				<p class="ezb-form-note" id="<?php echo esc_attr( $contact_note_id ); ?>"><?php esc_html_e( 'Please enter a phone number or email address so we can reply.', 'ezb-core' ); ?></p>
+				<p class="ezb-form-note" id="<?php echo esc_attr( $contact_note_id ); ?>"><?php esc_html_e( 'Please enter an email address or a phone number with 6–20 digits so we can reply.', 'ezb-core' ); ?></p>
 
 				<p>
 					<label><?php esc_html_e( 'Product', 'ezb-core' ); ?><br>

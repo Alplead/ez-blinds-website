@@ -27,7 +27,15 @@ $cases = array(
     array( 'non-string phone', 'Alice', array(), '', '', false ),
     array( 'non-string supplied email', 'Alice', '', array(), '', false ),
     array( 'non-string cleaned email', 'Alice', '', '', array(), false ),
-    array( 'trimmed name and phone', '  Alice  ', ' 0400 ', '', '', true ),
+    array( 'trimmed name and phone', '  Alice  ', ' 0400 123 456 ', '', '', true ),
+    array( 'letters-only phone', 'Alice', 'call me', '', '', false ),
+    array( 'punctuation-only phone', 'Alice', '+-()', '', '', false ),
+    array( 'short phone', 'Alice', '12345', '', '', false ),
+    array( 'six-digit local phone', 'Alice', '123456', '', '', true ),
+    array( 'international phone', 'Alice', '+61 (0) 400 123 456', '', '', true ),
+    array( 'twenty-digit phone', 'Alice', str_repeat( '1', 20 ), '', '', true ),
+    array( 'twenty-one-digit phone', 'Alice', str_repeat( '1', 21 ), '', '', false ),
+    array( 'email fallback with nonnumeric phone', 'Alice', 'call me', 'alice@example.com', 'alice@example.com', true ),
 );
 foreach ( $cases as $case ) {
     list( $label, $name, $phone, $input, $cleaned, $expected ) = $case;
