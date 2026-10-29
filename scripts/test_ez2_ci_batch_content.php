@@ -17,6 +17,14 @@ function update_post_meta($id, $key, $value) {
         $GLOBALS['ez2_fail_settings_once']=false;
         return false;
     }
+    // Simulate an Owner editing the first page while the second is written.
+    if ($id===2 && $key==='_elementor_page_settings'
+        && !empty($GLOBALS['ez2_owner_race_once'])) {
+        $mode=$GLOBALS['ez2_owner_race_once'];
+        $GLOBALS['ez2_owner_race_once']=false;
+        $GLOBALS['ez2_meta'][1]['_elementor_data']=['[{"id":"owner-concurrent"}]'];
+        if ($mode==='FAIL_SECOND_SETTINGS') return false;
+    }
     $GLOBALS['ez2_meta'][$id][$key] = [$value];
     return true;
 }
@@ -70,6 +78,35 @@ blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'PAGE_SETTINGS_WRITE_FA
 foreach ($before as $id=>$value) check(EZ2_CI_Batch_Content::read($id,$token)===$value
     && EZ2_CI_Batch_Content::settings($id,$token)===['hide_title'=>'no'], 'partial settings write rollback');
 ++$cases;
+// Rollback must not silently overwrite a concurrent Owner edit on page one.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_owner_race_once']='FAIL_SECOND_SETTINGS';
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken),'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)==='[{"id":"owner-concurrent"}]'
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2]
+    && EZ2_CI_Batch_Content::settings(2,$raceToken)===['hide_title'=>'no'],
+    'Owner concurrent edit preserved; other page rolled back');
+++$cases;
+// Even when the second write succeeds, postflight must detect earlier drift.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_owner_race_once']='SUCCESS_SECOND_SETTINGS';
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken),'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)==='[{"id":"owner-concurrent"}]'
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2]
+    && EZ2_CI_Batch_Content::settings(2,$raceToken)===['hide_title'=>'no'],
+    'postflight drift protected Owner edit');
+++$cases;
+// A no-op final page must not skip the last-phase rollback test.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$raceOps[1]['next']=$raceBefore[2];
+$raceOps[1]['settings_next']=['hide_title'=>'no'];
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken,'AFTER_LAST'),
+    'INJECTED_CI_BATCH_FAULT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)===$raceBefore[1]
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2],
+    'last-phase fault restores changed page when final page is unchanged');
+++$cases;
+[$token,$ops,$before]=fixture(3);
 check(EZ2_CI_Batch_Content::apply($ops,$token)===3,'three distinct pages updated');
 foreach ($ops as $op) check(EZ2_CI_Batch_Content::read($op['id'],$token)===$op['next']
     && EZ2_CI_Batch_Content::settings($op['id'],$token)===$op['settings_next'],'candidate parity');
@@ -116,5 +153,5 @@ blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'INVALID_BATCH');
 [$token,$ops]=fixture(1);
 blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token,'AFTER_SECOND'),'INVALID_BATCH');
 ++$cases;
-check($cases===15,'case count');
+check($cases===18,'case count');
 echo 'EZ2_CI_BATCH_GUARD_PASS cases='.$cases.' max_pages=20 faults=3 owner_edits_blocked=true'."\n";
