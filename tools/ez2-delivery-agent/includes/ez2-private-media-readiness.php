@@ -44,6 +44,23 @@ final class EZ2_Private_Media_Readiness {
         return str_ends_with(strtolower(end($segments)), $extension);
     }
 
+    /**
+     * A resolved file can still be reached through a linked parent directory.
+     * Reject that alias even when its target remains inside uploads: the
+     * declared attachment path must be a real, direct path under this root.
+     */
+    private static function hasLinkedAncestor(string $file, string $root): bool {
+        $parent = dirname($file);
+        for ($depth = 0; $depth < 64; ++$depth) {
+            if (is_link($parent)) return true;
+            if ($parent === $root) return false;
+            $above = dirname($parent);
+            if ($above === $parent) return true;
+            $parent = $above;
+        }
+        return true;
+    }
+
     /** Callbacks supply local WordPress metadata; never fetch the public URL. */
     public static function evaluate($site, $mapping, $host, $uploadRoot, callable $attachment): array {
         if (!is_array($site) || ($site['status'] ?? null) !== 'READ_ONLY_PREVIEW_READY'
@@ -101,7 +118,8 @@ final class EZ2_Private_Media_Readiness {
                 return self::blocked('ATTACHMENT_MISSING_OR_MISMATCHED', $count, $verified);
             $real = realpath($actual['file']);
             $stat = lstat($actual['file']);
-            if ($real === false || $stat === false || !str_starts_with($real, $rootPrefix)
+            if ($real === false || $stat === false || self::hasLinkedAncestor($actual['file'], $root)
+                || !str_starts_with($real, $rootPrefix)
                 || ($stat['mode'] & 0170000) !== 0100000 || $stat['nlink'] !== 1
                 || $stat['size'] < 32 || $stat['size'] > 20971520)
                 return self::blocked('UNSAFE_PRIVATE_MEDIA_FILE', $count, $verified);

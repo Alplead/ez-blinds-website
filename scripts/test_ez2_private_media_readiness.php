@@ -105,6 +105,16 @@ try {
             === ['ATTACHMENT_MISSING_OR_MISMATCHED'], 'symlink');
         unlink($link);
     }
+    // A symlinked parent can resolve to the *same* uploads directory.
+    // Realpath containment and URL/file parity alone would accept it.
+    $aliasDir = $root . '/2026/10/alias';
+    if (symlink($root . '/2026/10', $aliasDir)) {
+        $aliasFile = $aliasDir . '/hero.png';
+        $check($run(null, null, null, null,
+            static fn($id) => array_replace($meta, ['file' => $aliasFile]))['issues']
+            === ['UNSAFE_PRIVATE_MEDIA_FILE'], 'symlinked ancestor within uploads');
+        unlink($aliasDir);
+    }
     $hard = $root . '/2026/10/hard.png';
     if (link($file, $hard)) {
         $check($run()['issues'] === ['UNSAFE_PRIVATE_MEDIA_FILE'], 'hardlink');
