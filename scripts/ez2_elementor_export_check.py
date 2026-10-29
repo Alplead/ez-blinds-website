@@ -61,6 +61,23 @@ def unique(pairs):
 def reject_nonfinite(value):
     raise ValueError("Non-finite JSON number")
 
+def media_url_field(path, kind, widget_type):
+    """Only genuine Elementor image controls may resolve private media tokens.
+
+    A nested button/link/metadata 'url' is not an image, even if its field
+    name matches. A list index is represented by None in the path.
+    """
+    if kind in {"container", "section", "column"}:
+        return (path in {("background_image", "url"),
+                         ("background_overlay_image", "url")}
+                or path == ("background_slideshow_gallery", None, "url"))
+    if kind == "widget" and widget_type == "image":
+        return path == ("image", "url")
+    if kind == "widget" and widget_type == "image-carousel":
+        return path in {("carousel", None, "url"), ("gallery", None, "url")}
+    return False
+
+
 def check(doc):
     if not isinstance(doc, dict) or set(doc) != {"title", "type", "version", "page_settings", "content"}:
         raise ValueError("Unexpected Elementor export fields")
@@ -73,7 +90,7 @@ def check(doc):
     ids, slots = set(), set()
     count = 0
 
-    def settings(value, depth=0, field=None):
+    def settings(value, depth=0, path=(), kind=None, widget_type=None):
         if depth > 12:
             raise ValueError("Settings nesting limit")
         if isinstance(value, dict):
@@ -82,12 +99,12 @@ def check(doc):
             for key, item in value.items():
                 if not isinstance(key, str) or key.lower() in {"__dynamic__", "custom_html", "shortcode", "custom_css"}:
                     raise ValueError("Unsupported settings field")
-                settings(item, depth + 1, key)
+                settings(item, depth + 1, path + (key,), kind, widget_type)
         elif isinstance(value, list):
             if len(value) > 100:
                 raise ValueError("Settings list limit")
             for item in value:
-                settings(item, depth + 1, field)
+                settings(item, depth + 1, path + (None,), kind, widget_type)
         elif isinstance(value, str):
             if len(value) > 6000:
                 raise ValueError("Settings text limit")
@@ -95,7 +112,7 @@ def check(doc):
             if value.startswith("ez2-media://"):
                 # Media references belong to Elementor image URL fields,
                 # never a heading, button label or other Owner-facing text.
-                if field != "url" or not SLOT.fullmatch(value):
+                if not SLOT.fullmatch(value) or not media_url_field(path, kind, widget_type):
                     raise ValueError("Invalid media slot")
                 slots.add(value[len("ez2-media://"):])
             elif ("://" in value or value.lstrip().startswith("//")
@@ -126,7 +143,7 @@ def check(doc):
                 raise ValueError("Unsupported Elementor widget")
         elif "widgetType" in node:
             raise ValueError("Unexpected widget type")
-        settings(node["settings"])
+        settings(node["settings"], kind=kind, widget_type=node.get("widgetType"))
         for child in node["elements"]:
             walk(child, depth + 1)
 

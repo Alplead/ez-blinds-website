@@ -48,6 +48,32 @@ reject(lambda d: d["content"][0]["elements"][0]["settings"].update(title="ez2-me
 reject(lambda d: d["content"][0]["settings"].update(custom_label="ez2-media://hero-one"))
 reject(lambda d: d["content"][0]["settings"].update(x=[1] * 101))
 reject(lambda d: d["content"][0]["elements"][0].update(elements=[{"id": "11223344"}]))
+# A 'url' field is not necessarily an image. Never let a private
+# attachment silently replace button destinations or unrelated settings.
+reject(lambda d: d["content"][0]["elements"][0].update(
+    widgetType="button", settings={"link": {"url": "ez2-media://hero-one"}}))
+reject(lambda d: d["content"][0]["settings"].update(
+    tracking={"url": "ez2-media://hero-one"}))
+reject(lambda d: d["content"][0]["elements"][0]["settings"].update(
+    image={"url": "ez2-media://hero-one"}))
+reject(lambda d: d["content"][0]["settings"].update(
+    image={"url": "ez2-media://hero-one"}))
+reject(lambda d: d["content"][0]["elements"][0]["settings"].update(
+    background_slideshow_gallery=[{"url": "ez2-media://hero-one"}]))
+reject(lambda d: d["page_settings"].update(
+    image={"url": "ez2-media://hero-one"}))
+
+image = sample()
+image["content"][0]["elements"][0].update(
+    widgetType="image", settings={"image": {"url": "ez2-media://hero-one"}})
+assert check(image)["media_slots"] == ["hero-one"]
+cases += 1
+carousel = sample()
+carousel["content"][0]["elements"][0].update(
+    widgetType="image-carousel", settings={"carousel": [{"url": "ez2-media://hero-one"}]})
+assert check(carousel)["media_slots"] == ["hero-one"]
+cases += 1
+
 try:
     unique([("a", 1), ("a", 2)])
     raise AssertionError("Duplicate JSON key was accepted")
@@ -66,4 +92,5 @@ with tempfile.TemporaryDirectory() as directory:
     assert run.returncode == 1
     cases += 1
 
+assert cases == 26, cases
 print(f"EZ2_ELEMENTOR_EXPORT_PREFLIGHT_PASS cases={cases}")

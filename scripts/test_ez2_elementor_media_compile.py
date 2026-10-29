@@ -71,6 +71,15 @@ reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://user@{HOST}/wp-cont
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/photo.webp#frag"))
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/\\photo.webp"))
 
+# A symbolic URL in a button or unrelated setting must fail before
+# compilation, even when its slot is present in the private media map.
+reject(lambda d,m:d["content"][0]["elements"][0].update(
+    widgetType="button", settings={"link": {"url": "ez2-media://hero-one"}}))
+reject(lambda d,m:d["content"][0]["settings"].update(
+    tracking={"url": "ez2-media://hero-one"}))
+reject(lambda d,m:d["content"][0]["elements"][0]["settings"].update(
+    image={"url": "ez2-media://hero-one"}))
+
 def add_second_slot(doc, media_map, attachment_id, url):
     media_map["slots"]["hero-two"] = {"id": attachment_id, "url": url, "mime": "image/webp", "sha256": "a"*64}
     doc["content"][0]["settings"]["background_slideshow_gallery"].append(
@@ -129,7 +138,7 @@ with tempfile.TemporaryDirectory() as tmp:
             try:ensure_private_media_map(str(linked_dir/"media.json"))
             except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted map through in-checkout linked directory")
-assert cases==37,cases
+assert cases==40,cases
 assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
 print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
