@@ -13,6 +13,10 @@ function get_post_meta($id, $key, $single = false) {
 }
 function update_post_meta($id, $key, $value) {
     if (!isset($GLOBALS['ez2_posts'][$id])) return false;
+    if ($key==='_elementor_page_settings' && !empty($GLOBALS['ez2_fail_settings_once'])) {
+        $GLOBALS['ez2_fail_settings_once']=false;
+        return false;
+    }
     $GLOBALS['ez2_meta'][$id][$key] = [$value];
     return true;
 }
@@ -61,6 +65,11 @@ foreach (['AFTER_FIRST','AFTER_SECOND','AFTER_LAST'] as $fault) {
         && EZ2_CI_Batch_Content::settings($id,$token)===['hide_title'=>'no'], 'rollback '.$fault);
     ++$cases;
 }
+$GLOBALS['ez2_fail_settings_once']=true;
+blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'PAGE_SETTINGS_WRITE_FAILED');
+foreach ($before as $id=>$value) check(EZ2_CI_Batch_Content::read($id,$token)===$value
+    && EZ2_CI_Batch_Content::settings($id,$token)===['hide_title'=>'no'], 'partial settings write rollback');
+++$cases;
 check(EZ2_CI_Batch_Content::apply($ops,$token)===3,'three distinct pages updated');
 foreach ($ops as $op) check(EZ2_CI_Batch_Content::read($op['id'],$token)===$op['next']
     && EZ2_CI_Batch_Content::settings($op['id'],$token)===$op['settings_next'],'candidate parity');
@@ -107,5 +116,5 @@ blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'INVALID_BATCH');
 [$token,$ops]=fixture(1);
 blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token,'AFTER_SECOND'),'INVALID_BATCH');
 ++$cases;
-check($cases===14,'case count');
+check($cases===15,'case count');
 echo 'EZ2_CI_BATCH_GUARD_PASS cases='.$cases.' max_pages=20 faults=3 owner_edits_blocked=true'."\n";
