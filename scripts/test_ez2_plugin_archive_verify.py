@@ -165,14 +165,14 @@ with tempfile.TemporaryDirectory() as temp:
     # Swap after checksum verification, before ZIP parsing. Both operations
     # must be bound to the SAME pinned bytes; the original code missed this.
     original_zip = zipfile.ZipFile
+    replacement = archive_dir / 'replacement.zip'
+    replacement.write_bytes(zip_bytes([
+        ('elementor/elementor.php',
+         '<?php\\n/*\\nPlugin Name: Synthetic Other\\nVersion: 4.3.4\\n*/\\n',
+         stat.S_IFREG | 0o644),
+        GOOD[1],
+    ]))
     def swap_during_zip_open(*args, **kwargs):
-        replacement = archive_dir / 'replacement.zip'
-        replacement.write_bytes(zip_bytes([
-            ('elementor/elementor.php',
-             '<?php\\n/*\\nPlugin Name: Synthetic Other\\nVersion: 4.3.4\\n*/\\n',
-             stat.S_IFREG | 0o644),
-            GOOD[1],
-        ]))
         os.replace(replacement, path)
         return original_zip(*args, **kwargs)
     with patch('ez2_plugin_archive_verify.zipfile.ZipFile',
