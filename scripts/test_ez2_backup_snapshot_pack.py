@@ -432,5 +432,39 @@ if hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"):
     reject_fifo_swap("sql")
     reject_fifo_swap("uploads")
 
-assert cases == 34 + (2 if hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK") else 0), cases
+# Reject linked ancestors before any private archive is created. The leaf
+# itself can be a normal directory even when its parent is a symlink.
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    actual_parent = base / "actual-source-parent"
+    actual_parent.mkdir()
+    fixture(actual_parent / "snapshot")
+    alias = base / "linked-source-parent"
+    alias.symlink_to(actual_parent, target_is_directory=True)
+    destination = base / "backup"
+    try:
+        pack(alias / "snapshot", destination, SHA)
+    except ValueError:
+        assert not destination.exists()
+        cases += 1
+    else:
+        raise AssertionError("Linked snapshot parent accepted")
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp)
+    fixture(base / "snapshot")
+    actual_parent = base / "actual-backup-parent"
+    actual_parent.mkdir()
+    alias = base / "linked-backup-parent"
+    alias.symlink_to(actual_parent, target_is_directory=True)
+    destination = alias / "backup"
+    try:
+        pack(base / "snapshot", destination, SHA)
+    except ValueError:
+        assert not destination.exists()
+        cases += 1
+    else:
+        raise AssertionError("Linked destination parent accepted")
+
+assert cases == 36 + (2 if hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK") else 0), cases
 print(f"EZ2_BACKUP_SNAPSHOT_PACK_PASS cases={cases} backup_created=true wordpress_touched=false")

@@ -214,6 +214,11 @@ def pack(snapshot_dir, destination_dir, exact_sha):
         raise ValueError("Backup parent must be an existing real directory")
     source_real = source.resolve(strict=True)
     parent_real = parent.resolve(strict=True)
+    # The verifier rejects linked backup ancestors. Apply the same rule
+    # before packaging, so a private snapshot or destination cannot be
+    # redirected through an otherwise ordinary-looking parent directory.
+    if source_real != source.absolute() or parent_real != parent.absolute():
+        raise ValueError("Linked snapshot or backup parent ancestor")
     destination_real = parent_real / destination.name
     if (source_real == destination_real or source_real in destination_real.parents
             or destination_real in source_real.parents):
