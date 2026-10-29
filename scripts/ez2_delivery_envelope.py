@@ -8,6 +8,7 @@ bundles third-party code or private media, or grants LocalWP publication rights.
 import hashlib
 import io
 import json
+import os
 import re
 import stat
 import sys
@@ -119,17 +120,48 @@ def verify_bytes(raw, sha):
             "localwp_installed": False, "deployment_authorized": False}
 
 
+def checked_dependency_lock(path):
+    """Read a bounded, unlinked manifest from a stable file descriptor.
+
+    A linked parent, hardlink or path swap must not let a private local file
+    become part of a public delivery envelope. This never reads plugin bytes.
+    """
+    if path.is_symlink() or path.resolve(strict=True) != path.absolute():
+        raise ValueError("Linked dependency manifest path")
+    before = path.lstat()
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+            or not 0 < before.st_size <= 32768):
+        raise ValueError("Unsafe dependency manifest file")
+    identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns,
+                          s.st_ctime_ns, s.st_nlink)
+    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "rb") as source:
+        if identity(os.fstat(source.fileno())) != identity(before):
+            raise ValueError("Dependency manifest replaced before reading")
+        data = source.read(32769)
+        if (len(data) != before.st_size
+                or identity(os.fstat(source.fileno())) != identity(before)):
+            raise ValueError("Dependency manifest changed during reading")
+    after = path.lstat()
+    if (path.is_symlink() or path.resolve(strict=True) != path.absolute()
+            or identity(after) != identity(before)):
+        raise ValueError("Dependency manifest path changed after reading")
+    return data
+
+
 def build(release_dir, sha, plugin_lock, output):
     root = Path(release_dir)
     lock = Path(plugin_lock)
     destination = Path(output)
-    if (root.is_symlink() or not root.is_dir() or lock.is_symlink()
-            or not lock.is_file() or lock.stat().st_size > 32768
+    if (root.is_symlink() or not root.is_dir()
             or destination.name != OUT_NAME or destination.parent.resolve() != root.resolve()
             or destination.exists() or destination.is_symlink()):
         raise ValueError("Unsafe envelope build paths")
+    lock_bytes = checked_dependency_lock(lock)
     files = {"release/" + name: safe_read(root, name) for name in (*COMPONENTS, CATALOG)}
-    files[DEPENDENCY] = lock.read_bytes()
+    files[DEPENDENCY] = lock_bytes
     manifest = validate_payload(files, sha)
     raw = encode(files, manifest)
     verify_bytes(raw, sha)

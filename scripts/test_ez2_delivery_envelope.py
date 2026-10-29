@@ -3,7 +3,9 @@
 import hashlib
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -127,6 +129,66 @@ class EnvelopeTests(unittest.TestCase):
         self.files[envelope.DEPENDENCY] = b'{"plugins":1,"plugins":2}'
         with self.assertRaises(ValueError):
             envelope.validate_payload(self.files, SHA)
+
+    def test_lock_regular_file_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "elementor.json"
+            lock.write_bytes(b'{"synthetic":true}')
+            self.assertEqual(envelope.checked_dependency_lock(lock), b'{"synthetic":true}')
+
+    def test_lock_hardlink_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "elementor.json"
+            lock.write_bytes(b'{"synthetic":true}')
+            os.link(lock, Path(temp) / "private-alias.json")
+            with self.assertRaises(ValueError):
+                envelope.checked_dependency_lock(lock)
+
+    def test_lock_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "elementor.json"
+            lock.write_bytes(b'{"synthetic":true}')
+            alias = Path(temp) / "alias.json"
+            alias.symlink_to(lock)
+            with self.assertRaises(ValueError):
+                envelope.checked_dependency_lock(alias)
+
+    def test_lock_linked_parent_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            parent = Path(temp) / "real"
+            parent.mkdir()
+            (parent / "elementor.json").write_bytes(b'{"synthetic":true}')
+            alias = Path(temp) / "linked"
+            alias.symlink_to(parent, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                envelope.checked_dependency_lock(alias / "elementor.json")
+
+    def test_lock_oversized_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "elementor.json"
+            lock.write_bytes(b"x" * 32769)
+            with self.assertRaises(ValueError):
+                envelope.checked_dependency_lock(lock)
+
+    def test_lock_identical_bytes_replacement_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "elementor.json"
+            lock.write_bytes(b'{"synthetic":true}')
+            original_open = os.open
+            swapped = False
+
+            def swap_before_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if Path(path) == lock and not swapped:
+                    lock.unlink()
+                    lock.write_bytes(b'{"synthetic":true}')
+                    swapped = True
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch.object(envelope.os, "open", side_effect=swap_before_open):
+                with self.assertRaises(ValueError):
+                    envelope.checked_dependency_lock(lock)
+            self.assertTrue(swapped)
 
     def test_no_private_media(self):
         raw = self.make()

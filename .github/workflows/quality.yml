@@ -541,7 +541,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_delivery_envelope.py scripts/test_ez2_delivery_envelope.py
           python3 scripts/test_ez2_delivery_envelope.py | tee /tmp/ez2-delivery-envelope.log
-          grep -Fq 'EZ2_DELIVERY_ENVELOPE_GUARD_PASS cases=12 installable=false private_media=false' /tmp/ez2-delivery-envelope.log
+          grep -Fq 'EZ2_DELIVERY_ENVELOPE_GUARD_PASS cases=18 installable=false private_media=false' /tmp/ez2-delivery-envelope.log
 
       - name: Test exact-head release evidence auditor (offline fixtures)
         run: |
