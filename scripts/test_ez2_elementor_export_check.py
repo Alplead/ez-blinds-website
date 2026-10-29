@@ -43,6 +43,9 @@ reject(lambda d: d["content"][0]["elements"][0].update(widgetType="unapproved-wi
 reject(lambda d: d["content"][0]["settings"].update(custom_html="not permitted"))
 reject(lambda d: d["content"][0]["settings"].update(image={"url": "https://example.invalid/media"}))
 reject(lambda d: d["content"][0]["settings"].update(image={"url": "ez2-media://INVALID"}))
+reject(lambda d: d.update(title="ez2-media://hero-one"))
+reject(lambda d: d["content"][0]["elements"][0]["settings"].update(title="ez2-media://hero-one"))
+reject(lambda d: d["content"][0]["settings"].update(custom_label="ez2-media://hero-one"))
 reject(lambda d: d["content"][0]["settings"].update(x=[1] * 101))
 reject(lambda d: d["content"][0]["elements"][0].update(elements=[{"id": "11223344"}]))
 try:

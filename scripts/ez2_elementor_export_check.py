@@ -66,12 +66,14 @@ def check(doc):
         raise ValueError("Unexpected Elementor export fields")
     if doc["type"] != "page" or not isinstance(doc["title"], str) or not isinstance(doc["version"], str):
         raise ValueError("Unexpected Elementor page metadata")
+    if "ez2-media://" in doc["title"]:
+        raise ValueError("Symbolic media cannot appear in the page title")
     if not isinstance(doc["page_settings"], dict) or not isinstance(doc["content"], list) or not doc["content"]:
         raise ValueError("Missing Elementor page content")
     ids, slots = set(), set()
     count = 0
 
-    def settings(value, depth=0):
+    def settings(value, depth=0, field=None):
         if depth > 12:
             raise ValueError("Settings nesting limit")
         if isinstance(value, dict):
@@ -80,18 +82,20 @@ def check(doc):
             for key, item in value.items():
                 if not isinstance(key, str) or key.lower() in {"__dynamic__", "custom_html", "shortcode", "custom_css"}:
                     raise ValueError("Unsupported settings field")
-                settings(item, depth + 1)
+                settings(item, depth + 1, key)
         elif isinstance(value, list):
             if len(value) > 100:
                 raise ValueError("Settings list limit")
             for item in value:
-                settings(item, depth + 1)
+                settings(item, depth + 1, field)
         elif isinstance(value, str):
             if len(value) > 6000:
                 raise ValueError("Settings text limit")
             validate_markup(value)
             if value.startswith("ez2-media://"):
-                if not SLOT.fullmatch(value):
+                # Media references belong to Elementor image URL fields,
+                # never a heading, button label or other Owner-facing text.
+                if field != "url" or not SLOT.fullmatch(value):
                     raise ValueError("Invalid media slot")
                 slots.add(value[len("ez2-media://"):])
             elif ("://" in value or value.lstrip().startswith("//")
