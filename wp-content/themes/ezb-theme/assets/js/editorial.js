@@ -24,6 +24,9 @@
     var focusing = false;
     var inView = true;
     var pageSuspended = false;
+    // A visible tab can belong to an unfocused browser window. Suspend the
+    // timer until focus returns, without overriding a deliberate Pause.
+    var windowFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
     var initialising = true;
     var intervalMs = 7700; // four images rotate once in about 31 seconds.
 
@@ -79,7 +82,7 @@
     function shouldStop() {
       return slides.length < 2 || paused ||
         ((hovering || focusing) && !explicitPlay) ||
-        reduced.matches || document.hidden || pageSuspended || !inView;
+        reduced.matches || document.hidden || pageSuspended || !inView || !windowFocused;
     }
 
     function syncTimer() {
@@ -173,6 +176,14 @@
     });
     window.addEventListener('pageshow', function () {
       pageSuspended = false;
+      syncTimer();
+    });
+    window.addEventListener('blur', function () {
+      windowFocused = false;
+      syncTimer();
+    });
+    window.addEventListener('focus', function () {
+      windowFocused = true;
       syncTimer();
     });
     document.addEventListener('visibilitychange', syncTimer);
