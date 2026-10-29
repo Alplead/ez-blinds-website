@@ -93,6 +93,11 @@ def verify(root, expected_sha):
         raise ValueError("Invalid exact source SHA")
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Invalid backup directory")
+    # A linked parent can redirect a seemingly ordinary backup folder to an
+    # unintended location. Refuse the entire alias, not just a linked leaf.
+    resolved_root = root.resolve(strict=True)
+    if resolved_root != root.absolute():
+        raise ValueError("Linked ancestor in backup directory")
     root_before = root.lstat()
     # A rollback set is a closed inventory. Undeclared files, directories and
     # symlinks must not ride along with the four verified backup components.
@@ -142,6 +147,8 @@ def verify(root, expected_sha):
     # after its individual digest must not be accepted as the same backup set.
     if (_identity(root.lstat()) != _identity(root_before)
             or root.is_symlink() or not root.is_dir()
+            or root.resolve(strict=True) != resolved_root
+            or root.resolve(strict=True) != root.absolute()
             or {entry.name for entry in root.iterdir()} != expected_entries):
         raise ValueError("Backup directory changed during verification")
     for filename, identity in verified_files.items():

@@ -182,5 +182,36 @@ def reject_post_stat_fifo_swap(filename):
 reject_post_stat_fifo_swap("backup-manifest.json")
 reject_post_stat_fifo_swap(ROLES["uploads"])
 
-assert cases == 30, cases
+# A non-linked backup leaf can still be reached through a linked parent.
+# Never follow that alias to read a private backup set.
+with tempfile.TemporaryDirectory() as tmp:
+    parent = Path(tmp) / "real-parent"
+    parent.mkdir()
+    backup = parent / "backup"
+    backup.mkdir()
+    fixture(backup)
+    alias = Path(tmp) / "linked-parent"
+    alias.symlink_to(parent, target_is_directory=True)
+    try:
+        verify(alias / "backup", SHA)
+    except (OSError, ValueError, TypeError):
+        cases += 1
+    else:
+        raise AssertionError("Linked backup parent was accepted")
+
+# Keep rejecting a symlinked backup directory itself as well.
+with tempfile.TemporaryDirectory() as tmp:
+    actual = Path(tmp) / "actual-backup"
+    actual.mkdir()
+    fixture(actual)
+    alias = Path(tmp) / "linked-backup"
+    alias.symlink_to(actual, target_is_directory=True)
+    try:
+        verify(alias, SHA)
+    except (OSError, ValueError, TypeError):
+        cases += 1
+    else:
+        raise AssertionError("Linked backup root was accepted")
+
+assert cases == 32, cases
 print(f"EZ2_BACKUP_PREFLIGHT_PASS cases={cases}")
