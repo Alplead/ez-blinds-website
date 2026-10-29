@@ -1,7 +1,9 @@
 <?php
 /** CI-only exact-head Elementor candidate roundtrip in disposable release WordPress. */
 define('EZ2_DISPOSABLE_IMPORT_LIBRARY_ONLY',true);
+define('EZ2_CI_BATCH_CONTENT_LIBRARY_ONLY',true);
 require_once __DIR__.'/ez2_disposable_import.php';
+require_once __DIR__.'/ez2_ci_batch_content.php';
 final class Ez2ReleaseCandidateCi {
  const HOME='http://localhost:8081', TITLE='EZ2 synthetic release candidate - NEVER PUBLISH';
  const MARKER='_ez2_ci_release_candidate_source_sha';
@@ -98,6 +100,48 @@ final class Ez2ReleaseCandidateCi {
    $html=$elementor->frontend->get_builder_content_for_display($post,true);
    if(!is_string($html)||!str_contains($html,'Request a Quote'))
     throw new RuntimeException('FRONTEND');
+   // Exercise the exact-head release candidate with real disposable WordPress
+   // attachment IDs, page settings, and reversible metadata writes.
+   $token=bin2hex(random_bytes(16));
+   $renamed=wp_update_post(['ID'=>$post,'post_title'=>EZ2_CI_Batch_Content::TITLE],true);
+   if(is_wp_error($renamed)||$renamed!==$post
+    ||!update_post_meta($post,EZ2_CI_Batch_Content::MARK,$token))
+    throw new RuntimeException('BATCH_DRAFT_SETUP');
+   $original=EZ2_CI_Batch_Content::read($post,$token);
+   $originalSettings=EZ2_CI_Batch_Content::settings($post,$token);
+   $changed=$compiled['content'];
+   $changed[0]['elements'][0]['settings']['title']='Blinds & Shutters - Synthetic CI Update';
+   $next=wp_json_encode($changed,JSON_THROW_ON_ERROR);
+   $nextSettings=['hide_title'=>'no'];
+   $plan=[['id'=>$post,'expected'=>hash('sha256',$original),'next'=>$next,
+    'settings_expected'=>hash('sha256',serialize($originalSettings)),
+    'settings_next'=>$nextSettings]];
+   try {
+    EZ2_CI_Batch_Content::apply($plan,$token,'AFTER_FIRST');
+    throw new RuntimeException('MEDIA_BATCH_FAULT_NOT_INJECTED');
+   } catch(RuntimeException $error) {
+    if($error->getMessage()!=='INJECTED_CI_BATCH_FAULT') throw $error;
+   }
+   if(EZ2_CI_Batch_Content::read($post,$token)!==$original
+    ||EZ2_CI_Batch_Content::settings($post,$token)!==$originalSettings)
+    throw new RuntimeException('MEDIA_BATCH_FAULT_ROLLBACK');
+   if(EZ2_CI_Batch_Content::apply($plan,$token)!==1
+    ||EZ2_CI_Batch_Content::read($post,$token)!==$next
+    ||EZ2_CI_Batch_Content::settings($post,$token)!==$nextSettings
+    ||($changed[0]['settings']['background_slideshow_gallery']??null)!==array_values($media))
+    throw new RuntimeException('MEDIA_BATCH_APPLY');
+   $same=[['id'=>$post,'expected'=>hash('sha256',$next),'next'=>$next,
+    'settings_expected'=>hash('sha256',serialize($nextSettings)),
+    'settings_next'=>$nextSettings]];
+   if(EZ2_CI_Batch_Content::apply($same,$token)!==0)
+    throw new RuntimeException('MEDIA_BATCH_NOT_IDEMPOTENT');
+   $restore=[['id'=>$post,'expected'=>hash('sha256',$next),'next'=>$original,
+    'settings_expected'=>hash('sha256',serialize($nextSettings)),
+    'settings_next'=>$originalSettings]];
+   if(EZ2_CI_Batch_Content::apply($restore,$token)!==1
+    ||EZ2_CI_Batch_Content::read($post,$token)!==$original
+    ||EZ2_CI_Batch_Content::settings($post,$token)!==$originalSettings)
+    throw new RuntimeException('MEDIA_BATCH_RESTORE');
    $ok=true;
   } finally {
    $failed=false;
