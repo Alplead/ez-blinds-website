@@ -904,7 +904,7 @@ jobs:
           grep -qi 'location: .*quote_status=invalid' /tmp/error-submit-headers.txt
 
           curl -LsS 'http://127.0.0.1:8080/contact/?quote_status=invalid' -o /tmp/invalid-contact.html
-          grep -q 'Please enter your name and a phone number or valid email address. Check any email address you provide.' /tmp/invalid-contact.html
+          grep -q 'Please enter your name and a phone number with 6–20 digits or a valid email address. Check any email address you provide.' /tmp/invalid-contact.html
           grep -q 'role="alert"' /tmp/invalid-contact.html
 
           INVALID_EMAIL_CODE="$(curl -sS -o /tmp/invalid-email-body.html -D /tmp/invalid-email-headers.txt -w '%{http_code}' \
@@ -928,6 +928,21 @@ jobs:
           test "$PHONE_ONLY_CODE" = "302"
           grep -qi 'location: .*quote_status=sent' /tmp/phone-only-headers.txt
           test "$(docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'cat /tmp/ezb-ci-mail-to.txt' | tr -d '\r\n')" = "admin-fallback@example.com"
+
+          # A phone-only enquiry without a plausible callback number must
+          # fail server-side even if a client bypasses browser validation.
+          for bad_phone in 'call me' '12345' '123456789012345678901'; do
+            docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
+            BAD_PHONE_CODE="$(curl -sS -o /tmp/bad-phone-body.html -D /tmp/bad-phone-headers.txt -w '%{http_code}' \
+              -X POST 'http://127.0.0.1:8080/wp-admin/admin-post.php' \
+              --data-urlencode 'action=ezb_quote' \
+              --data-urlencode "ezb_quote_nonce=$NONCE" \
+              --data-urlencode 'name=CI Invalid Phone' \
+              --data-urlencode "phone=$bad_phone")"
+            test "$BAD_PHONE_CODE" = "302"
+            grep -qi 'location: .*quote_status=invalid' /tmp/bad-phone-headers.txt
+            docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'test ! -e /tmp/ezb-ci-mail-to.txt'
+          done
 
           docker compose -f .devcontainer/docker-compose.yml exec -T wordpress sh -lc 'rm -f /tmp/ezb-ci-mail-to.txt'
           INVALID_EMAIL_WITH_PHONE_CODE="$(curl -sS -o /tmp/invalid-email-phone-body.html -D /tmp/invalid-email-phone-headers.txt -w '%{http_code}' \
