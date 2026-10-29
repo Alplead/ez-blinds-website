@@ -32,7 +32,24 @@ def archive(path, role, entries=None):
                 item.linkname = "../../escape"
             else:
                 item.size = len(data)
+            item.mode = 0o700 if kind == "dir" else 0o600
             out.addfile(item, io.BytesIO(data) if kind == "file" else None)
+
+
+def archive_with_metadata(path, role, field, value, kind):
+    """Create a valid-content tar with a deliberately unsafe restore header."""
+    with tarfile.open(path, "w:gz") as out:
+        item = tarfile.TarInfo(role + ("/" if kind == "dir" else "/file.txt"))
+        item.type = tarfile.DIRTYPE if kind == "dir" else tarfile.REGTYPE
+        item.mode = 0o700 if kind == "dir" else 0o600
+        item.size = 0 if kind == "dir" else 1
+        setattr(item, field, value)
+        out.addfile(item, None if kind == "dir" else io.BytesIO(b"x"))
+        if kind == "dir":
+            child = tarfile.TarInfo(role + "/file.txt")
+            child.mode = 0o600
+            child.size = 1
+            out.addfile(child, io.BytesIO(b"x"))
 
 
 def fixture(root):
@@ -109,6 +126,22 @@ reject(lambda r: archive(r / ROLES["theme"], "theme", []))
 reject(lambda r: (r / ROLES["database"]).write_bytes(b"not a gzip file"))
 reject(lambda r: (r / ROLES["database"]).write_bytes(gzip.compress(b"")))
 reject(lambda r: (r / ROLES["plugins"]).write_bytes(b"not tar gzip"))
+# Archive digests and safe paths are insufficient when the tar header could
+# grant privileges or inject filesystem metadata during a later restore.
+for field, value, kind in [
+    ("mode", 0o4755, "file"),
+    ("mode", 0o777, "dir"),
+    ("uid", 1001, "file"),
+    ("gid", 1001, "file"),
+    ("mtime", 42, "file"),
+    ("uname", "untrusted-owner", "file"),
+    ("gname", "untrusted-group", "file"),
+    ("linkname", "../../outside", "file"),
+    ("pax_headers", {"SCHILY.xattr.user.ezb": "unsafe"}, "file"),
+]:
+    reject(lambda r, f=field, v=value, k=kind:
+           archive_with_metadata(r / ROLES["uploads"], "uploads", f, v, k))
+
 # Unicode-normalisation aliases must not overwrite one another on restore.
 reject(lambda r: archive(r / ROLES["uploads"], "uploads", [
     ("uploads/caf\u00e9.txt", b"x", "file"), ("uploads/cafe\u0301.txt", b"y", "file")]))
@@ -220,5 +253,5 @@ def reject_post_preflight_fifo_swap(filename):
 reject_post_preflight_fifo_swap(ROLES["database"])
 reject_post_preflight_fifo_swap(ROLES["uploads"])
 
-assert cases == 37, cases
+assert cases == 46, cases
 print(f"EZ2_BACKUP_ARCHIVE_GUARD_PASS cases={cases}")

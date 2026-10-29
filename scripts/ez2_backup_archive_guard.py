@@ -76,6 +76,16 @@ def inspect_tar(path, role):
                 if members > MAX_MEMBERS:
                     raise ValueError("Archive member count exceeds limit")
                 key = safe_member(item.name, role, item.isdir())
+                # The private snapshot packer writes restrictive, deterministic
+                # restore metadata. A foreign tar can pass path/hash checks yet
+                # restore privileged permissions, ownership or PAX xattrs.
+                # Accept only the metadata our own rollback packer emits.
+                expected_mode = 0o700 if item.isdir() else 0o600
+                if (item.mode != expected_mode or item.uid != 0 or item.gid != 0
+                        or item.mtime != 0 or item.uname or item.gname
+                        or item.linkname or item.devmajor or item.devminor
+                        or set(item.pax_headers) - {"path"}):
+                    raise ValueError("Unsafe archive restore metadata")
                 if key in seen:
                     raise ValueError("Duplicate or case-colliding archive member")
                 seen.add(key)
