@@ -17,6 +17,13 @@ SLOT = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
 SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}\Z")
 MIME = {"image/webp": ".webp", "image/jpeg": ".jpg", "image/png": ".png"}
 SCHEME = "ez2-media://"
+# Windows LocalWP reserves DOS device basenames even when they have extensions.
+# Reject them in Linux CI before compiling private image references.
+WINDOWS_DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?\\Z", re.IGNORECASE)
+
+def safe_upload_segment(segment):
+    return (bool(SEGMENT.fullmatch(segment)) and segment not in (".", "..")
+            and not segment.endswith(".") and not WINDOWS_DEVICE.fullmatch(segment))
 
 def read_json(path, limit):
     # Private attachment mappings must be read from the SAME verified regular
@@ -62,7 +69,7 @@ def validate_media_map(mapping, expected_host):
             raise ValueError("Image URL outside isolated site")
         parts = parsed.path.split("/")
         if (len(parts) < 6 or len(parts) > 10 or parts[:3] != ["", "wp-content", "uploads"]
-                or not all(SEGMENT.fullmatch(p) and p not in (".", "..") for p in parts[3:])
+                or not all(safe_upload_segment(p) for p in parts[3:])
                 or not parts[-1].lower().endswith(MIME[mime])):
             raise ValueError("Invalid local WordPress media path")
         previous = seen_ids.setdefault(media["id"], (url, digest))

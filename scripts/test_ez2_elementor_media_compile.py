@@ -72,6 +72,23 @@ reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://user@{HOST}/wp-cont
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/photo.webp#frag"))
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/\\photo.webp"))
 
+# Linux-built private media URLs must also be safe on Windows LocalWP.
+# Device names are reserved in both directories and extension-bearing files.
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/CON.webp"))
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/aux/photo.webp"))
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/lpt1.webp"))
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/COM9.webp"))
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10./photo.webp"))
+reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/NUL/photo.webp"))
+# Non-device names including COM10 must still compile normally.
+for filename in ("company.webp", "com10.webp"):
+    d_valid, m_valid = fixture()
+    local_url = f"http://{HOST}/wp-content/uploads/2026/10/{filename}"
+    m_valid["slots"]["hero-one"]["url"] = local_url
+    compiled_valid, _ = compile_export(d_valid, m_valid, HOST)
+    assert compiled_valid["content"][0]["settings"]["background_slideshow_gallery"][0]["url"] == local_url
+    cases += 1
+
 # A symbolic URL in a button or unrelated setting must fail before
 # compilation, even when its slot is present in the private media map.
 reject(lambda d,m:d["content"][0]["elements"][0].update(
@@ -197,7 +214,7 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError("Accepted same-byte private map replacement")
 
-assert cases==45,cases
+assert cases==53,cases
 assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
 print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
