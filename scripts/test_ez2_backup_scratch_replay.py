@@ -31,6 +31,7 @@ def archive(path, role, entries=None):
                 item.linkname = "../../outside"
             else:
                 item.size = len(data)
+            item.mode = 0o700 if kind == "dir" else 0o600
             output.addfile(item, io.BytesIO(data) if kind == "file" else None)
 
 
