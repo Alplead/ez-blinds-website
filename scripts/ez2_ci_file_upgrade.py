@@ -37,7 +37,7 @@ def unpack(archive, dest, folder):
     seen, directory_casing, total, count = set(), {}, 0, 0
     # The eventual LocalWP consumer is Windows: reject NTFS aliases even
     # though the isolated Linux CI filesystem would accept these members.
-    reserved = re.compile(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?\\Z", re.I)
+    reserved = re.compile(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?\Z", re.I)
     with zipfile.ZipFile(archive) as z:
         members = z.infolist()
         if not 1 <= len(members) <= 3000 or z.testzip() is not None:
