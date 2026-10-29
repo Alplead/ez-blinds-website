@@ -11,7 +11,7 @@ function get_post_meta($id, $key, $single = false) {
     $values = $GLOBALS['ez2_meta'][$id][$key] ?? [];
     return $single ? ($values[0] ?? '') : $values;
 }
-function update_post_meta($id, $key, $value) {
+function update_post_meta($id, $key, $value, $prev_value = null) {
     if (!isset($GLOBALS['ez2_posts'][$id])) return false;
     if ($key==='_elementor_page_settings' && !empty($GLOBALS['ez2_fail_settings_once'])) {
         $GLOBALS['ez2_fail_settings_once']=false;
@@ -22,9 +22,22 @@ function update_post_meta($id, $key, $value) {
         && !empty($GLOBALS['ez2_owner_race_once'])) {
         $mode=$GLOBALS['ez2_owner_race_once'];
         $GLOBALS['ez2_owner_race_once']=false;
-        $GLOBALS['ez2_meta'][1]['_elementor_data']=['[{"id":"owner-concurrent"}]'];
+        if ($mode==='OWNER_SETTINGS_SUCCESS_SECOND')
+            $GLOBALS['ez2_meta'][1]['_elementor_page_settings']=[['hide_title'=>'owner-concurrent']];
+        else
+            $GLOBALS['ez2_meta'][1]['_elementor_data']=['[{"id":"owner-concurrent"}]'];
         if ($mode==='FAIL_SECOND_SETTINGS') return false;
     }
+    // Model a real WordPress postmeta compare-and-swap race just before SQL.
+    $race=$GLOBALS['ez2_write_race_once'] ?? null;
+    if (is_array($race) && $race['id']===$id && $race['key']===$key
+        && $race['on_value']===$value) {
+        $GLOBALS['ez2_write_race_once']=null;
+        $GLOBALS['ez2_meta'][$id][$key]=[$race['owner_value']];
+    }
+    if ($prev_value!==null
+        && ($GLOBALS['ez2_meta'][$id][$key][0] ?? null)!==$prev_value)
+        return false;
     $GLOBALS['ez2_meta'][$id][$key] = [$value];
     return true;
 }
@@ -96,6 +109,50 @@ check(EZ2_CI_Batch_Content::read(1,$raceToken)==='[{"id":"owner-concurrent"}]'
     && EZ2_CI_Batch_Content::settings(2,$raceToken)===['hide_title'=>'no'],
     'postflight drift protected Owner edit');
 ++$cases;
+// A page-content edit racing the first write must never be overwritten.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_write_race_once']=['id'=>1,'key'=>'_elementor_data',
+    'on_value'=>$raceOps[0]['next'],'owner_value'=>'[{"id":"owner-during-write"}]'];
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken),'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)==='[{"id":"owner-during-write"}]'
+    && EZ2_CI_Batch_Content::settings(1,$raceToken)===['hide_title'=>'no']
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2],
+    'content CAS preserves Owner edit before forward write');
+++$cases;
+// A settings edit racing the second metadata write must restore our data,
+// while preserving the Owner's settings change on the same page.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_write_race_once']=['id'=>1,'key'=>'_elementor_page_settings',
+    'on_value'=>['hide_title'=>'yes'],'owner_value'=>['hide_title'=>'owner-race']];
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken),'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)===$raceBefore[1]
+    && EZ2_CI_Batch_Content::settings(1,$raceToken)===['hide_title'=>'owner-race']
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2],
+    'settings CAS preserves Owner edit and restores our data');
+++$cases;
+// Even during rollback, a fresh Owner edit must defeat the stale CAS.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_write_race_once']=['id'=>1,'key'=>'_elementor_data',
+    'on_value'=>$raceBefore[1],'owner_value'=>'[{"id":"owner-during-rollback"}]'];
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken,'AFTER_SECOND'),
+    'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)==='[{"id":"owner-during-rollback"}]'
+    && EZ2_CI_Batch_Content::settings(1,$raceToken)===['hide_title'=>'no']
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2]
+    && EZ2_CI_Batch_Content::settings(2,$raceToken)===['hide_title'=>'no'],
+    'rollback CAS preserves Owner data and restores other fields');
+++$cases;
+// Owner changes only settings on an earlier page during a later write.
+// Restore the earlier page's transaction-owned data independently.
+[$raceToken,$raceOps,$raceBefore]=fixture(2);
+$GLOBALS['ez2_owner_race_once']='OWNER_SETTINGS_SUCCESS_SECOND';
+blocked(fn() => EZ2_CI_Batch_Content::apply($raceOps,$raceToken),'BATCH_ROLLBACK_CONFLICT');
+check(EZ2_CI_Batch_Content::read(1,$raceToken)===$raceBefore[1]
+    && EZ2_CI_Batch_Content::settings(1,$raceToken)===['hide_title'=>'owner-concurrent']
+    && EZ2_CI_Batch_Content::read(2,$raceToken)===$raceBefore[2]
+    && EZ2_CI_Batch_Content::settings(2,$raceToken)===['hide_title'=>'no'],
+    'independent rollback preserves Owner settings without stranding our data');
+++$cases;
 // A no-op final page must not skip the last-phase rollback test.
 [$raceToken,$raceOps,$raceBefore]=fixture(2);
 $raceOps[1]['next']=$raceBefore[2];
@@ -153,5 +210,5 @@ blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'INVALID_BATCH');
 [$token,$ops]=fixture(1);
 blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token,'AFTER_SECOND'),'INVALID_BATCH');
 ++$cases;
-check($cases===18,'case count');
+check($cases===22,'case count');
 echo 'EZ2_CI_BATCH_GUARD_PASS cases='.$cases.' max_pages=20 faults=3 owner_edits_blocked=true'."\n";

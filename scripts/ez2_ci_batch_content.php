@@ -81,10 +81,10 @@ final class EZ2_CI_Batch_Content {
                 $written[]=$id;
                 $expectedAfter[$id]=['data'=>$next,'settings'=>$settingsNext];
                 if ($next!==$before[$id]
-                    && !update_post_meta($id,'_elementor_data',wp_slash($next)))
+                    && !update_post_meta($id,'_elementor_data',wp_slash($next),$before[$id]))
                     throw new RuntimeException('META_WRITE_FAILED');
                 if ($settingsNext!==$beforeSettings[$id]
-                    && !update_post_meta($id,'_elementor_page_settings',$settingsNext))
+                    && !update_post_meta($id,'_elementor_page_settings',$settingsNext,$beforeSettings[$id]))
                     throw new RuntimeException('PAGE_SETTINGS_WRITE_FAILED');
                 if (self::read($id,$token)!==$next
                     || self::settings($id,$token)!==$settingsNext)
@@ -118,21 +118,33 @@ final class EZ2_CI_Batch_Content {
                 }
                 // Never erase a concurrent Owner edit during rollback. Restore
                 // other transaction-owned pages and report the unresolved page.
-                if (($currentData!==$before[$id] && $currentData!==$expectedAfter[$id]['data'])
-                    || ($currentSettings!==$beforeSettings[$id]
-                        && $currentSettings!==$expectedAfter[$id]['settings'])) {
-                    $ownerConflict=true;
-                    continue;
+                // Protect each metadata field independently: an Owner edit to
+                // settings must not strand our separate, reversible data write.
+                $dataConflict=$currentData!==$before[$id]
+                    && $currentData!==$expectedAfter[$id]['data'];
+                $settingsConflict=$currentSettings!==$beforeSettings[$id]
+                    && $currentSettings!==$expectedAfter[$id]['settings'];
+                if ($dataConflict || $settingsConflict) $ownerConflict=true;
+                // WordPress postmeta's fourth argument is a compare-and-swap
+                // previous value. A concurrent edit between read and restore
+                // must not be overwritten by an unconditional metadata write.
+                if (!$dataConflict && $currentData!==$before[$id]) {
+                    if (!update_post_meta($id,'_elementor_data',wp_slash($before[$id]),$currentData)) {
+                        if (self::read($id,$token)===$currentData)
+                            throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
+                        $ownerConflict=true;
+                    }
                 }
-                if ($currentData!==$before[$id]
-                    && !update_post_meta($id,'_elementor_data',wp_slash($before[$id])))
-                    throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
-                if ($currentSettings!==$beforeSettings[$id]
-                    && !update_post_meta($id,'_elementor_page_settings',$beforeSettings[$id]))
-                    throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
-                if (self::read($id,$token)!==$before[$id]
-                    || self::settings($id,$token)!==$beforeSettings[$id])
-                    throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
+                if (!$settingsConflict && $currentSettings!==$beforeSettings[$id]) {
+                    if (!update_post_meta($id,'_elementor_page_settings',$beforeSettings[$id],$currentSettings)) {
+                        if (self::settings($id,$token)===$currentSettings)
+                            throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
+                        $ownerConflict=true;
+                    }
+                }
+                if ((!$dataConflict && self::read($id,$token)!==$before[$id])
+                    || (!$settingsConflict && self::settings($id,$token)!==$beforeSettings[$id]))
+                    $ownerConflict=true;
             }
             if ($ownerConflict)
                 throw new RuntimeException('BATCH_ROLLBACK_CONFLICT',0,$error);
