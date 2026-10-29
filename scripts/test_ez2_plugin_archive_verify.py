@@ -2,12 +2,14 @@
 import hashlib
 import io
 import json
+import os
 import stat
 import subprocess
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 from ez2_plugin_archive_verify import verify
 
 
@@ -138,6 +140,51 @@ with tempfile.TemporaryDirectory() as temp:
     else:
         raise AssertionError('Archive inside repo accepted')
 
+    # A second hardlink allows mutations through another filesystem path.
+    other_link = root / 'outside-hardlink.zip'
+    os.link(path, other_link)
+    try:
+        verify(lock(data), archive_dir, repo_root=root / 'not-repo')
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError('Hardlinked archive accepted')
+    other_link.unlink()
+
+    # An ancestor symlink must not redirect private plugin inputs.
+    alias = root / 'archive-alias'
+    alias.symlink_to(archive_dir, target_is_directory=True)
+    try:
+        verify(lock(data), alias, repo_root=root / 'not-repo')
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError('Linked archive ancestor accepted')
+    alias.unlink()
+
+    # Swap after checksum verification, before ZIP parsing. Both operations
+    # must be bound to the SAME pinned bytes; the original code missed this.
+    original_zip = zipfile.ZipFile
+    def swap_during_zip_open(*args, **kwargs):
+        replacement = archive_dir / 'replacement.zip'
+        replacement.write_bytes(zip_bytes([
+            ('elementor/elementor.php',
+             '<?php\\n/*\\nPlugin Name: Synthetic Other\\nVersion: 4.3.4\\n*/\\n',
+             stat.S_IFREG | 0o644),
+            GOOD[1],
+        ]))
+        os.replace(replacement, path)
+        return original_zip(*args, **kwargs)
+    with patch('ez2_plugin_archive_verify.zipfile.ZipFile',
+               side_effect=swap_during_zip_open):
+        try:
+            verify(lock(data), archive_dir, repo_root=root / 'not-repo')
+        except ValueError:
+            cases += 1
+        else:
+            raise AssertionError('Post-hash archive replacement accepted')
+    path.write_bytes(data)
+
     manifest = lock(data)
     manifest['plugins'][0]['archive_sha256'] = None
     try:
@@ -157,5 +204,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 42, cases
+assert cases == 45, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')

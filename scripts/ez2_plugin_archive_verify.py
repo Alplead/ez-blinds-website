@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Verify pinned EZ2 plugin ZIP bytes offline; never extract, execute or install."""
 import hashlib
+import io
 import json
+import os
 import re
 import stat
 import sys
@@ -15,13 +17,21 @@ from ez2_plugin_dependency_check import check, read
 WINDOWS_DEVICE = re.compile(r'(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?\Z', re.I)
 
 
+def file_identity(info):
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
+            info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
 def verify(lock, archive_dir, repo_root=None):
     if check(lock)['missing_checksums']:
         raise ValueError('Missing pinned checksum')
     root = Path(archive_dir)
     if root.is_symlink() or not root.is_dir():
         raise ValueError('Invalid private archive directory')
-    root = root.resolve(strict=True)
+    resolved = root.resolve(strict=True)
+    if resolved != root.absolute():
+        raise ValueError('Linked ancestor in private archive directory')
+    root = resolved
     repo = Path(repo_root or Path(__file__).resolve().parents[1]).resolve(strict=True)
     if root == repo or repo in root.parents:
         raise ValueError('Third-party archives cannot be inside public repository')
@@ -29,18 +39,30 @@ def verify(lock, archive_dir, repo_root=None):
     for plugin in lock['plugins']:
         slug, version = plugin['slug'], plugin['version']
         archive_path = root / f'{slug}.{version}.zip'
-        if (archive_path.is_symlink() or not archive_path.is_file()
-                or not 0 < archive_path.stat().st_size <= 50 * 1024 * 1024):
+        if archive_path.is_symlink() or not archive_path.is_file():
             raise ValueError('Missing or unsafe plugin ZIP')
-        digest = hashlib.sha256()
+        before = archive_path.stat(follow_symlinks=False)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or not 0 < before.st_size <= 50 * 1024 * 1024):
+            raise ValueError('Missing, linked or oversized plugin ZIP')
+        # Hash and inspect one immutable byte snapshot. Previously the ZIP was
+        # reopened by path after hashing, so a replacement could pass a digest
+        # for different bytes than the ones checked for safe installation.
         with archive_path.open('rb') as source:
-            for chunk in iter(lambda: source.read(1024 * 1024), b''):
-                digest.update(chunk)
-        if digest.hexdigest() != plugin['archive_sha256']:
+            if file_identity(os.fstat(source.fileno())) != file_identity(before):
+                raise ValueError('Plugin ZIP changed before reading')
+            raw = source.read(50 * 1024 * 1024 + 1)
+            if (len(raw) != before.st_size
+                    or file_identity(os.fstat(source.fileno())) != file_identity(before)):
+                raise ValueError('Plugin ZIP changed while reading')
+        if (archive_path.is_symlink()
+                or file_identity(archive_path.stat(follow_symlinks=False)) != file_identity(before)):
+            raise ValueError('Plugin ZIP path changed after reading')
+        if hashlib.sha256(raw).hexdigest() != plugin['archive_sha256']:
             raise ValueError('Pinned ZIP digest mismatch')
         seen, files, dirs, count, total, header = set(), set(), set(), 0, 0, None
         try:
-            with zipfile.ZipFile(archive_path) as z:
+            with zipfile.ZipFile(io.BytesIO(raw)) as z:
                 entries = z.infolist()
                 if not 1 <= len(entries) <= 5500:
                     raise ValueError('Unsafe ZIP entry count')
@@ -110,6 +132,9 @@ def verify(lock, archive_dir, repo_root=None):
                     raise ValueError('ZIP CRC mismatch')
         except (zipfile.BadZipFile, zipfile.LargeZipFile, RuntimeError, EOFError, UnicodeError) as exc:
             raise ValueError('Malformed plugin ZIP') from exc
+        if (archive_path.is_symlink()
+                or file_identity(archive_path.stat(follow_symlinks=False)) != file_identity(before)):
+            raise ValueError('Plugin ZIP path changed during verification')
         results.append({'slug': slug, 'version': version, 'files_checked': count,
                         'uncompressed_bytes': total, 'checksum_verified': True})
     return {'status': 'LOCAL_PLUGIN_ARCHIVE_BYTES_VERIFIED_ONLY', 'target_site': 'ez2-isolated-only',
