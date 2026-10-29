@@ -19,7 +19,7 @@ MIME = {"image/webp": ".webp", "image/jpeg": ".jpg", "image/png": ".png"}
 SCHEME = "ez2-media://"
 # Windows LocalWP reserves DOS device basenames even when they have extensions.
 # Reject them in Linux CI before compiling private image references.
-WINDOWS_DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?\\Z", re.IGNORECASE)
+WINDOWS_DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z", re.IGNORECASE)
 
 def safe_upload_segment(segment):
     return (bool(SEGMENT.fullmatch(segment)) and segment not in (".", "..")
