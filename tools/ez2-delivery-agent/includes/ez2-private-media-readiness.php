@@ -25,6 +25,18 @@ final class EZ2_Private_Media_Readiness {
         return self::result('BLOCKED_PRIVATE_MEDIA_READINESS', [$issue], $slots, $verified);
     }
 
+    // Check the complete isolated-site report before touching WordPress data.
+    // A status string alone is not evidence that this is the separate EZ2 site.
+    private static function isolatedSite($site): bool {
+        return is_array($site)
+            && ($site['status'] ?? null) === 'READ_ONLY_PREVIEW_READY'
+            && ($site['target_site'] ?? null) === 'ez2-isolated-only'
+            && ($site['mode'] ?? null) === 'read-only'
+            && ($site['can_apply'] ?? null) === false
+            && ($site['site_modified'] ?? null) === false
+            && ($site['issues'] ?? null) === [];
+    }
+
     private static function safeUrl($url, string $host, string $extension): bool {
         if (!is_string($url) || strlen($url) > 1000 || preg_match('/[^\x21-\x7e]/', $url)
             || str_contains($url, '\\') || str_contains($url, '%')) return false;
@@ -39,7 +51,12 @@ final class EZ2_Private_Media_Readiness {
         if (count($segments) < 3 || count($segments) > 8) return false;
         foreach ($segments as $segment) {
             if ($segment === '.' || $segment === '..'
-                || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/D', $segment)) return false;
+                || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/D', $segment)
+                // ZIP/WordPress media references must also be unambiguous on
+                // the Owner's Windows VM, even when tested on Linux CI.
+                || str_ends_with($segment, '.')
+                || preg_match('/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iD', $segment))
+                return false;
         }
         return str_ends_with(strtolower(end($segments)), $extension);
     }
@@ -63,12 +80,7 @@ final class EZ2_Private_Media_Readiness {
 
     /** Callbacks supply local WordPress metadata; never fetch the public URL. */
     public static function evaluate($site, $mapping, $host, $uploadRoot, callable $attachment): array {
-        if (!is_array($site) || ($site['status'] ?? null) !== 'READ_ONLY_PREVIEW_READY'
-            || ($site['target_site'] ?? null) !== 'ez2-isolated-only'
-            || ($site['mode'] ?? null) !== 'read-only'
-            || ($site['can_apply'] ?? null) !== false
-            || ($site['site_modified'] ?? null) !== false
-            || ($site['issues'] ?? null) !== []
+        if (!self::isolatedSite($site)
             || !is_string($host) || !preg_match(self::HOST, $host))
             return self::blocked('ISOLATED_SITE_REQUIRED');
         if (!is_array($mapping) || array_keys($mapping) !== ['schema_version', 'target_site', 'host', 'slots']
@@ -155,7 +167,7 @@ final class EZ2_Private_Media_Readiness {
     }
 
     public static function observe(array $site): array {
-        if (($site['status'] ?? null) !== 'READ_ONLY_PREVIEW_READY')
+        if (!self::isolatedSite($site))
             return self::blocked('ISOLATED_SITE_REQUIRED');
         if (!function_exists('get_option') || !function_exists('get_post')
             || !function_exists('get_post_mime_type') || !function_exists('wp_get_attachment_url')

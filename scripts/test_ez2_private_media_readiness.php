@@ -24,7 +24,34 @@ $meta = ['post_type' => 'attachment', 'status' => 'inherit', 'mime' => 'image/pn
 $lookup = static fn(int $id) => $id === 17 ? $meta : null;
 $run = static fn($s = null, $m = null, $h = null, $r = null, $fn = null) =>
     EZ2_Private_Media_Readiness::evaluate($s ?? $site, $m ?? $map, $h ?? $host, $r ?? $root, $fn ?? $lookup);
+// Minimal synthetic WordPress stubs make an accidental private read observable.
+// No real WordPress instance, site option, attachment or image is accessed.
+$GLOBALS['ez2_private_wp_reads'] = 0;
+function get_option($name, $default = null) {
+    ++$GLOBALS['ez2_private_wp_reads'];
+    return $default;
+}
+function get_post($id) { return null; }
+function get_post_mime_type($id) { return null; }
+function wp_get_attachment_url($id) { return false; }
+function get_attached_file($id) { return false; }
+function wp_upload_dir($time = null, $create = false) {
+    ++$GLOBALS['ez2_private_wp_reads'];
+    return ['basedir' => '/nonexistent/isolated/uploads'];
+}
 try {
+    foreach ([
+        ['status', 'BLOCKED'], ['target_site', 'ez-bns-new-dev.local'],
+        ['mode', 'write'], ['can_apply', true],
+        ['site_modified', true], ['issues', ['UNVERIFIED']],
+    ] as [$field, $value]) {
+        $unsafe = $site; $unsafe[$field] = $value;
+        $beforeReads = $GLOBALS['ez2_private_wp_reads'];
+        $observation = EZ2_Private_Media_Readiness::observe($unsafe);
+        $check($observation['issues'] === ['ISOLATED_SITE_REQUIRED']
+            && $GLOBALS['ez2_private_wp_reads'] === $beforeReads,
+            'observe rejects unsafe site before any WordPress private reads: ' . $field);
+    }
     $good = $run();
     $check($good['status'] === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
         && $good['slot_count'] === 1 && $good['verified_count'] === 1
@@ -85,7 +112,12 @@ try {
               'http://ez2-review.local/wp-content/uploads/2026/10/../hero.png',
               'http://ez2-review.local/wp-content/uploads/2026/10/hero.png?x=1',
               'http://ez2-review.local/wp-content/uploads/2026/10/%68ero.png',
-              'http://ez2-review.local/wp-content/uploads/2026/10/hero.jpg'] as $unsafe) {
+              'http://ez2-review.local/wp-content/uploads/2026/10/hero.jpg',
+              'http://ez2-review.local/wp-content/uploads/2026/10/CON.png',
+              'http://ez2-review.local/wp-content/uploads/2026/10/LPT1.png',
+              'http://ez2-review.local/wp-content/uploads/AUX/10/hero.png',
+              'http://ez2-review.local/wp-content/uploads/2026./10/hero.png',
+              'http://ez2-review.local/wp-content/uploads/COM9/10/hero.png'] as $unsafe) {
         $bad = $map; $bad['slots']['home-hero-one']['url'] = $unsafe;
         $check($run(null, $bad)['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT'], 'unsafe URL');
     }
