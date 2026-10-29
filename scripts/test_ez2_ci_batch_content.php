@@ -13,6 +13,8 @@ function get_post_meta($id, $key, $single = false) {
 }
 function update_post_meta($id, $key, $value, $prev_value = null) {
     if (!isset($GLOBALS['ez2_posts'][$id])) return false;
+    // WordPress update_metadata() unslashes the new value, including nested arrays.
+    $value = wp_unslash($value);
     if ($key==='_elementor_page_settings' && !empty($GLOBALS['ez2_fail_settings_once'])) {
         $GLOBALS['ez2_fail_settings_once']=false;
         return false;
@@ -41,7 +43,14 @@ function update_post_meta($id, $key, $value, $prev_value = null) {
     $GLOBALS['ez2_meta'][$id][$key] = [$value];
     return true;
 }
-function wp_slash($value) { return $value; }
+function wp_slash($value) {
+    return is_array($value) ? array_map('wp_slash', $value)
+        : (is_string($value) ? addslashes($value) : $value);
+}
+function wp_unslash($value) {
+    return is_array($value) ? array_map('wp_unslash', $value)
+        : (is_string($value) ? stripslashes($value) : $value);
+}
 function check($condition, $message) {
     if (!$condition) throw new RuntimeException('TEST_FAIL:' . $message);
 }
@@ -210,5 +219,28 @@ blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token),'INVALID_BATCH');
 [$token,$ops]=fixture(1);
 blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token,'AFTER_SECOND'),'INVALID_BATCH');
 ++$cases;
-check($cases===22,'case count');
-echo 'EZ2_CI_BATCH_GUARD_PASS cases='.$cases.' max_pages=20 faults=3 owner_edits_blocked=true'."\n";
+// WordPress recursively unslashes postmeta writes: nested settings must
+// retain quotes and backslashes through apply, injected rollback, and restore.
+[$token,$ops,$before]=fixture(1);
+$specialBefore=['hide_title'=>'no','custom'=>['caption'=>'Owner "quote" \\ path']];
+$specialNext=['hide_title'=>'yes','custom'=>['caption'=>'New "quote" \\ path']];
+$GLOBALS['ez2_meta'][1]['_elementor_page_settings']=[$specialBefore];
+$ops[0]['settings_expected']=hash('sha256',serialize($specialBefore));
+$ops[0]['settings_next']=$specialNext;
+blocked(fn() => EZ2_CI_Batch_Content::apply($ops,$token,'AFTER_FIRST'),
+    'INJECTED_CI_BATCH_FAULT');
+check(EZ2_CI_Batch_Content::settings(1,$token)===$specialBefore,
+    'escaped settings preserved after injected rollback');
+check(EZ2_CI_Batch_Content::apply($ops,$token)===1
+    && EZ2_CI_Batch_Content::settings(1,$token)===$specialNext,
+    'escaped settings preserved after apply');
+$escapedRestore=[['id'=>1,'expected'=>hash('sha256',$before[1]),
+    'next'=>$before[1],
+    'settings_expected'=>hash('sha256',serialize($specialNext)),
+    'settings_next'=>$specialBefore]];
+check(EZ2_CI_Batch_Content::apply($escapedRestore,$token)===1
+    && EZ2_CI_Batch_Content::settings(1,$token)===$specialBefore,
+    'escaped settings preserved after restore');
+++$cases;
+check($cases===23,'case count');
+echo 'EZ2_CI_BATCH_GUARD_PASS cases='.$cases.' max_pages=20 faults=3 owner_edits_blocked=true escaped_settings=true'."\n";

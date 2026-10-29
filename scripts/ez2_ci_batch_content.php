@@ -84,7 +84,7 @@ final class EZ2_CI_Batch_Content {
                     && !update_post_meta($id,'_elementor_data',wp_slash($next),$before[$id]))
                     throw new RuntimeException('META_WRITE_FAILED');
                 if ($settingsNext!==$beforeSettings[$id]
-                    && !update_post_meta($id,'_elementor_page_settings',$settingsNext,$beforeSettings[$id]))
+                    && !update_post_meta($id,'_elementor_page_settings',wp_slash($settingsNext),$beforeSettings[$id]))
                     throw new RuntimeException('PAGE_SETTINGS_WRITE_FAILED');
                 if (self::read($id,$token)!==$next
                     || self::settings($id,$token)!==$settingsNext)
@@ -136,7 +136,7 @@ final class EZ2_CI_Batch_Content {
                     }
                 }
                 if (!$settingsConflict && $currentSettings!==$beforeSettings[$id]) {
-                    if (!update_post_meta($id,'_elementor_page_settings',$beforeSettings[$id],$currentSettings)) {
+                    if (!update_post_meta($id,'_elementor_page_settings',wp_slash($beforeSettings[$id]),$currentSettings)) {
                         if (self::settings($id,$token)===$currentSettings)
                             throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
                         $ownerConflict=true;
@@ -271,6 +271,39 @@ final class EZ2_CI_Batch_Content {
                 if (self::read($id,$token)!==$before[$id]
                     || self::settings($id,$token)!==$beforeSettings[$id])
                     throw new RuntimeException('BATCH_RESTORE_MISMATCH');
+            // WordPress unslashes postmeta writes recursively. Verify real
+            // nested Elementor settings survive apply AND rollback unchanged.
+            $specialId=$ids[0];
+            $specialBefore=['hide_title'=>'no','custom'=>['caption'=>'Owner "quote" \\ path']];
+            $specialNext=['hide_title'=>'yes','custom'=>['caption'=>'New "quote" \\ path']];
+            if (!update_post_meta($specialId,'_elementor_page_settings',
+                wp_slash($specialBefore),$beforeSettings[$specialId]))
+                throw new RuntimeException('ESCAPED_SETTINGS_FIXTURE_FAILED');
+            $escaped=[['id'=>$specialId,
+                'expected'=>hash('sha256',$before[$specialId]),'next'=>$before[$specialId],
+                'settings_expected'=>hash('sha256',serialize($specialBefore)),
+                'settings_next'=>$specialNext]];
+            $injected=false;
+            try { self::apply($escaped,$token,'AFTER_FIRST'); }
+            catch (RuntimeException $e) {
+                if ($e->getMessage()!=='INJECTED_CI_BATCH_FAULT') throw $e;
+                $injected=true;
+            }
+            if (!$injected || self::settings($specialId,$token)!==$specialBefore)
+                throw new RuntimeException('ESCAPED_SETTINGS_ROLLBACK_MISMATCH');
+            if (self::apply($escaped,$token)!==1
+                || self::settings($specialId,$token)!==$specialNext)
+                throw new RuntimeException('ESCAPED_SETTINGS_APPLY_MISMATCH');
+            $escapedRestore=[['id'=>$specialId,
+                'expected'=>hash('sha256',$before[$specialId]),'next'=>$before[$specialId],
+                'settings_expected'=>hash('sha256',serialize($specialNext)),
+                'settings_next'=>$specialBefore]];
+            if (self::apply($escapedRestore,$token)!==1
+                || self::settings($specialId,$token)!==$specialBefore
+                || !update_post_meta($specialId,'_elementor_page_settings',
+                    wp_slash($beforeSettings[$specialId]),$specialBefore)
+                || self::settings($specialId,$token)!==$beforeSettings[$specialId])
+                throw new RuntimeException('ESCAPED_SETTINGS_RESTORE_MISMATCH');
             if ((int)get_option('page_on_front')!==$front
                 || get_post($front)->post_title!==$frontPost->post_title)
                 throw new RuntimeException('PUBLISHED_HOME_CHANGED');
