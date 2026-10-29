@@ -30,41 +30,63 @@ final class EZ2_CI_Batch_Content {
         return $data[0];
     }
 
-    /** Preflight ALL pages, then write; reverse rollback on any failure. */
+    /** Page-level Elementor settings are separate from Elementor element data. */
+    static function settings(int $id, string $token): array {
+        self::read($id,$token);
+        $values=get_post_meta($id,'_elementor_page_settings',false);
+        if (count($values)!==1 || !is_array($values[0]))
+            throw new RuntimeException('UNMANAGED_PAGE_SETTINGS');
+        return $values[0];
+    }
+
+    /** Preflight both metadata domains for ALL pages, then write and rollback. */
     static function apply(array $ops, string $token, string $fault=''): int {
         if (!preg_match('/^[a-f0-9]{32}$/D',$token) || count($ops)<1 || count($ops)>20
             || !array_is_list($ops)
             || !in_array($fault,['','AFTER_FIRST','AFTER_SECOND','AFTER_LAST'],true)
             || ($fault==='AFTER_SECOND' && count($ops)<2))
             throw new RuntimeException('INVALID_BATCH');
-        $before=[]; $seen=[];
+        $before=[]; $beforeSettings=[]; $seen=[];
         foreach ($ops as $op) {
-            if (!is_array($op) || array_keys($op)!==['id','expected','next'])
+            if (!is_array($op) || array_keys($op)!==['id','expected','next','settings_expected','settings_next'])
                 throw new RuntimeException('INVALID_BATCH_SCHEMA');
-            ['id'=>$id,'expected'=>$expected,'next'=>$next]=$op;
+            ['id'=>$id,'expected'=>$expected,'next'=>$next,
+             'settings_expected'=>$settingsExpected,'settings_next'=>$settingsNext]=$op;
             if (!is_int($id) || $id<1 || isset($seen[$id])
                 || !is_string($expected) || !preg_match('/^[a-f0-9]{64}$/D',$expected)
-                || !is_string($next) || strlen($next)<2 || strlen($next)>256000)
+                || !is_string($next) || strlen($next)<2 || strlen($next)>256000
+                || !is_string($settingsExpected) || !preg_match('/^[a-f0-9]{64}$/D',$settingsExpected)
+                || !is_array($settingsNext) || !$settingsNext
+                || strlen(serialize($settingsNext))>16000)
                 throw new RuntimeException('INVALID_BATCH_ENTRY');
             $nodes=json_decode($next,true,32,JSON_THROW_ON_ERROR);
             if (!is_array($nodes) || !array_is_list($nodes) || !$nodes)
                 throw new RuntimeException('INVALID_ELEMENTOR_DATA');
             $seen[$id]=true;
             $before[$id]=self::read($id,$token);
-            if (!hash_equals($expected,hash('sha256',$before[$id])))
+            $beforeSettings[$id]=self::settings($id,$token);
+            if (!hash_equals($expected,hash('sha256',$before[$id]))
+                || !hash_equals($settingsExpected,hash('sha256',serialize($beforeSettings[$id]))))
                 throw new RuntimeException('OWNER_EDIT_CONFLICT');
         }
         $written=[];
         try {
             foreach ($ops as $op) {
-                $id=$op['id']; $next=$op['next'];
-                if (self::read($id,$token)!==$before[$id])
+                $id=$op['id']; $next=$op['next']; $settingsNext=$op['settings_next'];
+                if (self::read($id,$token)!==$before[$id]
+                    || self::settings($id,$token)!==$beforeSettings[$id])
                     throw new RuntimeException('DRAFT_CHANGED_AFTER_PREFLIGHT');
-                if ($next===$before[$id]) continue;
-                if (!update_post_meta($id,'_elementor_data',wp_slash($next)))
-                    throw new RuntimeException('META_WRITE_FAILED');
+                if ($next===$before[$id] && $settingsNext===$beforeSettings[$id]) continue;
+                // Record before either write: a failed second write must restore the first.
                 $written[]=$id;
-                if (self::read($id,$token)!==$next)
+                if ($next!==$before[$id]
+                    && !update_post_meta($id,'_elementor_data',wp_slash($next)))
+                    throw new RuntimeException('META_WRITE_FAILED');
+                if ($settingsNext!==$beforeSettings[$id]
+                    && !update_post_meta($id,'_elementor_page_settings',$settingsNext))
+                    throw new RuntimeException('PAGE_SETTINGS_WRITE_FAILED');
+                if (self::read($id,$token)!==$next
+                    || self::settings($id,$token)!==$settingsNext)
                     throw new RuntimeException('POSTINSTALL_CONTENT_MISMATCH');
                 if (($fault==='AFTER_FIRST' && count($written)===1)
                     || ($fault==='AFTER_SECOND' && count($written)===2)
@@ -73,8 +95,14 @@ final class EZ2_CI_Batch_Content {
             }
         } catch (Throwable $error) {
             foreach (array_reverse($written) as $id) {
-                if (!update_post_meta($id,'_elementor_data',wp_slash($before[$id]))
-                    || self::read($id,$token)!==$before[$id])
+                if (self::read($id,$token)!==$before[$id]
+                    && !update_post_meta($id,'_elementor_data',wp_slash($before[$id])))
+                    throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
+                if (self::settings($id,$token)!==$beforeSettings[$id]
+                    && !update_post_meta($id,'_elementor_page_settings',$beforeSettings[$id]))
+                    throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
+                if (self::read($id,$token)!==$before[$id]
+                    || self::settings($id,$token)!==$beforeSettings[$id])
                     throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
             }
             throw $error;
@@ -110,14 +138,15 @@ final class EZ2_CI_Batch_Content {
             throw new RuntimeException('EXACT_HEAD_CANDIDATE_MISMATCH');
         $doc=json_decode(file_get_contents($path),true,32,JSON_THROW_ON_ERROR);
         if (!is_array($doc) || ($doc['version']??null)!=='4.3.4'
-            || !is_array($doc['content']??null) || !$doc['content'])
+            || !is_array($doc['content']??null) || !$doc['content']
+            || !is_array($doc['page_settings']??null) || !$doc['page_settings'])
             throw new RuntimeException('CANDIDATE_SCHEMA');
         $next=wp_json_encode($doc['content'],JSON_THROW_ON_ERROR);
         $front=(int)get_option('page_on_front');
         $frontPost=get_post($front);
         if (!$frontPost || $frontPost->post_status!=='publish')
             throw new RuntimeException('PUBLISHED_FRONT_PAGE_REQUIRED');
-        $token=bin2hex(random_bytes(16)); $ids=[]; $before=[]; $candidates=[];
+        $token=bin2hex(random_bytes(16)); $ids=[]; $before=[]; $beforeSettings=[]; $candidates=[];
         try {
             for ($i=1;$i<=3;$i++) {
                 $id=wp_insert_post(['post_type'=>'page','post_status'=>'draft',
@@ -130,9 +159,11 @@ final class EZ2_CI_Batch_Content {
                 if (!update_post_meta($id,self::MARK,$token)
                     || !update_post_meta($id,'_elementor_edit_mode','builder')
                     || !update_post_meta($id,'_elementor_version','4.3.4')
+                    || !update_post_meta($id,'_elementor_page_settings',['hide_title'=>'no'])
                     || !update_post_meta($id,'_elementor_data',wp_slash($raw)))
                     throw new RuntimeException('SYNTHETIC_DRAFT_META');
                 $before[$id]=self::read($id,$token);
+                $beforeSettings[$id]=self::settings($id,$token);
                 // Page one uses the exact-head release candidate. Additional
                 // drafts use distinct CI-only derivatives to prove a batch
                 // can update different pages without publishing either.
@@ -143,7 +174,9 @@ final class EZ2_CI_Batch_Content {
             }
             $plan=[];
             foreach ($ids as $id) $plan[]=['id'=>$id,
-                'expected'=>hash('sha256',$before[$id]),'next'=>$candidates[$id]];
+                'expected'=>hash('sha256',$before[$id]),'next'=>$candidates[$id],
+                'settings_expected'=>hash('sha256',serialize($beforeSettings[$id])),
+                'settings_next'=>$doc['page_settings']];
             foreach (['AFTER_FIRST','AFTER_SECOND','AFTER_LAST'] as $fault) {
                 $failed=false;
                 try { self::apply($plan,$token,$fault); }
@@ -153,7 +186,8 @@ final class EZ2_CI_Batch_Content {
                 }
                 if (!$failed) throw new RuntimeException('FAULT_NOT_INJECTED');
                 foreach ($ids as $id)
-                    if (self::read($id,$token)!==$before[$id])
+                    if (self::read($id,$token)!==$before[$id]
+                        || self::settings($id,$token)!==$beforeSettings[$id])
                         throw new RuntimeException('FAULT_ROLLBACK_MISMATCH');
             }
             // Owner-edit simulation: second draft changes before preflight.
@@ -173,20 +207,26 @@ final class EZ2_CI_Batch_Content {
             if (self::apply($plan,$token)!==3)
                 throw new RuntimeException('BATCH_APPLY_FAILED');
             foreach ($ids as $id)
-                if (self::read($id,$token)!==$candidates[$id])
+                if (self::read($id,$token)!==$candidates[$id]
+                    || self::settings($id,$token)!==$doc['page_settings'])
                     throw new RuntimeException('EXACT_CANDIDATE_NOT_INSTALLED');
             $same=[];
             foreach ($ids as $id) $same[]=['id'=>$id,
-                'expected'=>hash('sha256',$candidates[$id]),'next'=>$candidates[$id]];
+                'expected'=>hash('sha256',$candidates[$id]),'next'=>$candidates[$id],
+                'settings_expected'=>hash('sha256',serialize($doc['page_settings'])),
+                'settings_next'=>$doc['page_settings']];
             if (self::apply($same,$token)!==0)
                 throw new RuntimeException('BATCH_NOT_IDEMPOTENT');
             $restore=[];
             foreach ($ids as $id) $restore[]=['id'=>$id,
-                'expected'=>hash('sha256',$candidates[$id]),'next'=>$before[$id]];
+                'expected'=>hash('sha256',$candidates[$id]),'next'=>$before[$id],
+                'settings_expected'=>hash('sha256',serialize($doc['page_settings'])),
+                'settings_next'=>$beforeSettings[$id]];
             if (self::apply($restore,$token)!==3)
                 throw new RuntimeException('BATCH_RESTORE_FAILED');
             foreach ($ids as $id)
-                if (self::read($id,$token)!==$before[$id])
+                if (self::read($id,$token)!==$before[$id]
+                    || self::settings($id,$token)!==$beforeSettings[$id])
                     throw new RuntimeException('BATCH_RESTORE_MISMATCH');
             if ((int)get_option('page_on_front')!==$front
                 || get_post($front)->post_title!==$frontPost->post_title)
@@ -198,7 +238,7 @@ final class EZ2_CI_Batch_Content {
                     throw new RuntimeException('SYNTHETIC_CLEANUP_FAILED');
             }
         }
-        echo "EZ2_CI_BATCH_CONTENT_PASS pages=3 faults=3 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true distinct_synthetic_pages=true publication=false localwp_touched=false one_click_complete=false\n";
+        echo "EZ2_CI_BATCH_CONTENT_PASS pages=3 faults=3 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true distinct_synthetic_pages=true publication=false localwp_touched=false one_click_complete=false page_settings=true\n";
     }
 }
 if (!defined('EZ2_CI_BATCH_CONTENT_LIBRARY_ONLY')) {
