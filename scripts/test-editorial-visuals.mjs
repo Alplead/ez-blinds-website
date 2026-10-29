@@ -174,27 +174,37 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     assert.equal(timerStarts, beforeEdge + 1, 'Visible pixels may resume autoplay');
     const running = timerStarts;
     hero.handlers.mouseenter();
-    assert.equal(toggle.textContent, 'Play slideshow', 'Hover exposes explicit Play control');
-    toggle.handlers.click();
+    assert.equal(toggle.textContent, 'Play slideshow', 'Hover temporarily pauses rotation');
+    hero.handlers.mouseleave();
     assert.equal(timerStarts, running + 1,
+      'Simply moving the pointer away must resume automatic rotation');
+    hero.handlers.mouseenter();
+    toggle.handlers.click();
+    assert.equal(timerStarts, running + 2,
       'Explicit Play must work while the pointer is still over the control');
     assert.equal(toggle.textContent, 'Pause slideshow',
-      'A running carousel must not advertise an ineffective Play/Pause action');
+      'A running carousel must offer an effective Pause action');
     toggle.handlers.click();
     hero.handlers.mouseleave();
-    assert.equal(timerStarts, running + 1, 'Leaving hover must not restart a visitor-paused carousel');
+    assert.equal(timerStarts, running + 2,
+      'A deliberate Pause must survive leaving hover');
     toggle.handlers.click();
-    assert.equal(timerStarts, running + 2, 'Explicit Play resumes after hover');
+    assert.equal(timerStarts, running + 3, 'Explicit Play resumes after manual pause');
     hero.handlers.focusin();
-    assert.equal(toggle.textContent, 'Play slideshow', 'Keyboard focus pauses autoplay');
+    assert.equal(toggle.textContent, 'Play slideshow', 'Keyboard focus temporarily pauses rotation');
+    hero.handlers.focusout({ relatedTarget: null });
+    assert.equal(timerStarts, running + 4,
+      'Leaving keyboard focus without manual action resumes rotation');
+    hero.handlers.focusin();
     toggle.handlers.click();
-    assert.equal(timerStarts, running + 3,
+    assert.equal(timerStarts, running + 5,
       'Explicit Play must work while the control still has keyboard focus');
     toggle.handlers.click();
     hero.handlers.focusout({ relatedTarget: null });
-    assert.equal(timerStarts, running + 3, 'Leaving keyboard focus must not restart rotation');
+    assert.equal(timerStarts, running + 5,
+      'A deliberate keyboard Pause must survive leaving focus');
     toggle.handlers.click();
-    assert.equal(timerStarts, running + 4, 'Explicit Play resumes after keyboard focus');
+    assert.equal(timerStarts, running + 6, 'Explicit Play resumes after keyboard pause');
   }
   const startsBeforeOffscreen = timerStarts;
   const stopsBeforeOffscreen = timerStops;

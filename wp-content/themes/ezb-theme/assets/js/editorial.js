@@ -101,7 +101,7 @@
         // fixed-label ARIA toggle button, so aria-pressed must not be used.
         toggle.textContent = motionBlocked
           ? 'Automatic slideshow unavailable'
-          : (paused ? 'Play slideshow' : 'Pause slideshow');
+          : (stopped ? 'Play slideshow' : 'Pause slideshow');
       }
     }
 
@@ -119,22 +119,36 @@
       syncTimer();
     });
     if (toggle) toggle.addEventListener('click', function () {
-      paused = !paused;
-      explicitPlay = !paused;
+      if (reduced.matches || slides.length < 2) return;
+      // Hover/focus is temporary: Play resumes without first setting Pause.
+      // Only deliberate Pause and manual photo selection persist.
+      var stopped = shouldStop();
+      paused = !stopped;
+      explicitPlay = stopped;
       syncTimer();
     });
 
     hero.addEventListener('mouseenter', function () {
-      hovering = true; paused = true; explicitPlay = false; syncTimer();
+      if (!hovering && !focusing) explicitPlay = false;
+      hovering = true;
+      syncTimer();
     });
-    hero.addEventListener('mouseleave', function () { hovering = false; syncTimer(); });
+    hero.addEventListener('mouseleave', function () {
+      hovering = false;
+      if (!focusing) explicitPlay = false;
+      syncTimer();
+    });
     hero.addEventListener('focusin', function () {
-      focusing = true; paused = true; explicitPlay = false; syncTimer();
+      if (!focusing && !hovering) explicitPlay = false;
+      focusing = true;
+      syncTimer();
     });
-    // Leaving hover/focus does not silently undo the visitor's pause.
+    // Hover/focus temporarily suspends rotation; only a deliberate visitor
+    // pause persists after leaving. Explicit Play overrides the active pause.
     hero.addEventListener('focusout', function (event) {
       if (!hero.contains(event.relatedTarget)) {
         focusing = false;
+        if (!hovering) explicitPlay = false;
         syncTimer();
       }
     });
