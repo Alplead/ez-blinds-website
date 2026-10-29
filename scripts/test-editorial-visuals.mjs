@@ -50,7 +50,7 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false) {
+function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
@@ -112,13 +112,20 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     }
   };
   const document = {
-    hidden: false, querySelector() { return hero; },
+    hidden: false, hasFocus() { return initialFocused; }, querySelector() { return hero; },
     querySelectorAll() { return []; },
     addEventListener(event, callback) {
       if (event === 'visibilitychange') this.visibility = callback;
     }
   };
   runInNewContext(js, { window, document });
+  if (!initialFocused) {
+    assert.equal(timerStarts, 0, 'An initially unfocused browser must not start autoplay');
+    assert.equal(toggle.textContent, 'Play slideshow', 'Initially unfocused window offers Play');
+    lifecycle.focus();
+    assert.equal(timerStarts, 1, 'First window focus may start eligible autoplay');
+    return;
+  }
   if (missingImage) {
     assert.equal(slides[0].removed, true, 'Empty slide markup is discarded');
     assert.equal(slides[1].active, true, 'First valid image is shown');
@@ -300,6 +307,7 @@ exerciseMotionPreference(true);
 exerciseMotionPreference(false);
 exerciseMotionPreference(false, true);
 exerciseMotionPreference(false, false, true);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=4');
+exerciseMotionPreference(false, false, false, false);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=5');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
