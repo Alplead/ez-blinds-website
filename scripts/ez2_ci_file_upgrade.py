@@ -34,7 +34,10 @@ def snapshot(root):
 def unpack(archive, dest, folder):
     if archive.is_symlink() or not archive.is_file() or archive.stat().st_nlink != 1:
         raise ValueError("Unsafe release ZIP")
-    seen, total, count = set(), 0, 0
+    seen, directory_casing, total, count = set(), {}, 0, 0
+    # The eventual LocalWP consumer is Windows: reject NTFS aliases even
+    # though the isolated Linux CI filesystem would accept these members.
+    reserved = re.compile(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?\\Z", re.I)
     with zipfile.ZipFile(archive) as z:
         members = z.infolist()
         if not 1 <= len(members) <= 3000 or z.testzip() is not None:
@@ -48,6 +51,19 @@ def unpack(archive, dest, folder):
                     or (len(parts) < 2 and not (entry.is_dir() and name == folder + "/"))
                     or len(name) > 240):
                 raise ValueError("Unsafe release ZIP member")
+            # Windows strips trailing dots and treats device names as
+            # special files, including names with an extension (CON.txt).
+            # Reject inconsistent casing of shared parent directories:
+            # Linux could stage both, but Windows would merge them.
+            for part in parts:
+                if part.endswith(".") or reserved.fullmatch(part):
+                    raise ValueError("Windows-unsafe ZIP member")
+            for depth in range(1, len(parts)):
+                prefix = "/".join(parts[:depth])
+                folded_prefix = prefix.casefold()
+                prior = directory_casing.setdefault(folded_prefix, prefix)
+                if prior != prefix:
+                    raise ValueError("Case-conflicting ZIP parent directory")
             folded = name.rstrip("/").casefold()
             if folded in seen:
                 raise ValueError("Duplicate case-insensitive ZIP member")
