@@ -69,7 +69,7 @@ final class EZ2_CI_Batch_Content {
                 || !hash_equals($settingsExpected,hash('sha256',serialize($beforeSettings[$id]))))
                 throw new RuntimeException('OWNER_EDIT_CONFLICT');
         }
-        $written=[];
+        $written=[]; $expectedAfter=[];
         try {
             foreach ($ops as $op) {
                 $id=$op['id']; $next=$op['next']; $settingsNext=$op['settings_next'];
@@ -79,6 +79,7 @@ final class EZ2_CI_Batch_Content {
                 if ($next===$before[$id] && $settingsNext===$beforeSettings[$id]) continue;
                 // Record before either write: a failed second write must restore the first.
                 $written[]=$id;
+                $expectedAfter[$id]=['data'=>$next,'settings'=>$settingsNext];
                 if ($next!==$before[$id]
                     && !update_post_meta($id,'_elementor_data',wp_slash($next)))
                     throw new RuntimeException('META_WRITE_FAILED');
@@ -89,22 +90,52 @@ final class EZ2_CI_Batch_Content {
                     || self::settings($id,$token)!==$settingsNext)
                     throw new RuntimeException('POSTINSTALL_CONTENT_MISMATCH');
                 if (($fault==='AFTER_FIRST' && count($written)===1)
-                    || ($fault==='AFTER_SECOND' && count($written)===2)
-                    || ($fault==='AFTER_LAST' && count($written)===count($ops)))
+                    || ($fault==='AFTER_SECOND' && count($written)===2))
                     throw new RuntimeException('INJECTED_CI_BATCH_FAULT');
             }
+            // A no-op final page must not bypass the AFTER_LAST rollback probe.
+            if ($fault==='AFTER_LAST' && $written)
+                throw new RuntimeException('INJECTED_CI_BATCH_FAULT');
+            // Check every page again: a previously updated page may have
+            // changed while a later page was being written.
+            foreach ($ops as $op) {
+                $id=$op['id'];
+                $expectedData=$expectedAfter[$id]['data'] ?? $before[$id];
+                $expectedSettings=$expectedAfter[$id]['settings'] ?? $beforeSettings[$id];
+                if (self::read($id,$token)!==$expectedData
+                    || self::settings($id,$token)!==$expectedSettings)
+                    throw new RuntimeException('POSTINSTALL_BATCH_DRIFT');
+            }
         } catch (Throwable $error) {
+            $ownerConflict=false;
             foreach (array_reverse($written) as $id) {
-                if (self::read($id,$token)!==$before[$id]
+                try {
+                    $currentData=self::read($id,$token);
+                    $currentSettings=self::settings($id,$token);
+                } catch (Throwable $_unmanaged) {
+                    $ownerConflict=true;
+                    continue;
+                }
+                // Never erase a concurrent Owner edit during rollback. Restore
+                // other transaction-owned pages and report the unresolved page.
+                if (($currentData!==$before[$id] && $currentData!==$expectedAfter[$id]['data'])
+                    || ($currentSettings!==$beforeSettings[$id]
+                        && $currentSettings!==$expectedAfter[$id]['settings'])) {
+                    $ownerConflict=true;
+                    continue;
+                }
+                if ($currentData!==$before[$id]
                     && !update_post_meta($id,'_elementor_data',wp_slash($before[$id])))
                     throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
-                if (self::settings($id,$token)!==$beforeSettings[$id]
+                if ($currentSettings!==$beforeSettings[$id]
                     && !update_post_meta($id,'_elementor_page_settings',$beforeSettings[$id]))
                     throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
                 if (self::read($id,$token)!==$before[$id]
                     || self::settings($id,$token)!==$beforeSettings[$id])
                     throw new RuntimeException('BATCH_ROLLBACK_FAILED',0,$error);
             }
+            if ($ownerConflict)
+                throw new RuntimeException('BATCH_ROLLBACK_CONFLICT',0,$error);
             throw $error;
         }
         return count($written);
