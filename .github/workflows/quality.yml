@@ -418,7 +418,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_export_check.py
           python3 scripts/test_ez2_elementor_export_check.py | tee /tmp/ez2-elementor-export.log
-          grep -q 'EZ2_ELEMENTOR_EXPORT_PREFLIGHT_PASS cases=15' /tmp/ez2-elementor-export.log
+          grep -q 'EZ2_ELEMENTOR_EXPORT_PREFLIGHT_PASS cases=18' /tmp/ez2-elementor-export.log
 
       - name: Reject unsafe Elementor URI schemes and non-finite values
         run: |
@@ -493,7 +493,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_elementor_media_compile.py scripts/test_ez2_elementor_media_compile.py
           python3 scripts/test_ez2_elementor_media_compile.py | tee /tmp/ez2-elementor-media-compile.log
-          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=34' /tmp/ez2-elementor-media-compile.log
+          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=37' /tmp/ez2-elementor-media-compile.log
 
       - name: Test isolated EZ2 WP-CLI private snapshot capture (fake WP only)
         run: |
