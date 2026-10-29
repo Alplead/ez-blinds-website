@@ -78,7 +78,7 @@ reject(lambda d,m:d["content"][0]["elements"][0].update(
 reject(lambda d,m:d["content"][0]["settings"].update(
     tracking={"url": "ez2-media://hero-one"}))
 reject(lambda d,m:d["content"][0]["elements"][0]["settings"].update(
-    image={"url": "ez2-media://hero-one"}))
+    caption={"url": "ez2-media://hero-one"}))
 
 def add_second_slot(doc, media_map, attachment_id, url):
     media_map["slots"]["hero-two"] = {"id": attachment_id, "url": url, "mime": "image/webp", "sha256": "a"*64}
