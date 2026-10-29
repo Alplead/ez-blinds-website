@@ -34,6 +34,12 @@ jobs:
         run: |
           find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Protect Owner-cleared development page content
+        run: |
+          php -l scripts/test-ezb-development-seeding.php
+          php scripts/test-ezb-development-seeding.php | tee /tmp/ezb-development-seeding.log
+          grep -Fq 'EZB_DEV_SEED_OWNER_EDIT_GUARD_PASS cases=10' /tmp/ezb-development-seeding.log
+
       - name: Exercise synthetic crash recovery journal (no WordPress writes)
         run: |
           python3 scripts/test_ez2_scratch_durable_journal.py | tee /tmp/ez2-scratch-journal.log

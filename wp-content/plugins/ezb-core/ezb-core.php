@@ -516,7 +516,7 @@ function ezb_seed_prototype_pages() {
 			continue;
 		}
 
-		wp_insert_post(
+		$created = wp_insert_post(
 			array(
 				'post_type'   => 'page',
 				'post_status' => 'publish',
@@ -524,17 +524,36 @@ function ezb_seed_prototype_pages() {
 				'post_name'   => $slug,
 			)
 		);
+		// Only pages created by this development seeder may receive automatic copy.
+		if ( is_int( $created ) && $created > 0 ) {
+			add_post_meta( $created, '_ezb_prototype_created_v1', '1', true );
+		}
 	}
 
 }
 add_action( 'init', 'ezb_seed_prototype_pages', 30 );
 
+/**
+ * Claim a one-time field seed on a page created by this development plugin.
+ * Pre-existing Owner pages and pages cleared after an edit must stay untouched.
+ * Claim BEFORE writing; if metadata cannot be saved, fail closed.
+ */
+function ezb_claim_initial_page_seed( $page, $marker ) {
+	if ( ! $page || ! isset( $page->ID ) || ! is_int( $page->ID ) || $page->ID < 1 ) {
+		return false;
+	}
+	if ( '1' !== get_post_meta( $page->ID, '_ezb_prototype_created_v1', true ) ) {
+		return false;
+	}
+	return (bool) add_post_meta( $page->ID, $marker, '1', true );
+}
+
 
 /**
  * Seed initial product introductions into editable Page excerpts in development.
  *
- * Only empty excerpts are populated. Once the Owner edits the excerpt in
- * WordPress, that Page record remains authoritative.
+ * Only newly created development prototype pages may receive one initial
+ * excerpt. Clearing an excerpt later is an intentional Owner edit.
  */
 function ezb_seed_product_intro_excerpts() {
 	if ( 'development' !== wp_get_environment_type() ) {
@@ -551,7 +570,7 @@ function ezb_seed_product_intro_excerpts() {
 
 	foreach ( $excerpts as $slug => $excerpt ) {
 		$page = get_page_by_path( $slug, OBJECT, 'page' );
-		if ( ! $page || '' !== trim( $page->post_excerpt ) ) {
+		if ( ! ezb_claim_initial_page_seed( $page, '_ezb_intro_seed_attempted_v1' ) || '' !== trim( $page->post_excerpt ) ) {
 			continue;
 		}
 
@@ -588,8 +607,8 @@ add_shortcode(
 /**
  * Seed initial product FAQs into editable Page content in development.
  *
- * This runs only while post_content is empty. Once the Owner edits the Page,
- * WordPress content becomes authoritative and is never overwritten here.
+ * Only newly created development prototype pages receive one initial FAQ.
+ * A later deletion or blank Owner edit must never resurrect seed content.
  */
 function ezb_seed_product_faq_content() {
 	if ( 'development' !== wp_get_environment_type() ) {
@@ -626,7 +645,7 @@ function ezb_seed_product_faq_content() {
 
 	foreach ( $faq_sets as $slug => $faqs ) {
 		$page = get_page_by_path( $slug, OBJECT, 'page' );
-		if ( ! $page || '' !== trim( $page->post_content ) ) {
+		if ( ! ezb_claim_initial_page_seed( $page, '_ezb_faq_seed_attempted_v1' ) || '' !== trim( $page->post_content ) ) {
 			continue;
 		}
 
