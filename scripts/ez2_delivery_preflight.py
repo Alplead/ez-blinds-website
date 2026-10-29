@@ -19,10 +19,18 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 KEY = re.compile(r"ez2-[a-z0-9-]{1,80}\Z")
 SLOT = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
 FILE = re.compile(r"[a-z0-9][a-z0-9_-]{0,70}\.json\Z")
+# Windows reserves device names even with a .json extension. Linux CI can
+# create these files, but an Owner Windows LocalWP VM cannot safely use them.
+WINDOWS_DEVICE_JSON = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])\.json\Z")
+
+
+def safe_json_filename(value):
+    return (isinstance(value, str) and FILE.fullmatch(value) is not None
+            and WINDOWS_DEVICE_JSON.fullmatch(value) is None)
 
 
 def load(root, filename, limit, pinned=None):
-    if not isinstance(filename, str) or not FILE.fullmatch(filename):
+    if not safe_json_filename(filename):
         raise ValueError("Unsafe JSON filename")
     # Bind the JSON bytes to a verified regular-file descriptor. A plain
     # lstat() followed by read_text() can follow a replacement symlink or
@@ -44,7 +52,7 @@ def check(contract, installed, plugin_doc, exports, expected_sha):
     if (not isinstance(expected_sha, str) or not COMMIT.fullmatch(expected_sha)
             or contract["source_sha"] != expected_sha):
         raise ValueError("Exact source SHA mismatch")
-    if not isinstance(contract["plugin_lock"], str) or not FILE.fullmatch(contract["plugin_lock"]):
+    if not safe_json_filename(contract["plugin_lock"]):
         raise ValueError("Unsafe plugin lock path")
     plugins = check_plugins(plugin_doc)
     # A syntactically valid Elementor export is not necessarily compatible with
@@ -69,7 +77,7 @@ def check(contract, installed, plugin_doc, exports, expected_sha):
             raise ValueError("Invalid template declaration")
         key, filename = entry["key"], entry["file"]
         if (not isinstance(key, str) or not KEY.fullmatch(key) or key in keys
-                or not isinstance(filename, str) or not FILE.fullmatch(filename)
+                or not safe_json_filename(filename)
                 or filename in paths or filename == contract["plugin_lock"]):
             raise ValueError("Duplicate or unsafe template key/path")
         keys.add(key)
@@ -113,7 +121,7 @@ def run(root, expected_sha):
     if not isinstance(contract, dict):
         raise ValueError("Invalid contract")
     lock = contract.get("plugin_lock")
-    if not isinstance(lock, str) or not FILE.fullmatch(lock):
+    if not safe_json_filename(lock):
         raise ValueError("Invalid plugin lock filename")
     plugin_doc = load(root, lock, 32768, pinned)
     installed = load(root, "installed.json", 32768, pinned)

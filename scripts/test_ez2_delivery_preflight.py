@@ -63,6 +63,18 @@ reject(lambda c,i,p,e: e["home.json"].update(version="4.3.5"))
 reject(lambda c,i,p,e: e["home.json"]["content"][0]["settings"].update(url="https://example.invalid/photo.jpg"))
 reject(lambda c,i,p,e: c["templates"][0].update(previous_sha256="invalid"))
 
+# Reject Windows device names before a Linux-built contract reaches LocalWP.
+for device in ("con", "prn", "aux", "nul", "com1", "lpt9"):
+    reject(lambda c,i,p,e, name=device: c["templates"][0].update(file=name + ".json"))
+for device in ("com9", "lpt1"):
+    reject(lambda c,i,p,e, name=device: c.update(plugin_lock=name + ".json"))
+c,i,p,e = fixture()
+e["con-guide.json"] = e.pop("home.json")
+c["templates"][0]["file"] = "con-guide.json"
+c["plugin_lock"] = "com1-helper.json"
+assert check(c,i,p,e,SHA)["status"] == "READY_FOR_RUNTIME_TEST_ONLY"
+cases += 1
+
 c,i,p,e = fixture()
 c["media_slots"] = []
 r = check(c,i,p,e,SHA)
@@ -101,6 +113,17 @@ with tempfile.TemporaryDirectory() as tmp:
     output = subprocess.run(cmd, capture_output=True, text=True)
     assert output.returncode == 0 and json.loads(output.stdout)["installed"] is False
     cases += 1
+    # Device filenames are legal on Linux but cannot be safely installed on Windows.
+    c["templates"][0]["file"] = "con.json"
+    (root/"delivery.json").write_text(json.dumps(c))
+    (root/"con.json").write_text(json.dumps(e["home.json"]))
+    (root/"home.json").unlink()
+    assert subprocess.run(cmd, capture_output=True).returncode == 1
+    cases += 1
+    (root/"con.json").unlink()
+    (root/"home.json").write_text(json.dumps(e["home.json"]))
+    c["templates"][0]["file"] = "home.json"
+    (root/"delivery.json").write_text(json.dumps(c))
     (root/"home.json").write_text('{"title":"a","title":"b"}')
     assert subprocess.run(cmd, capture_output=True).returncode == 1
     cases += 1
@@ -186,5 +209,5 @@ with tempfile.TemporaryDirectory() as tmp:
             raise AssertionError("Post-plan inventory mutation accepted")
     (root/"undeclared-private.json").unlink()
 
-assert cases == 32, cases
+assert cases == 42, cases
 print(f"EZ2_DELIVERY_PREFLIGHT_PASS cases={cases}")

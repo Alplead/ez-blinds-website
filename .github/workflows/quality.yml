@@ -474,7 +474,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_delivery_preflight.py scripts/test_ez2_delivery_preflight.py
           python3 scripts/test_ez2_delivery_preflight.py | tee /tmp/ez2-delivery-preflight.log
-          grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=32' /tmp/ez2-delivery-preflight.log
+          grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=42' /tmp/ez2-delivery-preflight.log
 
       - name: Verify exact-head release-to-delivery bridge (synthetic only)
         run: |
