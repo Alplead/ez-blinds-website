@@ -138,6 +138,25 @@ final class Ez2ReleaseCandidateCi {
    $restore=[['id'=>$post,'expected'=>hash('sha256',$next),'next'=>$original,
     'settings_expected'=>hash('sha256',serialize($nextSettings)),
     'settings_next'=>$originalSettings]];
+   // Reordering the four real attachment references is an Owner edit.
+   // A stale release baseline must not silently overwrite that order.
+   $ownerReordered=$changed;
+   $gallery=&$ownerReordered[0]['settings']['background_slideshow_gallery'];
+   [$gallery[0],$gallery[1]]=[$gallery[1],$gallery[0]];
+   unset($gallery);
+   $ownerJson=wp_json_encode($ownerReordered,JSON_THROW_ON_ERROR);
+   if(!update_post_meta($post,'_elementor_data',wp_slash($ownerJson)))
+    throw new RuntimeException('MEDIA_OWNER_EDIT_SETUP');
+   try {
+    EZ2_CI_Batch_Content::apply($restore,$token);
+    throw new RuntimeException('MEDIA_OWNER_EDIT_NOT_BLOCKED');
+   } catch(RuntimeException $error) {
+    if($error->getMessage()!=='OWNER_EDIT_CONFLICT') throw $error;
+   }
+   if(EZ2_CI_Batch_Content::read($post,$token)!==$ownerJson
+    ||EZ2_CI_Batch_Content::settings($post,$token)!==$nextSettings
+    ||!update_post_meta($post,'_elementor_data',wp_slash($next)))
+    throw new RuntimeException('MEDIA_OWNER_EDIT_NOT_PRESERVED');
    if(EZ2_CI_Batch_Content::apply($restore,$token)!==1
     ||EZ2_CI_Batch_Content::read($post,$token)!==$original
     ||EZ2_CI_Batch_Content::settings($post,$token)!==$originalSettings)
