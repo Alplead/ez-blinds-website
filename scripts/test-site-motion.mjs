@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 
 const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/site.js', import.meta.url), 'utf8');
 
-function simulate({ reduced, observerSupported }) {
+function simulate({ reduced, observerSupported, initiallyFocused = true }) {
   const rootClasses = new Set();
   const targetClasses = new Set();
   const video = { autoplay: false, paused: true, pauseCount: 0, playCount: 0,
@@ -23,6 +23,7 @@ function simulate({ reduced, observerSupported }) {
   };
   const document = {
     hidden: false,
+    hasFocus() { return initiallyFocused; },
     addEventListener(name, listener) { if (name === 'visibilitychange') visibilityListener = listener; },
     documentElement: { classList: {
       add(name) { rootClasses.add(name); },
@@ -55,6 +56,8 @@ function simulate({ reduced, observerSupported }) {
     setHidden(value) { document.hidden = value; visibilityListener?.(); },
     pagehide() { lifecycle.pagehide?.(); },
     pageshow() { lifecycle.pageshow?.(); },
+    blur() { lifecycle.blur?.(); },
+    focus() { lifecycle.focus?.(); },
     target
   };
 }
@@ -158,10 +161,46 @@ assert.equal(reducedRestored.video.playCount, 1, 'reduced motion blocks restored
 reducedRestored.setReduced(false);
 assert.equal(reducedRestored.video.playCount, 2);
 
+// Switching away from a visible browser window suspends background video.
+const unfocusedWindow = simulate({ reduced: false, observerSupported: true });
+assert.equal(unfocusedWindow.video.playCount, 1);
+unfocusedWindow.blur();
+assert.equal(unfocusedWindow.video.autoplay, false, 'window blur disables video autoplay');
+assert.equal(unfocusedWindow.video.pauseCount, 1, 'window blur pauses playing video');
+unfocusedWindow.setHidden(true);
+unfocusedWindow.focus();
+assert.equal(unfocusedWindow.video.playCount, 1, 'focused but hidden tab must stay paused');
+unfocusedWindow.setHidden(false);
+assert.equal(unfocusedWindow.video.playCount, 2, 'visible focused window resumes eligible video');
+
+const repeatedWindowBlur = simulate({ reduced: false, observerSupported: true });
+repeatedWindowBlur.blur();
+repeatedWindowBlur.blur();
+repeatedWindowBlur.focus();
+repeatedWindowBlur.focus();
+assert.equal(repeatedWindowBlur.video.playCount, 2,
+  'repeated focus changes must not create duplicate playback');
+
+const manuallyPausedWindow = simulate({ reduced: false, observerSupported: true });
+manuallyPausedWindow.video.pause();
+manuallyPausedWindow.blur();
+manuallyPausedWindow.focus();
+assert.equal(manuallyPausedWindow.video.playCount, 1,
+  'window focus must respect a visitor pause in native video controls');
+
+const initiallyUnfocused = simulate({
+  reduced: false, observerSupported: true, initiallyFocused: false
+});
+assert.equal(initiallyUnfocused.video.playCount, 0,
+  'initially unfocused window must not start background video');
+initiallyUnfocused.focus();
+assert.equal(initiallyUnfocused.video.playCount, 1,
+  'first focus can start eligible video');
+
 const plugin = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
 const videoTag = plugin.match(/<video data-ezb-autoplay-video[^>]*>/)?.[0] || '';
 assert.ok(videoTag, 'development video shortcode must be present');
 assert.match(videoTag, /\scontrols(?:\s|>)/, 'manual video controls are required');
 assert.doesNotMatch(videoTag, /\sautoplay(?:\s|>)/, 'HTML must not start playing before JS checks preference');
 
-console.log('EZB_SITE_MOTION_TEST_PASS cases=10');
+console.log('EZB_SITE_MOTION_TEST_PASS cases=14');

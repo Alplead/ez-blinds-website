@@ -56,6 +56,9 @@
 	var videosInitialised = false;
 	var videosSuspended = false;
 	var pageSuspended = false;
+	// A visible tab may be in a background browser window. Do not restart
+	// native video after blur until that window regains focus.
+	var windowFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
 	var resumeEligible = new WeakMap();
 	videos.forEach(function (video) { resumeEligible.set(video, true); });
 
@@ -75,7 +78,7 @@
 	// Never autoplay from HTML before reduced-motion preference is known.
 	function startAutoplayVideos() {
 		// A background tab must not start or resume autoplay.
-		if (document.hidden || pageSuspended) {
+		if (document.hidden || pageSuspended || !windowFocused) {
 			stopAutoplayVideos();
 			return;
 		}
@@ -149,6 +152,15 @@
 		window.addEventListener('pageshow', function () {
 			pageSuspended = false;
 			if (document.hidden || motionPreference.matches) stopAutoplayVideos();
+			else startAutoplayVideos();
+		});
+		window.addEventListener('blur', function () {
+			windowFocused = false;
+			stopAutoplayVideos();
+		});
+		window.addEventListener('focus', function () {
+			windowFocused = true;
+			if (document.hidden || motionPreference.matches || pageSuspended) stopAutoplayVideos();
 			else startAutoplayVideos();
 		});
 	}
