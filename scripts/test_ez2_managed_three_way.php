@@ -56,6 +56,12 @@ $check($run($base, $base, $empty)['changes'][0]['kind'] === 'candidate_removal_r
     'candidate removal');
 $check($run($base, $empty, $base)['changes'][0]['kind'] === 'local_missing_review',
     'local deletion');
+$check($run($base, $empty, $empty)['changes'][0]['kind'] === 'local_and_candidate_missing_unverified',
+    'local and candidate independently missing cannot authorise deletion');
+$check($run($base, $empty, $next)['changes'][0]['kind'] === 'local_missing_candidate_update_conflict',
+    'local deletion versus candidate content update must be explicit');
+$check($run($base, $local, $empty)['changes'][0]['kind'] === 'local_drift_candidate_removal_conflict',
+    'candidate removal must not hide local content drift');
 $renumbered = $observe([array_replace($row, ['id' => 99])]);
 $check($run($base, $renumbered, $base)['changes'][0]['kind'] === 'local_identity_conflict',
     'local post id change');

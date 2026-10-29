@@ -47,11 +47,21 @@ final class EZ2_Managed_Three_Way {
                 elseif ($l !== null) $kind = 'local_only_preserve';
                 else $kind = 'candidate_addition_review';
             } elseif ($l === null) {
-                $kind = 'local_missing_review';
+                // A missing local page is not equivalent to a safe removal.
+                // Distinguish independent candidate changes from a shared
+                // absence; neither observation authorises a delete or write.
+                if ($n === null) $kind = 'local_and_candidate_missing_unverified';
+                elseif ($n['content_sha256'] !== $b['content_sha256'])
+                    $kind = 'local_missing_candidate_update_conflict';
+                else $kind = 'local_missing_review';
             } elseif ($l['post_id'] !== $b['post_id']) {
                 $kind = 'local_identity_conflict';
             } elseif ($n === null) {
-                $kind = 'candidate_removal_review';
+                // A candidate removal must not hide edits made locally since
+                // the observed baseline. Keep the conflict visible for review.
+                $kind = $l['content_sha256'] !== $b['content_sha256']
+                    ? 'local_drift_candidate_removal_conflict'
+                    : 'candidate_removal_review';
             } else {
                 // Candidate pages come from a separate disposable WordPress
                 // database. Numeric post IDs are local identifiers, not
