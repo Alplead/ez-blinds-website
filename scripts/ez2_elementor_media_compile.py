@@ -75,18 +75,23 @@ def compile_export(doc, mapping, expected_host):
     used = set(summary["media_slots"])
     if used != set(slots):
         raise ValueError("Unresolved or extra private media slots")
-    def walk(value):
+    def walk(value, in_settings=False, field=None):
         if isinstance(value, dict):
-            out = {k: walk(v) for k, v in value.items()}
-            if isinstance(value.get("url"), str) and value["url"].startswith(SCHEME):
+            # Only Elementor settings may resolve media. Page titles, node
+            # metadata and text widgets must never become private image URLs.
+            out = {k: walk(v, in_settings or k in ("settings", "page_settings"), k)
+                   for k, v in value.items()}
+            if in_settings and isinstance(value.get("url"), str) and value["url"].startswith(SCHEME):
                 media = slots[value["url"][len(SCHEME):]]
                 if "id" in value and value["id"] not in (None, "", 0, "0", media["id"]):
                     raise ValueError("Conflicting Elementor attachment ID")
                 out["id"] = media["id"]
             return out
         if isinstance(value, list):
-            return [walk(item) for item in value]
+            return [walk(item, in_settings, field) for item in value]
         if isinstance(value, str) and value.startswith(SCHEME):
+            if not in_settings or field != "url":
+                raise ValueError("Symbolic media token outside an Elementor image URL")
             return slots[value[len(SCHEME):]]["url"]
         return value
     compiled = walk(doc)

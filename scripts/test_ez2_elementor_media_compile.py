@@ -60,6 +60,11 @@ reject(lambda d,m:m["slots"]["hero-one"].update(mime="application/pdf"))
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://{HOST}/wp-content/uploads/2026/10/photo.jpg"))
 reject(lambda d,m:m["slots"].update(extra={"id":321,"url":URL,"mime":"image/webp"}))
 reject(lambda d,m:d["content"][0]["settings"]["background_slideshow_gallery"][0].update(id=999))
+# A symbolic image token is never permitted to rewrite an Owner-facing page
+# title, a heading widget, or unrelated text in an Elementor settings object.
+reject(lambda d,m:d.update(title="ez2-media://hero-one"))
+reject(lambda d,m:d["content"][0]["elements"][0]["settings"].update(title="ez2-media://hero-one"))
+reject(lambda d,m:d["content"][0]["settings"].update(custom_label="ez2-media://hero-one"))
 reject(lambda d,m:d["content"][0]["settings"].update(external="https://remote.invalid/pic"))
 reject(lambda d,m:m.update(host="ez2-review.local"),host="ez-bns-new-dev.local")
 reject(lambda d,m:m["slots"]["hero-one"].update(url=f"http://user@{HOST}/wp-content/uploads/2026/10/photo.webp"))
@@ -124,7 +129,7 @@ with tempfile.TemporaryDirectory() as tmp:
             try:ensure_private_media_map(str(linked_dir/"media.json"))
             except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted map through in-checkout linked directory")
-assert cases==34,cases
+assert cases==37,cases
 assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
 print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
