@@ -234,7 +234,7 @@ check(EZ2_CI_Batch_Content::settings(1,$token)===$specialBefore,
 check(EZ2_CI_Batch_Content::apply($ops,$token)===1
     && EZ2_CI_Batch_Content::settings(1,$token)===$specialNext,
     'escaped settings preserved after apply');
-$escapedRestore=[['id'=>1,'expected'=>hash('sha256',$before[1]),
+$escapedRestore=[['id'=>1,'expected'=>hash('sha256',$ops[0]['next']),
     'next'=>$before[1],
     'settings_expected'=>hash('sha256',serialize($specialNext)),
     'settings_next'=>$specialBefore]];
