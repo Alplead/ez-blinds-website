@@ -118,6 +118,12 @@ final class EZ2_Private_Media_Readiness {
                 || (isset($seenUrls[$url]) && $seenUrls[$url] !== $reverse))
                 return self::blocked('CONFLICTING_PRIVATE_MEDIA_MAPPING', $count, $verified);
             $seenIds[$id] = $identity; $seenUrls[$url] = $reverse;
+        }
+        // Validate every slot and cross-slot identity before reading any
+        // attachment. A malformed later entry must not cause earlier private
+        // WordPress media to be opened or hashed during a doomed audit.
+        foreach ($mapping['slots'] as $item) {
+            $id = $item['id']; $url = $item['url'];
             try {
                 $actual = $attachment($id);
             } catch (Throwable $e) {

@@ -185,14 +185,43 @@ try {
             return $meta;
         });
     $check($badAlias['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING']
-        && $badAlias['verified_count'] === 1 && $lookups === 1
+        && $badAlias['verified_count'] === 0 && $lookups === 0
         && $badAlias['byte_integrity_verified'] === false && $badAlias['can_apply'] === false,
-        'conflicting alias digest rejected before second file read');
+        'conflicting alias digest rejected before any file read');
+    // A malformed later slot must not trigger any private attachment lookup.
+    $invalidLate = $map;
+    $invalidLate['slots']['second-slot'] = $map['slots']['home-hero-one'];
+    $invalidLate['slots']['second-slot']['url'] = 'https://evil.invalid/hero.png';
+    $lookups = 0;
+    $invalidResult = $run(null, $invalidLate, null, null,
+        static function (int $id) use ($meta, &$lookups): array {
+            ++$lookups;
+            return $meta;
+        });
+    $check($invalidResult['issues'] === ['INVALID_PRIVATE_MEDIA_SLOT']
+        && $invalidResult['verified_count'] === 0 && $lookups === 0,
+        'malformed later slot blocks all private reads');
     $duplicate = $map;
     $duplicate['slots']['second-slot'] = ['id' => 18, 'url' => $url, 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)];
     $check($run(null, $duplicate)['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING'], 'duplicate URL');
+    $lookups = 0;
+    $duplicateUrl = $run(null, $duplicate, null, null,
+        static function (int $id) use ($meta, &$lookups): array {
+            ++$lookups;
+            return $meta;
+        });
+    $check($duplicateUrl['verified_count'] === 0 && $lookups === 0,
+        'duplicate URL blocks all private reads');
     $duplicate['slots']['second-slot'] = ['id' => 17, 'url' => str_replace('hero.png', 'other.png', $url), 'mime' => 'image/png', 'sha256' => hash('sha256', $pixel)];
     $check($run(null, $duplicate)['issues'] === ['CONFLICTING_PRIVATE_MEDIA_MAPPING'], 'duplicate ID');
+    $lookups = 0;
+    $duplicateId = $run(null, $duplicate, null, null,
+        static function (int $id) use ($meta, &$lookups): array {
+            ++$lookups;
+            return $meta;
+        });
+    $check($duplicateId['verified_count'] === 0 && $lookups === 0,
+        'duplicate ID blocks all private reads');
 } finally {
     foreach ([$file, $root . '/2026/10/other.png'] as $path) if (is_file($path)) unlink($path);
     rmdir($root . '/2026/10'); rmdir($root . '/2026'); rmdir($root); rmdir($tmp);
