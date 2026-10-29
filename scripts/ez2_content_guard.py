@@ -10,6 +10,8 @@ import re
 import sys
 from pathlib import Path
 
+from ez2_backup_preflight import checked_read, reject_constant
+
 KEY = re.compile(r"ez2-[a-z0-9-]{1,80}\Z")
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 
@@ -29,10 +31,18 @@ def unique(pairs):
 
 
 def read(path):
+    """Read one immutable, single-link JSON input without following links.
+
+    Binding the bytes to a verified descriptor prevents an attacker from
+    replacing an Owner-content conflict input after the path check. Reject
+    symlinked parent directories as well as symlinked files.
+    """
     path = Path(path)
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 2_000_000:
-        raise ValueError("Unsafe input file")
-    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+    if path.resolve(strict=True) != path.absolute():
+        raise ValueError("Linked input file or ancestor")
+    _, _, raw = checked_read(path, max_bytes=2_000_000, collect=True)
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
+                      parse_constant=reject_constant)
 
 
 def index(doc, kind):

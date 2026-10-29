@@ -1,9 +1,11 @@
 """No-network synthetic regression tests for EZ2 dry-run content guard."""
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from ez2_content_guard import digest, plan, read
 
 old, new, edited = ({"title": value} for value in ("Original", "New", "Owner edit"))
@@ -55,6 +57,60 @@ with tempfile.TemporaryDirectory() as temp:
     try:
         read(path)
         raise AssertionError("Duplicate keys accepted")
+    except ValueError:
+        cases += 1
+    # A valid-looking path must not be able to redirect or replace a
+    # content-conflict input between validation and reading.
+    path.write_text('{"schema_version":1,"items":[NaN]}')
+    try:
+        read(path)
+        raise AssertionError("Non-finite JSON input accepted")
+    except ValueError:
+        cases += 1
+    path.write_text('{"schema_version":1,"items":[]}')
+    alias = Path(temp) / "hardlink.json"
+    os.link(path, alias)
+    try:
+        read(path)
+        raise AssertionError("Hardlinked input accepted")
+    except ValueError:
+        cases += 1
+    alias.unlink()
+    alias.symlink_to(path)
+    try:
+        read(alias)
+        raise AssertionError("Symlinked input accepted")
+    except ValueError:
+        cases += 1
+    alias.unlink()
+    directory_alias = Path(temp) / "folder-alias"
+    nested = Path(temp) / "nested"
+    nested.mkdir()
+    (nested / "input.json").write_text('{"schema_version":1,"items":[]}')
+    directory_alias.symlink_to(nested, target_is_directory=True)
+    try:
+        read(directory_alias / "input.json")
+        raise AssertionError("Linked ancestor accepted")
+    except ValueError:
+        cases += 1
+    directory_alias.unlink()
+    original_open = os.open
+    def replace_before_open(path_arg, flags, *args, **kwargs):
+        if Path(path_arg) == path:
+            replacement = Path(temp) / "replacement.json"
+            replacement.write_bytes(path.read_bytes())
+            os.replace(replacement, path)
+        return original_open(path_arg, flags, *args, **kwargs)
+    with patch("ez2_backup_preflight.os.open", side_effect=replace_before_open):
+        try:
+            read(path)
+            raise AssertionError("Same-byte replacement accepted")
+        except ValueError:
+            cases += 1
+    path.write_bytes(b"")
+    try:
+        read(path)
+        raise AssertionError("Empty input accepted")
     except ValueError:
         cases += 1
     d, i = Path(temp) / "desired.json", Path(temp) / "installed.json"

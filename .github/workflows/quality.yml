@@ -394,7 +394,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_content_guard.py scripts/test_ez2_content_guard.py
           python3 scripts/test_ez2_content_guard.py | tee /tmp/ez2-content-guard.log
-          grep -q 'EZ2_CONTENT_GUARD_TEST_PASS cases=16' /tmp/ez2-content-guard.log
+          grep -q 'EZ2_CONTENT_GUARD_TEST_PASS cases=22' /tmp/ez2-content-guard.log
 
       - name: Verify public Elementor candidate package (offline only)
         run: |
