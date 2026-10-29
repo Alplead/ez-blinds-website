@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 from ez2_elementor_export_check import check as check_export, unique, reject_nonfinite
+from ez2_backup_preflight import checked_read
 
 HOST = re.compile(r"ez2(?:-[a-z0-9]+)*\.local\Z")
 SLOT = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
@@ -18,10 +19,11 @@ MIME = {"image/webp": ".webp", "image/jpeg": ".jpg", "image/png": ".png"}
 SCHEME = "ez2-media://"
 
 def read_json(path, limit):
-    path = Path(path)
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
-        raise ValueError("Missing, linked or oversized JSON input")
-    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique,
+    # Private attachment mappings must be read from the SAME verified regular
+    # file descriptor, not a path that may be swapped after stat(). Reject
+    # hardlinks, symlinks, empty files, and changes during or after the read.
+    _, _, raw = checked_read(Path(path), max_bytes=limit, collect=True)
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
                       parse_constant=reject_nonfinite)
 
 def validate_media_map(mapping, expected_host):

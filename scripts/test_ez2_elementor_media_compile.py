@@ -5,7 +5,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from ez2_elementor_media_compile import compile_export, ensure_private_media_map, write_private
+from unittest.mock import patch
+from ez2_elementor_media_compile import compile_export, ensure_private_media_map, write_private, read_json
 
 HOST = "ez2-review.local"
 URL = f"http://{HOST}/wp-content/uploads/2026/10/synthetic-photo.webp"
@@ -138,7 +139,65 @@ with tempfile.TemporaryDirectory() as tmp:
             try:ensure_private_media_map(str(linked_dir/"media.json"))
             except ValueError:private_guard_cases+=1
             else:raise AssertionError("Accepted map through in-checkout linked directory")
-assert cases==40,cases
+
+# The private mapping must be bound to a single verified file descriptor.
+# Linux CI permits hardlinks and path replacement that Windows LocalWP must
+# not inherit as trusted media inputs.
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    media_path = root / "media.json"
+    media_path.write_text(json.dumps(fixture()[1]), encoding="utf-8")
+    assert read_json(media_path, 65536)["host"] == HOST
+    cases += 1
+
+    linked = root / "linked.json"
+    os.link(media_path, linked)
+    try:
+        read_json(linked, 65536)
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Accepted a hardlinked private media map")
+    linked.unlink()
+
+    alias = root / "alias.json"
+    alias.symlink_to(media_path)
+    try:
+        read_json(alias, 65536)
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Accepted a symlinked private media map")
+    alias.unlink()
+
+    media_path.write_bytes(b"")
+    try:
+        read_json(media_path, 65536)
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Accepted an empty private media map")
+
+    media_path.write_text(json.dumps(fixture()[1]), encoding="utf-8")
+    original_open = os.open
+    swapped = [False]
+    def swap_media_before_open(path, flags, *args, **kwargs):
+        if Path(path) == media_path and not swapped[0]:
+            replacement = root / "replacement.json"
+            replacement.write_bytes(media_path.read_bytes())
+            os.replace(replacement, media_path)
+            swapped[0] = True
+        return original_open(path, flags, *args, **kwargs)
+    with patch("ez2_backup_preflight.os.open", side_effect=swap_media_before_open):
+        try:
+            read_json(media_path, 65536)
+        except ValueError:
+            assert swapped[0]
+            cases += 1
+        else:
+            raise AssertionError("Accepted same-byte private map replacement")
+
+assert cases==45,cases
 assert private_guard_cases==(1 if os.name=="nt" else 3),private_guard_cases
 print(f"EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases={cases}")
 print(f"EZ2_PRIVATE_MEDIA_GUARD_PASS cases={private_guard_cases}")
