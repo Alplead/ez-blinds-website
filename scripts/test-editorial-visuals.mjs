@@ -163,6 +163,32 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     document.visibility();
     assert.equal(timerStarts, startsBeforePagehide + 2,
       'visible eligible page may resume autoplay');
+    // A browser window can lose focus while its tab remains visible. Pause
+    // once and resume only when focus returns, without resetting the timer
+    // on duplicate blur/focus notifications.
+    const startsBeforeBlur = timerStarts;
+    const stopsBeforeBlur = timerStops;
+    lifecycle.blur();
+    lifecycle.blur();
+    assert.equal(timerStops, stopsBeforeBlur + 1,
+      'unfocused window suspends an active slideshow exactly once');
+    assert.equal(toggle.textContent, 'Play slideshow',
+      'unfocused window offers Play rather than an ineffective Pause');
+    lifecycle.focus();
+    lifecycle.focus();
+    assert.equal(timerStarts, startsBeforeBlur + 1,
+      'returning window focus resumes once without duplicating timers');
+    document.hidden = true;
+    document.visibility();
+    const startsWhileHidden = timerStarts;
+    lifecycle.blur();
+    lifecycle.focus();
+    assert.equal(timerStarts, startsWhileHidden,
+      'focus must not restart autoplay in a hidden tab');
+    document.hidden = false;
+    document.visibility();
+    assert.equal(timerStarts, startsWhileHidden + 1,
+      'visible, focused window can resume after tab becomes active');
   }
   if (!initialReduced) {
     // A zero-pixel edge contact must not restart a slideshow offscreen.
@@ -188,6 +214,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     hero.handlers.mouseleave();
     assert.equal(timerStarts, running + 2,
       'A deliberate Pause must survive leaving hover');
+    lifecycle.blur();
+    lifecycle.focus();
+    assert.equal(timerStarts, running + 2,
+      'A deliberate Pause must survive browser blur and refocus');
     toggle.handlers.click();
     assert.equal(timerStarts, running + 3, 'Explicit Play resumes after manual pause');
     hero.handlers.focusin();
