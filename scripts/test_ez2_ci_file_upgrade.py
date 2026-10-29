@@ -90,6 +90,20 @@ reject(lambda r, a, b: archive(r, a.name, [
 reject(lambda r, a, b: archive(r, a.name, [
     ("ezb-theme/style.css", b"x" * (4 * 1024 * 1024 + 1), stat.S_IFREG | 0o644)]), "oversized entry")
 reject(lambda r, a, b: archive(r, a.name, []), "empty ZIP")
+reject(lambda r, a, b: archive(r, a.name, [
+    ("ezb-theme/style.css", b"theme", stat.S_IFREG | 0o644),
+    ("ezb-theme/CON.txt", b"reserved", stat.S_IFREG | 0o644)]), "Windows reserved device")
+reject(lambda r, a, b: archive(r, a.name, [
+    ("ezb-theme/style.css", b"theme", stat.S_IFREG | 0o644),
+    ("ezb-theme/COM1.js", b"reserved", stat.S_IFREG | 0o644)]), "Windows reserved device with extension")
+reject(lambda r, a, b: archive(r, a.name, [
+    ("ezb-theme/style.css", b"theme", stat.S_IFREG | 0o644),
+    ("ezb-theme/assets./image.txt", b"alias", stat.S_IFREG | 0o644)]), "Windows trailing dot alias")
+reject(lambda r, a, b: archive(r, a.name, [
+    ("ezb-theme/style.css", b"theme", stat.S_IFREG | 0o644),
+    ("ezb-theme/Assets/one.txt", b"first", stat.S_IFREG | 0o644),
+    ("ezb-theme/assets/two.txt", b"second", stat.S_IFREG | 0o644)]), "Windows mixed-case parent collision")
+
 def symlink_archive(root, a, b):
     a.unlink()
     a.symlink_to(b)
@@ -126,5 +140,5 @@ for damage in ("alter", "delete", "extra"):
             else:
                 raise AssertionError("Modified scratch installation accepted: " + damage)
 
-assert CASES == 21, CASES
+assert CASES == 25, CASES
 print("EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=21")
