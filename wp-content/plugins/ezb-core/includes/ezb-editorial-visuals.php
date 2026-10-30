@@ -35,6 +35,29 @@ function ezb_editorial_image_choices() {
 	);
 }
 
+/**
+ * Reject a linked ancestor anywhere above a curated media path, including
+ * aliases ABOVE uploads. A direct uploads leaf can still have a linked parent.
+ * This is a read-only guard; no media bytes are copied or published.
+ */
+function ezb_editorial_has_linked_path_component( $path ) {
+	if ( ! is_string( $path ) || '' === $path ) {
+		return true;
+	}
+	$current = rtrim( $path, DIRECTORY_SEPARATOR );
+	for ( $depth = 0; $depth < 64; $depth++ ) {
+		if ( is_link( $current ) ) {
+			return true;
+		}
+		$parent = dirname( $current );
+		if ( $parent === $current ) {
+			return false;
+		}
+		$current = $parent;
+	}
+	return true;
+}
+
 function ezb_editorial_image_id( $selection ) {
 	if ( ! function_exists( 'ezb_find_attachment_by_basename' ) ) {
 		return 0;
@@ -55,10 +78,10 @@ function ezb_editorial_image_id( $selection ) {
 	$uploads = wp_get_upload_dir();
 	$base    = is_array( $uploads ) && empty( $uploads['error'] ) &&
 		isset( $uploads['basedir'] ) && is_string( $uploads['basedir'] ) &&
-		! is_link( $uploads['basedir'] )
+		! ezb_editorial_has_linked_path_component( $uploads['basedir'] )
 		? realpath( $uploads['basedir'] ) : false;
 	$actual  = is_string( $file ) ? realpath( $file ) : false;
-	if ( ! $base || ! $actual || is_link( $file ) ||
+	if ( ! $base || ! $actual || ezb_editorial_has_linked_path_component( $file ) ||
 		0 !== strpos( $actual, rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR ) ||
 		! is_file( $actual ) || ! is_readable( $actual ) ) {
 		return 0;

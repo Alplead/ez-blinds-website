@@ -151,4 +151,47 @@ if (strpos($html, 'ezb-cinema--missing-media') === false ||
     throw new Exception('Upload-directory errors must not render media.');
 }
 $GLOBALS['uploads_override'] = null;
-echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=12\n";
+
+// A linked grandparent of uploads is not detected by is_link(uploads) or
+// by walking only as far as the resolved uploads root. Both the declared
+// upload root and an individual attachment path must reject that alias.
+$fixture_root = sys_get_temp_dir() . '/ezb-editorial-ancestor-' . bin2hex(random_bytes(8));
+$real_parent = $fixture_root . '/real';
+$real_uploads = $real_parent . '/uploads';
+$alias_parent = $fixture_root . '/linked-parent';
+$synthetic_file = $real_uploads . '/synthetic.webp';
+mkdir($real_uploads, 0700, true);
+file_put_contents($synthetic_file, 'synthetic fixture, not customer media');
+if (!symlink($real_parent, $alias_parent)) {
+    throw new Exception('Cannot create linked-grandparent fixture.');
+}
+try {
+    $GLOBALS['mode'] = 'all_available';
+    $GLOBALS['file_overrides'][1] = $alias_parent . '/uploads/synthetic.webp';
+    $GLOBALS['uploads_override'] = array('basedir' => $alias_parent . '/uploads', 'error' => false);
+    $html = $render();
+    if (strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('Linked parent of uploads must block all curated photos.');
+    }
+    $GLOBALS['uploads_override'] = array('basedir' => $real_uploads, 'error' => false);
+    $html = $render();
+    if (strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('Linked parent of attachment path must block curated photo.');
+    }
+    $GLOBALS['file_overrides'][1] = $synthetic_file;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 1 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') === false) {
+        throw new Exception('Direct non-linked synthetic attachment must remain valid.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = null;
+    unlink($alias_parent);
+    unlink($synthetic_file);
+    rmdir($real_uploads);
+    rmdir($real_parent);
+    rmdir($fixture_root);
+}
+
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=15\n";
