@@ -448,7 +448,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_plugin_archive_verify.py scripts/test_ez2_plugin_archive_verify.py
           python3 scripts/test_ez2_plugin_archive_verify.py | tee /tmp/ez2-plugin-archive-verify.log
-          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=45' /tmp/ez2-plugin-archive-verify.log
+          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=48' /tmp/ez2-plugin-archive-verify.log
 
       - name: Test opt-in WordPress.org pinned plugin fetch (offline fixtures only)
         run: |
