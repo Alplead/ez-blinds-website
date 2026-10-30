@@ -13,6 +13,10 @@ async function check(name, mode, expectedFailure = '') {
     if (mode === 'off-origin-redirect' && path === '/contact/') {
       res.writeHead(302, { location: 'https://example.com/off-site/' }); res.end(); return;
     }
+    if (mode === 'secret-redirect' && path === '/contact/') {
+      res.writeHead(302, { location: 'https://viewer:synthetic@example.com/off-site/?token=synthetic-private#secret' });
+      res.end(); return;
+    }
     if (path === '/missing/' ||
         (mode === 'blog-missing' && path === '/blog/') ||
         (mode === 'article-missing' && path === '/roller-blinds-blockout-vs-sunscreen/')) {
@@ -56,6 +60,9 @@ async function check(name, mode, expectedFailure = '') {
       path === '/' && mode === 'ftp-protocol' ? '<a href="ftp://example.com/private.txt">Unsafe</a>' :
       path === '/' && mode === 'external-https' ? '<a href="https://example.com/">External</a>' :
       path === '/' && mode === 'valid-mailto' ? '<a href="mailto:hello@example.com">Email</a>' :
+      path === '/' && mode === 'secret-discovered' ? '<a href="/private/?token=synthetic-private">Private query</a>' :
+      path === '/' && mode === 'secret-transport' ? '<a href="/products/?ezb_page=products&amp;token=synthetic-private">Dev query</a>' :
+      path === '/' && mode === 'secret-malformed' ? '<a href="http://[invalid]?token=synthetic-private">Invalid URL</a>' :
       path === '/' && mode === 'discovered-redirect' ? '<a href="/redirected/">Wrong destination</a>' :
       path === '/' && mode === 'discovered-empty' ? '<a href="/empty/">Empty</a>' :
       path === '/' && mode === 'discovered-partial' ? '<a href="/partial/">Partial</a>' :
@@ -81,6 +88,8 @@ async function check(name, mode, expectedFailure = '') {
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
+  assert.ok(!result.output.includes('synthetic-private'), name + ': query token leaked into CI output');
+  assert.ok(!result.output.includes('viewer:synthetic@'), name + ': URL credentials leaked into CI output');
   if (expectedFailure) {
     assert.notEqual(result.code, 0, name + ': expected failure');
     assert.ok(result.output.includes(expectedFailure), name + ': wrong failure ' + result.output);
@@ -94,6 +103,7 @@ await check('clean internal links', 'clean');
 await check('required route redirect to Home rejected', 'redirect', 'unexpectedly redirected to');
 await check('discovered link redirect to Home rejected', 'discovered-redirect', 'unexpectedly redirected to');
 await check('off-origin redirect rejected without following', 'off-origin-redirect', 'unexpectedly redirected to https://example.com/off-site/');
+await check('redirect credentials and query redacted', 'secret-redirect', 'unexpectedly redirected to https://example.com/off-site/');
 await check('broken internal link rejected', 'broken', 'HTTP 404');
 await check('approved Blog index is a required route', 'blog-missing', 'required route expected HTTP 200, got 404');
 await check('development-only article route is crawled', 'article-missing', 'required route expected HTTP 200, got 404');
@@ -119,8 +129,11 @@ await check('blob URL rejected', 'blob-protocol', 'unsafe internal link protocol
 await check('legacy FTP URL rejected', 'ftp-protocol', 'unsafe internal link protocol: ftp:');
 await check('external HTTPS link remains allowed', 'external-https');
 await check('mail address link remains allowed', 'valid-mailto');
+await check('discovered internal query is redacted from logs', 'secret-discovered');
+await check('development query is redacted from logs', 'secret-transport', 'development ezb_page links');
+await check('malformed link does not echo query token', 'secret-malformed', 'contains malformed href');
 await check('uppercase development transport key rejected', 'transport-uppercase', 'development ezb_page links');
 await check('percent-encoded development transport key rejected', 'transport-encoded-key', 'development ezb_page links');
 await check('double-encoded development transport key rejected', 'transport-double-encoded-key', 'development ezb_page links');
 await check('HTML-entity development transport key rejected', 'transport-html-entity-key', 'development ezb_page links');
-console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=33');
+console.log('EZB_LINK_CHECK_GUARD_TEST_PASS cases=37');

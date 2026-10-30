@@ -42,6 +42,18 @@ const checked = new Map();
 const failures = [];
 const devTransportLinks = [];
 
+// Page HTML and redirects are untrusted. Never log URL credentials,
+// query tokens or fragments from crawled links or server responses.
+function safeUrlSummary(raw, reference = base) {
+  try {
+    const url = new URL(raw, reference);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'INVALID_URL';
+    return (url.origin === base.origin ? '' : url.origin) + url.pathname;
+  } catch {
+    return 'INVALID_URL';
+  }
+}
+
 function decodeHref(value) {
   return value
     .replace(/&amp;/gi, '&')
@@ -122,7 +134,7 @@ while (queue.length) {
       headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' }
     });
   } catch (error) {
-    failures.push(`${href} -> fetch error: ${error.message}`);
+    failures.push(`${safeUrlSummary(href)} -> fetch error: ${error.name || 'Error'}`);
     continue;
   }
 
@@ -137,36 +149,36 @@ while (queue.length) {
       try { destination = new URL(location, href).href; }
       catch { destination = 'invalid Location'; }
     }
-    failures.push(`${href} unexpectedly redirected to ${destination}`);
+    failures.push(`${safeUrlSummary(href)} unexpectedly redirected to ${safeUrlSummary(destination, href)}`);
     continue;
   }
 
   // Required public pages must be real HTTP 200 pages, not 204/206 responses.
   if (seeded.has(href) && response.status !== 200) {
-    failures.push(`${href} -> required route expected HTTP 200, got ${response.status}`);
+    failures.push(`${safeUrlSummary(href)} -> required route expected HTTP 200, got ${response.status}`);
     continue;
   }
 
   if (response.status >= 400) {
-    failures.push(`${href} -> HTTP ${response.status}`);
+    failures.push(`${safeUrlSummary(href)} -> HTTP ${response.status}`);
     continue;
   }
   // Discovered navigation must not silently pass with empty or partial bodies.
   if (response.status !== 200) {
-    failures.push(`${href} -> internal link expected HTTP 200, got ${response.status}`);
+    failures.push(`${safeUrlSummary(href)} -> internal link expected HTTP 200, got ${response.status}`);
     continue;
   }
 
   const finalUrl = new URL(response.url);
   if (finalUrl.origin !== base.origin) {
-    failures.push(`${href} unexpectedly redirected off-origin to ${finalUrl.href}`);
+    failures.push(`${safeUrlSummary(href)} unexpectedly redirected off-origin to ${safeUrlSummary(finalUrl.href)}`);
     continue;
   }
   // All discovered internal links must resolve to their intended canonical path.
   // A broken article link silently redirected to Home is not a valid link.
   const requestedUrl = new URL(href);
   if (finalUrl.pathname !== requestedUrl.pathname || finalUrl.search !== requestedUrl.search || finalUrl.hash) {
-    failures.push(`${href} unexpectedly redirected to ${finalUrl.href}`);
+    failures.push(`${safeUrlSummary(href)} unexpectedly redirected to ${safeUrlSummary(finalUrl.href)}`);
     continue;
   }
 
@@ -175,7 +187,7 @@ while (queue.length) {
   // to retain their own content types without hiding wrong-page responses.
   const pageLike = seeded.has(href) || !/\.[a-z0-9]{2,8}$/i.test(requestedUrl.pathname);
   if (pageLike && !/^text\/html(?:\s*;|$)/i.test(contentType)) {
-    failures.push(`${href} -> ${seeded.has(href) ? 'required route' : 'internal page'} expected text/html, got ${contentType || 'missing content-type'}`);
+    failures.push(`${safeUrlSummary(href)} -> ${seeded.has(href) ? 'required route' : 'internal page'} expected text/html, got ${contentType || 'missing content-type'}`);
     continue;
   }
   if (!/^text\/html(?:\s*;|$)/i.test(contentType)) continue;
@@ -198,7 +210,7 @@ while (queue.length) {
     // Only standard web, email and telephone schemes are valid public navigation.
     // Reject unknown schemes instead of silently skipping them as off-origin.
     if (protocol && !['http', 'https', 'mailto', 'tel'].includes(protocol)) {
-      failures.push(`${href} contains unsafe internal link protocol: ${protocol}:`);
+      failures.push(`${safeUrlSummary(href)} contains unsafe internal link protocol: ${protocol}:`);
       continue;
     }
 
@@ -206,14 +218,14 @@ while (queue.length) {
     try {
       url = new URL(rawHref, finalUrl);
     } catch {
-      failures.push(`${href} contains malformed href: ${rawHref}`);
+      failures.push(`${safeUrlSummary(href)} contains malformed href`);
       continue;
     }
 
     if (url.origin !== base.origin || shouldSkip(url)) continue;
 
     if ([...url.searchParams.keys()].some(key => isDevelopmentTransportKey(key))) {
-      devTransportLinks.push(`${href} -> ${url.pathname}${url.search}`);
+      devTransportLinks.push(`${safeUrlSummary(href)} -> ${url.pathname} (development transport key)`);
       continue;
     }
 
@@ -228,7 +240,7 @@ while (queue.length) {
 
 console.log(`EZB_LINK_CHECK checked=${checked.size} queued=${queued.size}`);
 for (const [href, status] of checked) {
-  console.log(`${status} ${new URL(href).pathname}${new URL(href).search}`);
+  console.log(`${status} ${safeUrlSummary(href)}`);
 }
 
 if (devTransportLinks.length) {
