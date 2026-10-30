@@ -38,6 +38,43 @@ final class EZ2_Owner_Readiness_Receipt {
             || self::status($release, 'release') !== 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') {
             $sha = null;
         }
+        $releaseStatus = self::status($release, 'release');
+        $inventoryStatus = self::status($inventory, 'inventory');
+        $baselineStatus = self::status($baseline, 'baseline');
+        $mediaStatus = self::status($media, 'media');
+        $pluginStatus = self::status($plugin, 'plugin');
+
+        // A blocked probe may retain stale counts. Only export observations
+        // from an allowed successful probe status, with consistent totals.
+        $workflowCount = $releaseStatus === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY'
+            ? self::count($release, 'workflow_count') : null;
+        $artifactCount = $releaseStatus === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY'
+            ? self::count($release, 'artifact_count') : null;
+        $managedCount = in_array($inventoryStatus,
+            ['MANAGED_DIGESTS_OBSERVED', 'NO_MANAGED_PAGES'], true)
+            ? self::count($inventory, 'managed_count') : null;
+        if ($inventoryStatus === 'NO_MANAGED_PAGES' && $managedCount !== 0) {
+            $managedCount = null;
+        }
+        $localDrift = $baselineStatus !== 'UNAVAILABLE'
+            ? self::count($baseline, 'local_drift_count') : null;
+        if (($baselineStatus === 'AUTHENTICATED_RECEIPT_UNATTESTED' && $localDrift !== 0)
+            || ($baselineStatus === 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'
+                && ($localDrift === null || $localDrift === 0))) {
+            $localDrift = null;
+        }
+        $mediaSlots = $mediaStatus === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
+            ? self::count($media, 'slot_count') : null;
+        $mediaVerified = $mediaStatus === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
+            ? self::count($media, 'verified_count') : null;
+        if ($mediaSlots === null || $mediaSlots === 0 || $mediaVerified === null
+            || $mediaVerified > $mediaSlots) {
+            $mediaSlots = null;
+            $mediaVerified = null;
+        }
+        $pluginMatches = $pluginStatus === 'LOCAL_PLUGIN_MATCH_UNATTESTED'
+            ? self::count($plugin, 'matching_count') : null;
+
         return [
             'schema_version' => 1,
             'kind' => 'EZ2_ISOLATED_READINESS_RECEIPT',
@@ -45,18 +82,18 @@ final class EZ2_Owner_Readiness_Receipt {
             'target_site' => 'ez2-isolated-only',
             'source_sha' => $sha,
             'site_status' => self::status($site, 'site'),
-            'release_status' => self::status($release, 'release'),
-            'workflow_count' => self::count($release, 'workflow_count'),
-            'artifact_count' => self::count($release, 'artifact_count'),
+            'release_status' => $releaseStatus,
+            'workflow_count' => $workflowCount,
+            'artifact_count' => $artifactCount,
             'backup_status' => self::status($backup, 'backup'),
-            'managed_page_count' => self::count($inventory, 'managed_count'),
-            'baseline_status' => self::status($baseline, 'baseline'),
-            'local_drift_count' => self::count($baseline, 'local_drift_count'),
-            'media_status' => self::status($media, 'media'),
-            'media_slot_count' => self::count($media, 'slot_count'),
-            'media_verified_count' => self::count($media, 'verified_count'),
-            'plugin_status' => self::status($plugin, 'plugin'),
-            'plugin_matching_count' => self::count($plugin, 'matching_count'),
+            'managed_page_count' => $managedCount,
+            'baseline_status' => $baselineStatus,
+            'local_drift_count' => $localDrift,
+            'media_status' => $mediaStatus,
+            'media_slot_count' => $mediaSlots,
+            'media_verified_count' => $mediaVerified,
+            'plugin_status' => $pluginStatus,
+            'plugin_matching_count' => $pluginMatches,
             'transaction_status' => self::status($transaction, 'transaction'),
             'private_media_exported' => false,
             'localwp_visual_qa_verified' => false,

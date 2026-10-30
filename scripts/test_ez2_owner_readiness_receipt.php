@@ -75,5 +75,37 @@ foreach (array_keys($reports) as $index) {
         && ($index === 3 || $probe[$fields[$index]] === 'UNAVAILABLE'),
         'uppercase private status blocked in component ' . $index);
 }
+// Blocked or contradictory probes must not export reassuring stale counts.
+$blockedRelease = $release; $blockedRelease['status'] = 'BLOCKED_REMOTE_EVIDENCE';
+$check($build(null, $blockedRelease)['workflow_count'] === null
+    && $build(null, $blockedRelease)['artifact_count'] === null,
+    'blocked release counts withheld');
+$blockedInventory = $inventory; $blockedInventory['status'] = 'BLOCKED_MANAGED_CONTENT_INVENTORY';
+$check($build(null, null, null, $blockedInventory)['managed_page_count'] === null,
+    'blocked inventory count withheld');
+$emptyInventory = $inventory; $emptyInventory['status'] = 'NO_MANAGED_PAGES';
+$emptyInventory['managed_count'] = 0;
+$check($build(null, null, null, $emptyInventory)['managed_page_count'] === 0,
+    'empty inventory count preserved');
+$emptyInventory['managed_count'] = 3;
+$check($build(null, null, null, $emptyInventory)['managed_page_count'] === null,
+    'contradictory empty inventory count withheld');
+$blockedBaseline = $baseline; $blockedBaseline['status'] = 'BLOCKED_BASELINE_RECEIPT';
+$check($build(null, null, null, null, $blockedBaseline)['local_drift_count'] === null,
+    'blocked baseline drift count withheld');
+$badBaseline = $baseline; $badBaseline['status'] = 'AUTHENTICATED_RECEIPT_UNATTESTED';
+$check($build(null, null, null, null, $badBaseline)['local_drift_count'] === null,
+    'contradictory baseline drift count withheld');
+$blockedMedia = $media; $blockedMedia['status'] = 'BLOCKED_PRIVATE_MEDIA_READINESS';
+$check($build(null, null, null, null, null, $blockedMedia)['media_slot_count'] === null
+    && $build(null, null, null, null, null, $blockedMedia)['media_verified_count'] === null,
+    'blocked media counts withheld');
+$badMedia = $media; $badMedia['verified_count'] = 5;
+$check($build(null, null, null, null, null, $badMedia)['media_slot_count'] === null
+    && $build(null, null, null, null, null, $badMedia)['media_verified_count'] === null,
+    'impossible media counts withheld');
+$blockedPlugin = $plugin; $blockedPlugin['status'] = 'BLOCKED_PLUGIN_RUNTIME';
+$check($build(null, null, null, null, null, null, $blockedPlugin)['plugin_matching_count'] === null,
+    'blocked plugin count withheld');
 $check(count($receipt) === 26, 'strict allowlisted field count');
 echo "EZ2_OWNER_READINESS_RECEIPT_PASS cases={$cases} read_only=true private_bytes_exported=false can_apply=false\n";

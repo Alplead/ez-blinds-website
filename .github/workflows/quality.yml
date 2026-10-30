@@ -328,7 +328,7 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-owner-readiness-receipt.php
           php -l scripts/test_ez2_owner_readiness_receipt.php
           php scripts/test_ez2_owner_readiness_receipt.php | tee /tmp/ez2-owner-readiness-receipt.log
-          grep -Fq 'EZ2_OWNER_READINESS_RECEIPT_PASS cases=25 read_only=true private_bytes_exported=false can_apply=false' /tmp/ez2-owner-readiness-receipt.log
+          grep -Fq 'EZ2_OWNER_READINESS_RECEIPT_PASS cases=34 read_only=true private_bytes_exported=false can_apply=false' /tmp/ez2-owner-readiness-receipt.log
 
       - name: Check isolated EZ2 WordPress delivery runtime safety (no install)
         run: |
