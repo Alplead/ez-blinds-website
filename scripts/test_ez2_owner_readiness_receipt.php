@@ -12,7 +12,7 @@ $release = ['status' => 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY',
     'source_sha' => str_repeat('a', 40), 'workflow_count' => 5,
     'artifact_count' => 6, 'raw_token' => $private];
 $backup = ['status' => 'BACKUP_LOCATION_CANDIDATE_ONLY', 'path' => $private];
-$inventory = ['status' => 'OBSERVED', 'managed_count' => 3, 'page_text' => $private];
+$inventory = ['status' => 'MANAGED_DIGESTS_OBSERVED', 'managed_count' => 3, 'page_text' => $private];
 $baseline = ['status' => 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT',
     'local_drift_count' => 2, 'salt' => $private];
 $media = ['status' => 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY',
@@ -52,5 +52,28 @@ $check($build(null, null, null, null, null, $badCounts)['media_verified_count'] 
     'invalid counts not coerced');
 $unverified = $release; $unverified['status'] = 'BLOCKED';
 $check($build(null, $unverified)['source_sha'] === null, 'unverified SHA never attested');
+$check($receipt['site_status'] === 'READ_ONLY_PREVIEW_READY'
+    && $receipt['release_status'] === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY'
+    && $receipt['backup_status'] === 'BACKUP_LOCATION_CANDIDATE_ONLY'
+    && $receipt['baseline_status'] === 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'
+    && $receipt['media_status'] === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
+    && $receipt['plugin_status'] === 'LOCAL_PLUGIN_MATCH_UNATTESTED'
+    && $receipt['transaction_status'] === 'BLOCKED_TRANSACTION_NOT_IMPLEMENTED',
+    'known component statuses preserved');
+$invented = $site; $invented['status'] = 'READY';
+$check($build($invented)['site_status'] === 'UNAVAILABLE',
+    'plausible but unknown status not exported');
+// This secret is intentionally valid under the former generic status regex.
+$reports = [$site, $release, $backup, $inventory, $baseline, $media, $plugin, $transaction];
+$fields = ['site_status', 'release_status', 'backup_status', 'managed_page_count',
+    'baseline_status', 'media_status', 'plugin_status', 'transaction_status'];
+foreach (array_keys($reports) as $index) {
+    $probeReports = $reports;
+    $probeReports[$index]['status'] = $private;
+    $probe = EZ2_Owner_Readiness_Receipt::build(...$probeReports);
+    $check(!str_contains(json_encode($probe), $private)
+        && ($index === 3 || $probe[$fields[$index]] === 'UNAVAILABLE'),
+        'uppercase private status blocked in component ' . $index);
+}
 $check(count($receipt) === 26, 'strict allowlisted field count');
 echo "EZ2_OWNER_READINESS_RECEIPT_PASS cases={$cases} read_only=true private_bytes_exported=false can_apply=false\n";

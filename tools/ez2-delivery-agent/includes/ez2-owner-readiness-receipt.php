@@ -7,9 +7,22 @@
  * does not attest installation, visual QA, restore, or publication authority.
  */
 final class EZ2_Owner_Readiness_Receipt {
-    private static function status($report): string {
+    // A syntactically safe status can still be a private identifier or token.
+    // Export only statuses that the corresponding read-only probe can produce.
+    private const STATUSES = [
+        'site' => ['READ_ONLY_PREVIEW_READY', 'BLOCKED'],
+        'release' => ['CI_AND_ARTIFACTS_VERIFIED_READ_ONLY', 'BLOCKED_REMOTE_EVIDENCE'],
+        'backup' => ['BACKUP_LOCATION_CANDIDATE_ONLY', 'BLOCKED_BACKUP_PREPARATION'],
+        'inventory' => ['MANAGED_DIGESTS_OBSERVED', 'NO_MANAGED_PAGES', 'BLOCKED_MANAGED_CONTENT_INVENTORY'],
+        'baseline' => ['AUTHENTICATED_RECEIPT_LOCAL_DRIFT', 'AUTHENTICATED_RECEIPT_UNATTESTED', 'BLOCKED_BASELINE_RECEIPT'],
+        'media' => ['PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY', 'BLOCKED_PRIVATE_MEDIA_READINESS'],
+        'plugin' => ['LOCAL_PLUGIN_MATCH_UNATTESTED', 'BLOCKED_PLUGIN_RUNTIME'],
+        'transaction' => ['BLOCKED_TRANSACTION_NOT_IMPLEMENTED'],
+    ];
+
+    private static function status($report, string $component): string {
         $value = is_array($report) ? ($report['status'] ?? null) : null;
-        return is_string($value) && preg_match('/^[A-Z][A-Z0-9_]{0,79}$/D', $value) === 1
+        return is_string($value) && in_array($value, self::STATUSES[$component] ?? [], true)
             ? $value : 'UNAVAILABLE';
     }
 
@@ -22,7 +35,7 @@ final class EZ2_Owner_Readiness_Receipt {
                                  $media, $plugin, $transaction): array {
         $sha = is_array($release) ? ($release['source_sha'] ?? null) : null;
         if (!is_string($sha) || preg_match('/^[0-9a-f]{40}$/D', $sha) !== 1
-            || self::status($release) !== 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') {
+            || self::status($release, 'release') !== 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') {
             $sha = null;
         }
         return [
@@ -31,20 +44,20 @@ final class EZ2_Owner_Readiness_Receipt {
             'scope' => 'owner-review-read-only-not-install-proof',
             'target_site' => 'ez2-isolated-only',
             'source_sha' => $sha,
-            'site_status' => self::status($site),
-            'release_status' => self::status($release),
+            'site_status' => self::status($site, 'site'),
+            'release_status' => self::status($release, 'release'),
             'workflow_count' => self::count($release, 'workflow_count'),
             'artifact_count' => self::count($release, 'artifact_count'),
-            'backup_status' => self::status($backup),
+            'backup_status' => self::status($backup, 'backup'),
             'managed_page_count' => self::count($inventory, 'managed_count'),
-            'baseline_status' => self::status($baseline),
+            'baseline_status' => self::status($baseline, 'baseline'),
             'local_drift_count' => self::count($baseline, 'local_drift_count'),
-            'media_status' => self::status($media),
+            'media_status' => self::status($media, 'media'),
             'media_slot_count' => self::count($media, 'slot_count'),
             'media_verified_count' => self::count($media, 'verified_count'),
-            'plugin_status' => self::status($plugin),
+            'plugin_status' => self::status($plugin, 'plugin'),
             'plugin_matching_count' => self::count($plugin, 'matching_count'),
-            'transaction_status' => self::status($transaction),
+            'transaction_status' => self::status($transaction, 'transaction'),
             'private_media_exported' => false,
             'localwp_visual_qa_verified' => false,
             'backup_restore_verified' => false,
