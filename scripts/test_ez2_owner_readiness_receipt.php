@@ -18,7 +18,7 @@ $baseline = ['status' => 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT',
 $media = ['status' => 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY',
     'slot_count' => 4, 'verified_count' => 4, 'url' => $private];
 $plugin = ['status' => 'LOCAL_PLUGIN_MATCH_UNATTESTED',
-    'matching_count' => 1, 'config' => $private];
+    'checked_count' => 1, 'matching_count' => 1, 'config' => $private];
 $transaction = ['status' => 'BLOCKED_TRANSACTION_NOT_IMPLEMENTED', 'issues' => [$private]];
 $build = static fn($s = null, $r = null, $b = null, $i = null, $l = null, $m = null, $p = null, $t = null) =>
     EZ2_Owner_Readiness_Receipt::build($s ?? $site, $r ?? $release, $b ?? $backup,
