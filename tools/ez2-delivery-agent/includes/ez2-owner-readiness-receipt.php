@@ -56,7 +56,8 @@ final class EZ2_Owner_Readiness_Receipt {
         if ($inventoryStatus === 'NO_MANAGED_PAGES' && $managedCount !== 0) {
             $managedCount = null;
         }
-        $localDrift = $baselineStatus !== 'UNAVAILABLE'
+        $localDrift = in_array($baselineStatus,
+            ['AUTHENTICATED_RECEIPT_UNATTESTED', 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'], true)
             ? self::count($baseline, 'local_drift_count') : null;
         if (($baselineStatus === 'AUTHENTICATED_RECEIPT_UNATTESTED' && $localDrift !== 0)
             || ($baselineStatus === 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'
