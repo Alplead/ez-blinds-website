@@ -7,6 +7,15 @@ const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/si
 function simulate({ reduced = false, formPresent = true, fieldsPresent = true } = {}) {
   const handlers = {};
   const windowHandlers = {};
+  const name = {
+    value: 'Visitor', error: '', reportCount: 0, focusCount: 0, attributes: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
+    focus() { this.focusCount += 1; },
+    setCustomValidity(value) { this.error = value; },
+    reportValidity() { this.reportCount += 1; return !this.error; },
+    addEventListener(event, fn) { handlers['name:' + event] = fn; }
+  };
   const phone = {
     value: '', error: '', reportCount: 0, focusCount: 0, attributes: {},
     setAttribute(key, value) { this.attributes[key] = value; },
@@ -26,7 +35,8 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
     removeAttribute(key) { delete this.attributes[key]; },
     querySelector(selector) {
       if (!fieldsPresent) return null;
-      return selector === 'input[name="phone"]' ? phone :
+      return selector === 'input[name="name"]' ? name :
+        selector === 'input[name="phone"]' ? phone :
         selector === 'input[name="email"]' ? email : null;
     },
     addEventListener(name, fn) { handlers['form:' + name] = fn; }
@@ -44,6 +54,7 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
   runInNewContext(script, { window, document });
 
   return {
+    name,
     phone,
     email,
     handlers,
@@ -53,6 +64,10 @@ function simulate({ reduced = false, formPresent = true, fieldsPresent = true } 
       let prevented = false;
       handlers['form:submit']?.({ preventDefault() { prevented = true; } });
       return prevented;
+    },
+    enterName(value) {
+      name.value = value;
+      handlers['name:input']?.();
     },
     enterPhone(value) {
       phone.value = value;
@@ -82,6 +97,23 @@ assert.equal(empty.send(), true, 'rapid second email submission is blocked');
 empty.pageShow();
 assert.equal(empty.form.attributes['aria-busy'], undefined, 'back/forward restoration clears busy state');
 assert.equal(empty.send(), false, 'restored form permits a fresh submission');
+
+const whitespaceName = simulate();
+whitespaceName.enterName('   ');
+whitespaceName.enterEmail('visitor@example.com');
+assert.equal(whitespaceName.send(), true, 'whitespace-only name must block an otherwise valid enquiry');
+assert.match(whitespaceName.name.error, /enter your name/);
+assert.equal(whitespaceName.name.attributes['aria-invalid'], 'true',
+  'whitespace-only name must be identified to assistive technology');
+assert.equal(whitespaceName.name.focusCount, 1, 'invalid name must receive keyboard focus');
+assert.equal(whitespaceName.name.reportCount, 1, 'invalid name must show browser validation feedback');
+assert.equal(whitespaceName.form.attributes['aria-busy'], undefined,
+  'invalid name must not lock the form');
+whitespaceName.enterName('  Visitor  ');
+assert.equal(whitespaceName.name.error, '', 'corrected name clears custom validity');
+assert.equal(whitespaceName.name.attributes['aria-invalid'], undefined,
+  'corrected name clears assistive error state');
+assert.equal(whitespaceName.send(), false, 'corrected name and valid email may submit');
 
 const phoneOnly = simulate();
 phoneOnly.enterPhone('0400 123 456');
@@ -143,4 +175,4 @@ const separators = simulate();
 separators.enterPhone('+61 (0) 400/123-456');
 assert.equal(separators.send(), false, 'common international phone separators remain accepted');
 
-console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=21');
+console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=25');

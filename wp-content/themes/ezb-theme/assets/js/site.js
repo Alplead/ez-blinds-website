@@ -5,6 +5,7 @@
 	// contact method before navigation so visitors do not lose their message.
 	// Run independently of motion settings and fail open if markup changes.
 	document.querySelectorAll('.ezb-quote-form').forEach(function (form) {
+		var name = form.querySelector('input[name="name"]');
 		var phone = form.querySelector('input[name="phone"]');
 		var email = form.querySelector('input[name="email"]');
 		if (!phone || !email || typeof phone.setCustomValidity !== 'function') return;
@@ -25,9 +26,28 @@
 			// Browsers can restore a submitted form from the back/forward cache.
 			window.addEventListener('pageshow', resetSubmission);
 		}
+		// HTML required accepts whitespace-only text; match the server's
+		// trimmed-name check before a long enquiry is sent to WordPress.
+		function clearNameError() {
+			if (!name || typeof name.setCustomValidity !== 'function') return;
+			name.setCustomValidity('');
+			name.removeAttribute('aria-invalid');
+		}
+		if (name && typeof name.setCustomValidity === 'function') {
+			name.addEventListener('input', clearNameError);
+		}
 		phone.addEventListener('input', clearContactError);
 		email.addEventListener('input', clearContactError);
 		form.addEventListener('submit', function (event) {
+			clearNameError();
+			if (name && typeof name.setCustomValidity === 'function' && !name.value.trim()) {
+				name.setCustomValidity('Please enter your name.');
+				name.setAttribute('aria-invalid', 'true');
+				event.preventDefault();
+				name.focus();
+				name.reportValidity();
+				return;
+			}
 			clearContactError();
 			if (!phone.value.trim() && !email.value.trim()) {
 				phone.setCustomValidity('Please enter a phone number or email address so we can reply.');
