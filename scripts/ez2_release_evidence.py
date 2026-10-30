@@ -150,11 +150,16 @@ def audit(fetch=fetch_json):
     first = get_head(fetch(pr_url))
     query = urllib.parse.urlencode({"head_sha": first, "event": "pull_request", "per_page": 100})
     run_doc = fetch(BASE + "/actions/runs?" + query)
-    if not isinstance(run_doc, dict) or run_doc.get("total_count", 0) > 100:
+    # GitHub may return a valid-looking first page while omitting a newer
+    # failed rerun. Require the declared total to match the actual page before
+    # selecting any green exact-head workflow evidence.
+    if (not isinstance(run_doc, dict)
+            or type(run_doc.get("total_count")) is not int
+            or not 0 <= run_doc["total_count"] <= 100
+            or not isinstance(run_doc.get("workflow_runs"), list)
+            or len(run_doc["workflow_runs"]) != run_doc["total_count"]):
         raise ValueError("Workflow result incomplete or malformed")
-    runs = run_doc.get("workflow_runs")
-    if not isinstance(runs, list):
-        raise ValueError("Missing workflow runs")
+    runs = run_doc["workflow_runs"]
     chosen = choose_runs(first, runs)
     artifacts = []
     for workflow in ("Release Install Smoke",) + EXTRA:
@@ -162,11 +167,15 @@ def audit(fetch=fetch_json):
         if run is None:
             continue
         data = fetch(BASE + f"/actions/runs/{run['id']}/artifacts?per_page=100")
-        if not isinstance(data, dict) or data.get("total_count", 0) > 100:
+        # A partial artifact page must not be accepted as a complete
+        # release set, even if the six expected names happen to be present.
+        if (not isinstance(data, dict)
+                or type(data.get("total_count")) is not int
+                or not 0 <= data["total_count"] <= 100
+                or not isinstance(data.get("artifacts"), list)
+                or len(data["artifacts"]) != data["total_count"]):
             raise ValueError("Artifact result incomplete or malformed")
-        items = data.get("artifacts")
-        if not isinstance(items, list):
-            raise ValueError("Missing artifact list")
+        items = data["artifacts"]
         artifacts.extend(items)
     result = evaluate(first, runs, artifacts)
     if get_head(fetch(pr_url)) != first:

@@ -151,6 +151,48 @@ def fetch(url):
 assert audit(fetch)["status"] == "EXACT_HEAD_CI_ARTIFACT_PASS"
 cases += 1
 
+# A successful first page is not sufficient if GitHub reports more (or
+# fewer) entries than returned. An omitted newer failed run could otherwise
+# let stale green evidence be selected. Reject malformed counts fail-closed.
+for endpoint in ("runs", "artifacts"):
+    for bad_count in (None, True, "5", -1, 101, 0, 1, 999):
+        def incomplete_fetch(url, endpoint=endpoint, bad_count=bad_count):
+            document = copy.deepcopy(fetch(url))
+            target = ("/actions/runs?" in url if endpoint == "runs"
+                      else "/actions/runs/103/artifacts?" in url)
+            if target:
+                if bad_count is None:
+                    document.pop("total_count", None)
+                else:
+                    document["total_count"] = bad_count
+            return document
+        try:
+            audit(incomplete_fetch)
+        except ValueError:
+            cases += 1
+        else:
+            raise AssertionError("Incomplete or malformed GitHub " + endpoint +
+                                 " pagination accepted: " + repr(bad_count))
+
+# A matching count is mandatory even when every required workflow or
+# release artifact appears in the truncated page.
+for endpoint in ("runs", "artifacts"):
+    def omitted_page_fetch(url, endpoint=endpoint):
+        document = copy.deepcopy(fetch(url))
+        target = ("/actions/runs?" in url if endpoint == "runs"
+                  else "/actions/runs/103/artifacts?" in url)
+        if target:
+            document["total_count"] = len(
+                document["workflow_runs"] if endpoint == "runs" else document["artifacts"]
+            ) + 1
+        return document
+    try:
+        audit(omitted_page_fetch)
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Truncated " + endpoint + " page accepted")
+
 p, r, a = fixture()
 counter = [0]
 def changed_fetch(url):
