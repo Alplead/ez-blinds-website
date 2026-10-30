@@ -65,6 +65,22 @@ $win['backup'] = 'D:\\Private EZ2 Backups';
 $check($win, null);
 $win['backup'] = 'C:\\Local Sites\\EZ2\\app\\public\\backups';
 $check($win, 'BACKUP_OVERLAPS_WORDPRESS_ROOT');
+// Win32 aliases must never bypass backup/root isolation.
+foreach ([
+    'D:\\Private EZ2 Backups\\CON',
+    'D:\\Private EZ2 Backups\\con.txt',
+    'D:\\Private EZ2 Backups\\LPT1',
+    'D:\\Private EZ2 Backups\\NUL',
+    'D:\\Private EZ2 Backups\\folder.',
+    'D:\\Private EZ2 Backups\\folder ',
+    'D:\\Private EZ2 Backups\\folder:stream',
+    'D:\\Private EZ2 Backups\\PROGRA~1',
+    'D:\\Private EZ2 Backups\\folder?name',
+] as $unsafeBackup) {
+    $candidate = $win;
+    $candidate['backup'] = $unsafeBackup;
+    $check($candidate, 'UNSAFE_PATH_BACKUP');
+}
 // Exercise actual ancestor traversal, including Git linked worktree marker files.
 $temp = sys_get_temp_dir() . '/ez2-backup-git-' . bin2hex(random_bytes(8));
 if (!mkdir($temp, 0700) || !mkdir($temp . '/repo', 0700)

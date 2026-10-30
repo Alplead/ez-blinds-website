@@ -10,12 +10,25 @@ final class EZ2_Backup_Readiness {
         if (!is_string($path) || $path === '' || preg_match('/[\x00-\x1f\x7f]/', $path)) return null;
         $path = str_replace('\\', '/', $path);
         if (!preg_match('~^(?:/|[A-Za-z]:/)~D', $path) || str_contains($path, '//')) return null;
+        $windows = preg_match('~^[A-Za-z]:/~D', $path) === 1;
         $parts = explode('/', $path);
         if (in_array('..', $parts, true) || in_array('.', $parts, true)) return null;
         $path = rtrim($path, '/');
         if ($path === '') return '/';
-        if (preg_match('~^[A-Za-z]:$~D', $path)) return $path . '/';
-        return preg_match('~^[A-Za-z]:/~D', $path) ? strtolower($path) : $path;
+        if (preg_match('~^[A-Za-z]:$~D', $path)) return strtolower($path) . '/';
+        if ($windows) {
+            // Win32 aliases (DOS device names, 8.3 names, trailing dots/spaces
+            // and alternate streams) must not bypass the root overlap guard.
+            foreach (array_slice(explode('/', $path), 1) as $part) {
+                if ($part === '' || preg_match('/[<>:"|?*]/', $part)
+                    || preg_match('/[. ]$/D', $part)
+                    || preg_match('/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iD', $part)
+                    || preg_match('/^[^~]{1,6}~[1-9][0-9]*(?:\.|$)/iD', $part)) {
+                    return null;
+                }
+            }
+        }
+        return $windows ? strtolower($path) : $path;
     }
 
     private static function within(string $child, string $parent): bool {
