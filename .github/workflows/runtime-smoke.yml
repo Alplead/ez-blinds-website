@@ -454,6 +454,21 @@ jobs:
             if (!$jpg || !$webp || is_wp_error($jpg) || is_wp_error($webp)) { throw new Exception("Could not insert media test fixtures"); }
             update_post_meta($jpg, "_wp_attached_file", "2026/10/ezb-webp-priority-test.jpg");
             update_post_meta($webp, "_wp_attached_file", "2026/10/ezb-webp-priority-test.webp");
+            // A matching database row without a local file must not render.
+            if (ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg") !== 0) {
+              throw new Exception("Missing synthetic WebP/JPG media was accepted");
+            }
+            $uploads = wp_get_upload_dir();
+            $dir = $uploads["basedir"] . "/2026/10";
+            if (!wp_mkdir_p($dir)) { throw new Exception("Cannot prepare synthetic media directory"); }
+            $jpgPath = $dir . "/ezb-webp-priority-test.jpg";
+            $webpPath = $dir . "/ezb-webp-priority-test.webp";
+            if (file_exists($jpgPath) || file_exists($webpPath) ||
+                is_link($jpgPath) || is_link($webpPath) ||
+                file_put_contents($jpgPath, "synthetic JPG fixture") === false ||
+                file_put_contents($webpPath, "synthetic WebP fixture") === false) {
+              throw new Exception("Cannot prepare synthetic media files");
+            }
             $found = ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg");
             if ($found !== $webp) {
               throw new Exception("Raw JPG incorrectly outranked WebP derivative");
@@ -462,6 +477,9 @@ jobs:
             $before_repeat = $wpdb->num_queries;
             if (ezb_find_attachment_by_basename("ezb-webp-priority-test.jpg") !== $found || $wpdb->num_queries !== $before_repeat) {
               throw new Exception("Repeated media lookup unexpectedly queried the database");
+            }
+            if (!unlink($jpgPath) || !unlink($webpPath)) {
+              throw new Exception("Synthetic media cleanup failed");
             }
             wp_delete_post($jpg, true);
             wp_delete_post($webp, true);
