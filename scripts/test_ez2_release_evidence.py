@@ -4,7 +4,11 @@ import datetime as dt
 from ez2_release_evidence import audit, evaluate, get_head
 
 SHA = "a" * 40
-NOW = dt.datetime(2026, 10, 16, tzinfo=dt.timezone.utc)
+# The offline audit also calls evaluate() with the real clock. A fixed fixture
+# expiry eventually makes a valid release fail at midnight in CI.
+NOW = dt.datetime.now(dt.timezone.utc)
+FUTURE_EXPIRY = (NOW + dt.timedelta(days=7)).isoformat().replace("+00:00", "Z")
+PAST_EXPIRY = (NOW - dt.timedelta(days=1)).isoformat().replace("+00:00", "Z")
 WORKFLOWS = ("Quality", "Runtime Smoke", "Release Install Smoke",
              "EZ2 Elementor Ephemeral Runtime (No Deployment)",
              "EZ2 Hero Candidate (No Deployment)")
@@ -32,7 +36,7 @@ def fixture():
              "created_at": "2026-10-16T00:00:00Z", "run_attempt": 1}
             for i, name in enumerate(WORKFLOWS, 101)]
     artifacts = [{"id": 900 + i, "name": prefix + SHA, "expired": False,
-                  "size_in_bytes": 1234, "expires_at": "2026-10-30T00:00:00Z",
+                  "size_in_bytes": 1234, "expires_at": FUTURE_EXPIRY,
                   "workflow_run": {"id": workflow_id, "head_sha": SHA}}
                  for i, (prefix, workflow_id) in enumerate(PREFIXES)]
     return pr, runs, artifacts
@@ -79,7 +83,7 @@ for change in (
     lambda r, a: a[0]["workflow_run"].update(head_sha="b" * 40),
     lambda r, a: a[0]["workflow_run"].pop("head_sha"),
     lambda r, a: r[2].update(id=0),
-    lambda r, a: a[0].update(expires_at="2026-10-15T00:00:00Z"),
+    lambda r, a: a[0].update(expires_at=PAST_EXPIRY),
     lambda r, a: a[3].update(expired=True),
     lambda r, a: a[5].update(expired=True),
 ):
