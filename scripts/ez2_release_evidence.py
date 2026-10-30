@@ -157,7 +157,8 @@ def audit(fetch=fetch_json):
             or type(run_doc.get("total_count")) is not int
             or not 0 <= run_doc["total_count"] <= 100
             or not isinstance(run_doc.get("workflow_runs"), list)
-            or len(run_doc["workflow_runs"]) != run_doc["total_count"]):
+            or len(run_doc["workflow_runs"]) != run_doc["total_count"]
+            or any(not isinstance(item, dict) for item in run_doc["workflow_runs"])):
         raise ValueError("Workflow result incomplete or malformed")
     runs = run_doc["workflow_runs"]
     chosen = choose_runs(first, runs)
@@ -173,7 +174,8 @@ def audit(fetch=fetch_json):
                 or type(data.get("total_count")) is not int
                 or not 0 <= data["total_count"] <= 100
                 or not isinstance(data.get("artifacts"), list)
-                or len(data["artifacts"]) != data["total_count"]):
+                or len(data["artifacts"]) != data["total_count"]
+                or any(not isinstance(item, dict) for item in data["artifacts"])):
             raise ValueError("Artifact result incomplete or malformed")
         items = data["artifacts"]
         artifacts.extend(items)
