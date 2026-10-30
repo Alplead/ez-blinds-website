@@ -165,8 +165,13 @@ final class EZ2_Release_Evidence {
                 throw new RuntimeException('INVALID_PR_HEAD');
             }
             $runs = $read('/actions/runs?head_sha=' . $sha . '&per_page=100');
+            // A short, missing or malformed first page cannot prove that
+            // the latest exact-head workflow runs were all inspected.
             if (!is_array($runs['workflow_runs'] ?? null)
-                || ($runs['total_count'] ?? 0) > 100) {
+                || !array_is_list($runs['workflow_runs'])
+                || !is_int($runs['total_count'] ?? null)
+                || $runs['total_count'] < 0 || $runs['total_count'] > 100
+                || count($runs['workflow_runs']) !== $runs['total_count']) {
                 throw new RuntimeException('WORKFLOW_RESULTS_INCOMPLETE');
             }
             $selected = [];
@@ -187,8 +192,13 @@ final class EZ2_Release_Evidence {
                 $id = $selected[$name]['id'] ?? null;
                 if (!is_int($id) || $id < 1) continue;
                 $page = $read('/actions/runs/' . $id . '/artifacts?per_page=100');
+                // Artifact pagination is also part of release provenance:
+                // never accept an incomplete or uncounted response as 6/6.
                 if (!is_array($page['artifacts'] ?? null)
-                    || ($page['total_count'] ?? 0) > 100) {
+                    || !array_is_list($page['artifacts'])
+                    || !is_int($page['total_count'] ?? null)
+                    || $page['total_count'] < 0 || $page['total_count'] > 100
+                    || count($page['artifacts']) !== $page['total_count']) {
                     throw new RuntimeException('ARTIFACT_RESULTS_INCOMPLETE');
                 }
                 $sets[$name] = $page['artifacts'];

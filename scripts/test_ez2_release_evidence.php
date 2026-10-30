@@ -85,7 +85,8 @@ function check_live_evidence(array $initial, array $runs, array $sets,
             return $count === 1 ? $initial : ($options['final_pr'] ?? $initial);
         }
         if ($path === '/actions/runs?head_sha=' . $sha . '&per_page=100') {
-            return ['workflow_runs' => $runs, 'total_count' => $options['run_total'] ?? count($runs)];
+            return ['workflow_runs' => $runs, 'total_count' =>
+                array_key_exists('run_total', $options) ? $options['run_total'] : count($runs)];
         }
         if ($path === '/branches/feature/vertical-slice-v1') {
             return ['commit' => ['sha' => $options['branch_sha'] ?? $sha]];
@@ -95,7 +96,9 @@ function check_live_evidence(array $initial, array $runs, array $sets,
                 if ($run['id'] === (int) $match[1]) {
                     $items = $sets[$run['name']] ?? [];
                     if (($options['drop_artifact'] ?? null) === $run['name']) $items = [];
-                    return ['artifacts' => $items, 'total_count' => count($items)];
+                    return ['artifacts' => $items, 'total_count' =>
+                        array_key_exists('artifact_total', $options)
+                            ? $options['artifact_total'] : count($items)];
                 }
             }
         }
@@ -136,9 +139,14 @@ check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
 check_live_evidence($pr, $runs, $sets, ['drop_artifact' => 'Release Install Smoke'], false);
 check_live_evidence($pr, $runs, $sets, ['fail_path' => '/pulls/1'], false);
 check_live_evidence($pr, $runs, $sets, ['run_total' => 101], false);
+// A truncated or uncounted first page must never become a release PASS.
+check_live_evidence($pr, $runs, $sets, ['run_total' => count($runs) - 1], false);
+check_live_evidence($pr, $runs, $sets, ['run_total' => null], false);
+check_live_evidence($pr, $runs, $sets, ['artifact_total' => 99], false);
+check_live_evidence($pr, $runs, $sets, ['artifact_total' => null], false);
 $p = $pr; $p['base']['ref'] = 'release';
 check_live_evidence($pr, $runs, $sets, ['final_pr' => $p], false);
 check_live_evidence($pr, $runs, $sets, ['final_pr' => []], false);
 
-if ($cases !== 33) throw new RuntimeException('Unexpected case count');
+if ($cases !== 37) throw new RuntimeException('Unexpected case count');
 echo "EZ2_RELEASE_EVIDENCE_GUARD_PASS cases={$cases} apply_disabled=true\n";

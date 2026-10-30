@@ -646,4 +646,4 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-release-evidence.php
           php -l scripts/test_ez2_release_evidence.php
           php scripts/test_ez2_release_evidence.php | tee /tmp/ez2-release-evidence-agent.log
-          grep -Fq 'EZ2_RELEASE_EVIDENCE_GUARD_PASS cases=33 apply_disabled=true' /tmp/ez2-release-evidence-agent.log
+          grep -Fq 'EZ2_RELEASE_EVIDENCE_GUARD_PASS cases=37 apply_disabled=true' /tmp/ez2-release-evidence-agent.log
