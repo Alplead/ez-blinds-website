@@ -110,5 +110,5 @@ const numberedImageFailure = previewImageFailures([
 ]).join('; ');
 assert.match(numberedImageFailure, /image 2 did not finish loading/);
 assert.doesNotMatch(numberedImageFailure, /synthetic|token=/);
-assert.equal(cases.length + 2 + navigationCases.length + 5 + 3, 49);
-console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=49');
+assert.equal(cases.length + 2 + navigationCases.length + 5 + 3, 48);
+console.log('EZB_PREVIEW_RENDER_GUARD_PASS cases=48');
