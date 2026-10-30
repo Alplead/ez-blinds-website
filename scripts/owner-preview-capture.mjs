@@ -57,7 +57,7 @@ async function main() {
           const page = await context.newPage();
           const pageErrors = [];
           const assetFailures = [];
-          const themeAsset = /\/wp-content\/themes\/ezb-theme\/(?:style\.css|assets\/js\/site\.js)(?:[?#]|$)/;
+          const themeAsset = /\/wp-content\/themes\/ezb-theme\/(?:style\.css|assets\/js\/site\.js|assets\/css\/editorial\.css|assets\/js\/editorial\.js)(?:[?#]|$)/;
           page.on('pageerror', error => pageErrors.push(error.message));
           page.on('response', response => {
             if (themeAsset.test(response.url()) && response.status() !== 200) {
@@ -124,8 +124,26 @@ async function main() {
                 });
               const themeScript = themeScripts[0];
               const scriptResources = performance.getEntriesByType('resource');
-              const hero = document.querySelector('.ezb-hero');
+              // The live homepage uses the photo-led cinema, not the retired .ezb-hero.
+              // Check its real browser styles and slide structure before accepting a preview.
+              const editorialLinks = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'))
+                .filter(link => {
+                  try { return new URL(link.href, document.baseURI).pathname
+                    .endsWith('/wp-content/themes/ezb-theme/assets/css/editorial.css'); }
+                  catch { return false; }
+                });
+              const editorialScripts = Array.from(document.querySelectorAll('script[src]'))
+                .filter(script => {
+                  try { return new URL(script.src, document.baseURI).pathname
+                    .endsWith('/wp-content/themes/ezb-theme/assets/js/editorial.js'); }
+                  catch { return false; }
+                });
+              const editorialLink = editorialLinks[0];
+              const editorialScript = editorialScripts[0];
+              const hero = document.querySelector('.ezb-cinema');
               const heroHeading = hero?.querySelector('h1');
+              const activeSlide = hero?.querySelector('[data-ezb-slide].is-active');
+              const heroStyle = hero ? getComputedStyle(hero) : null;
               const card = document.querySelector('.ezb-card');
               return {
                 themeStylesheetCount: themeLinks.length,
@@ -145,8 +163,27 @@ async function main() {
                   .getPropertyValue('--ezb-accent').trim(),
                 rawShortcode: /\[(?:\/)?ezb_[a-z0-9_]+(?:\s|\])/i
                   .test(document.body.textContent || ''),
+                editorialStylesheetCount: editorialLinks.length,
+                editorialStylesheetPath: editorialLink
+                  ? new URL(editorialLink.href, document.baseURI).pathname : '',
+                editorialStylesheetLoaded: Boolean(editorialLink?.sheet),
+                editorialStylesheetSameOrigin: Boolean(editorialLink &&
+                  new URL(editorialLink.href, document.baseURI).origin === location.origin),
+                editorialScriptCount: editorialScripts.length,
+                editorialScriptPath: editorialScript
+                  ? new URL(editorialScript.src, document.baseURI).pathname : '',
+                editorialScriptSameOrigin: Boolean(editorialScript &&
+                  new URL(editorialScript.src, document.baseURI).origin === location.origin),
+                editorialScriptFetched: Boolean(editorialScript && scriptResources.some(entry =>
+                  entry.name === editorialScript.src)),
                 homeHeroPresent: Boolean(hero),
-                homeHeroBackground: hero ? getComputedStyle(hero).backgroundImage : '',
+                homeHeroHeightPx: hero ? hero.getBoundingClientRect().height : 0,
+                homeHeroBackgroundColor: heroStyle?.backgroundColor || '',
+                homeHeroSlides: hero?.querySelectorAll('[data-ezb-slide]').length || 0,
+                homeHeroActiveSlides: hero?.querySelectorAll('[data-ezb-slide].is-active').length || 0,
+                homeHeroMissingMedia: Boolean(hero?.classList.contains('ezb-cinema--missing-media')),
+                homeHeroImageFit: activeSlide?.querySelector('img')
+                  ? getComputedStyle(activeSlide.querySelector('img')).objectFit : '',
                 homeHeadingPx: heroHeading ? parseFloat(getComputedStyle(heroHeading).fontSize) : 0,
                 homeCardPresent: Boolean(card),
                 homeCardBorderPx: card ? parseFloat(getComputedStyle(card).borderTopWidth) : 0,

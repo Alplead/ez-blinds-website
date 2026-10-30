@@ -68,9 +68,42 @@ export function previewRenderFailures(evidence, isHome = false) {
     failures.push('raw EZB shortcode leaked into rendered page');
   }
   if (isHome) {
-    if (!evidence.homeHeroPresent) failures.push('homepage hero is missing');
-    if (!evidence.homeHeroBackground || evidence.homeHeroBackground === 'none') {
-      failures.push('homepage hero background styling is missing');
+    if (evidence.editorialStylesheetCount !== 1 ||
+        evidence.editorialStylesheetPath !== '/wp-content/themes/ezb-theme/assets/css/editorial.css') {
+      failures.push('editorial stylesheet must resolve from the site root');
+    }
+    if (!evidence.editorialStylesheetLoaded) {
+      failures.push('editorial stylesheet did not load in the browser');
+    }
+    if (!evidence.editorialStylesheetSameOrigin) {
+      failures.push('editorial stylesheet must be served from the preview origin');
+    }
+    if (evidence.editorialScriptCount !== 1 ||
+        evidence.editorialScriptPath !== '/wp-content/themes/ezb-theme/assets/js/editorial.js') {
+      failures.push('editorial script must resolve from the site root');
+    }
+    if (!evidence.editorialScriptSameOrigin) {
+      failures.push('editorial script must be served from the preview origin');
+    }
+    if (!evidence.editorialScriptFetched) {
+      failures.push('editorial script was not fetched by the browser');
+    }
+    if (!evidence.homeHeroPresent) failures.push('cinematic homepage hero is missing');
+    if (!(evidence.homeHeroHeightPx >= 400)) {
+      failures.push('cinematic homepage hero is unexpectedly short');
+    }
+    if (!evidence.homeHeroBackgroundColor ||
+        ['transparent', 'rgba(0, 0, 0, 0)'].includes(evidence.homeHeroBackgroundColor)) {
+      failures.push('cinematic homepage hero background styling is missing');
+    }
+    if (!(evidence.homeHeroSlides >= 1) || evidence.homeHeroMissingMedia) {
+      failures.push('cinematic homepage real media is missing');
+    }
+    if (evidence.homeHeroActiveSlides !== 1) {
+      failures.push('cinematic homepage must have exactly one active slide');
+    }
+    if (evidence.homeHeroImageFit !== 'cover') {
+      failures.push('cinematic homepage image cover styling is missing');
     }
     if (!(evidence.homeHeadingPx >= 30)) {
       failures.push('homepage heading typography is unexpectedly small');

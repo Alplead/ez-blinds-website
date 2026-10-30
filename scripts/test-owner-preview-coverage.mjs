@@ -50,6 +50,20 @@ assert.match(source, /rawShortcode/,
   'screenshots must reject leaked shortcode placeholders');
 assert.match(source, /homeHeadingPx/,
   'screenshots must check real computed hero typography');
+assert.ok(source.includes("document.querySelector('.ezb-cinema')"),
+  'homepage preview must inspect the current cinematic hero, not the old prototype');
+assert.match(source, /editorialStylesheetLoaded/,
+  'cinematic preview must check actual editorial CSS loading');
+assert.match(source, /editorialScriptFetched/,
+  'cinematic preview must check actual editorial JS loading');
+assert.match(source, /homeHeroSlides/,
+  'cinematic preview must check real photo slide presence');
+assert.match(source, /homeHeroActiveSlides/,
+  'cinematic preview must check active slide visibility');
+assert.match(source, /homeHeroMissingMedia/,
+  'cinematic preview must not accept missing-photo fallback as finished imagery');
+assert.match(source, /homeHeroImageFit/,
+  'cinematic preview must check real full-bleed image styling');
 assert.match(source, /homeCardBorderPx/,
   'screenshots must check real computed card framing');
 assert.match(source, /reducedMotion: 'reduce'/,
