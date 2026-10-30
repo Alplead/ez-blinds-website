@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 from ez2_content_candidate_bundle import NAME, SOURCE, verify as verify_candidate
 from ez2_release_set import run as verify_release_set
+from ez2_backup_preflight import checked_read, regular_file, _identity
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = 'ez2-runtime-candidate.json'
@@ -25,6 +26,9 @@ def stage(release_dir, sha, expected_source, *, envelope_required=False):
     root = Path(release_dir)
     if root.is_symlink() or not root.is_dir():
         raise ValueError('Unsafe release directory')
+    if root.resolve(strict=True) != root.absolute():
+        raise ValueError('Linked ancestor in release directory')
+    root_identity = _identity(root.lstat())
     if not isinstance(expected_source, bytes) or not expected_source:
         raise ValueError('Missing committed candidate bytes')
     output = root / OUTPUT
@@ -45,21 +49,36 @@ def stage(release_dir, sha, expected_source, *, envelope_required=False):
     envelope_dir = root / 'ez2-envelope-install-input'
     if envelope_required and (envelope_dir.is_symlink() or not envelope_dir.is_dir()):
         raise ValueError('Verified envelope install inputs required')
+    if envelope_required and envelope_dir.resolve(strict=True) != envelope_dir.absolute():
+        raise ValueError('Linked ancestor in envelope directory')
+    envelope_identity = _identity(envelope_dir.lstat()) if envelope_required else None
     archive_path = (envelope_dir / 'ez2-content-candidate.zip'
                     if envelope_required else source_archive)
-    for path in (source_archive, archive_path):
-        if (path.is_symlink() or not path.is_file()
-                or path.stat().st_nlink != 1
-                or not 0 < path.stat().st_size <= 64 * 1024 * 1024):
-            raise ValueError('Unsafe exact-head candidate archive')
-    archive = archive_path.read_bytes()
-    if envelope_required and archive != source_archive.read_bytes():
+    # Bind both ZIP snapshots to verified regular-file descriptors. Checking
+    # lstat and then calling read_bytes() could follow a replacement symlink,
+    # FIFO or a different same-sized file between those two operations.
+    snapshots = {}
+    for path in dict.fromkeys((source_archive, archive_path)):
+        info, _, raw = checked_read(path, max_bytes=64 * 1024 * 1024, collect=True)
+        snapshots[path] = (_identity(info), raw)
+    archive = snapshots[archive_path][1]
+    if envelope_required and archive != snapshots[source_archive][1]:
         raise ValueError('Envelope candidate differs from exact-head release')
     verify_candidate(sha, archive)
     with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
         payload = zipped.read(NAME)
     if payload != expected_source:
         raise ValueError('Candidate differs from committed exact-head source')
+    # A candidate can be swapped after its individual read. Recheck all
+    # inputs and parent directories before creating any staged output.
+    if (_identity(root.lstat()) != root_identity
+            or root.resolve(strict=True) != root.absolute()
+            or (envelope_required and (
+                _identity(envelope_dir.lstat()) != envelope_identity
+                or envelope_dir.resolve(strict=True) != envelope_dir.absolute()))
+            or any(_identity(regular_file(path)) != identity
+                   for path, (identity, _) in snapshots.items())):
+        raise ValueError('Release candidate inputs changed during staging')
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, 'O_NOFOLLOW'):
         flags |= os.O_NOFOLLOW

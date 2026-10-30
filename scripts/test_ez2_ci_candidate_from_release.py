@@ -131,6 +131,37 @@ with tempfile.TemporaryDirectory() as temp:
     staged.symlink_to(root, target_is_directory=True)
     reject(lambda: run(root))  # Directory link must not bypass envelope stage.
 
+# Linked ancestor directories must not redirect a trusted-looking release.
+with tempfile.TemporaryDirectory() as temp:
+    parent = Path(temp)
+    actual = parent / 'actual'
+    actual.mkdir()
+    setup(actual)
+    linked = parent / 'linked'
+    linked.symlink_to(actual, target_is_directory=True)
+    reject(lambda: run(linked))
+
+# Reject same-byte path replacements after a descriptor-bound read, even when
+# the ZIP digest and contents are unchanged.
+for relative in ('ez2-content-candidate.zip',
+                 'ez2-envelope-install-input/ez2-content-candidate.zip'):
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        setup(root)
+        victim = root / relative
+        original_read = target.checked_read
+
+        def replace_after_read(path, *, max_bytes=None, collect=False):
+            result = original_read(path, max_bytes=max_bytes, collect=collect)
+            if Path(path) == victim:
+                replacement = victim.with_name('replacement.zip')
+                replacement.write_bytes(result[2])
+                os.replace(replacement, victim)
+            return result
+
+        with patch.object(target, 'checked_read', side_effect=replace_after_read):
+            reject(lambda: run(root))
+
 # The independent Elementor browser workflow intentionally has no envelope.
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
@@ -144,5 +175,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert info['source_sha'] == SHA and (root / OUTPUT).read_bytes() == PAYLOAD
     CASES += 1
 
-assert CASES == 21, CASES
+assert CASES == 24, CASES
 print(f'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases={CASES}')
