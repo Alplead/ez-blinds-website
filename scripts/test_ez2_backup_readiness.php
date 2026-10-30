@@ -40,6 +40,13 @@ foreach ([
     ['backup', '/srv/ez2', 'BACKUP_OVERLAPS_WORDPRESS_ROOT'],
     ['backup', '/srv/ez2/public', 'BACKUP_OVERLAPS_WORDPRESS_ROOT'],
     ['backup', '/srv/ez2/publication-backup', null],
+    // Distinct, non-nested backup components are required for safe restore.
+    ['plugins', '/srv/ez2/public/wp-content/uploads', 'BACKUP_COMPONENTS_OVERLAP'],
+    ['plugins', '/srv/ez2/public/wp-content/uploads/extensions', 'BACKUP_COMPONENTS_OVERLAP'],
+    ['themes', '/srv/ez2/public/wp-content/plugins/themes', 'BACKUP_COMPONENTS_OVERLAP'],
+    ['uploads', '/srv/ez2/public/wp-content/themes/uploads', 'BACKUP_COMPONENTS_OVERLAP'],
+    ['plugins', '/srv/ez2/public/wp-content/plugins-v2', null],
+    ['themes', '/srv/ez2/public/wp-content/uploads-backup', null],
     ['backup_exists', false, 'BACKUP_DESTINATION_UNSAFE'],
     ['backup_is_link', true, 'BACKUP_DESTINATION_UNSAFE'],
     ['backup_writable', false, 'BACKUP_DESTINATION_UNSAFE'],
@@ -63,6 +70,11 @@ $win['plugins'] = 'C:\\Local Sites\\EZ2\\app\\public\\wp-content\\plugins';
 $win['themes'] = 'C:\\Local Sites\\EZ2\\app\\public\\wp-content\\themes';
 $win['backup'] = 'D:\\Private EZ2 Backups';
 $check($win, null);
+// Windows LocalWP paths are case-insensitive: a differently cased alias
+// must not make one component appear independent of another.
+$winAlias = $win;
+$winAlias['uploads'] = 'C:\\Local Sites\\EZ2\\app\\public\\wp-content\\PLUGINS';
+$check($winAlias, 'BACKUP_COMPONENTS_OVERLAP');
 $win['backup'] = 'C:\\Local Sites\\EZ2\\app\\public\\backups';
 $check($win, 'BACKUP_OVERLAPS_WORDPRESS_ROOT');
 // Win32 aliases must never bypass backup/root isolation.

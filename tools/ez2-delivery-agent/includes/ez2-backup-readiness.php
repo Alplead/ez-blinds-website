@@ -69,6 +69,19 @@ final class EZ2_Backup_Readiness {
                     $issues[] = 'COMPONENT_OUTSIDE_' . strtoupper($parent);
                 }
             }
+            // A backup cannot faithfully restore distinct WordPress components
+            // when uploads, plugins or themes resolve to the same directory,
+            // or when one component nests inside another. Compare whole path
+            // segments, not textual prefixes (uploads-v2 is a valid sibling).
+            $components = ['uploads', 'plugins', 'themes'];
+            foreach ($components as $index => $left) {
+                foreach (array_slice($components, $index + 1) as $right) {
+                    if (self::within($paths[$left], $paths[$right])
+                        || self::within($paths[$right], $paths[$left])) {
+                        $issues[] = 'BACKUP_COMPONENTS_OVERLAP';
+                    }
+                }
+            }
             if (self::within($paths['backup'], $paths['root'])
                 || self::within($paths['root'], $paths['backup'])) {
                 $issues[] = 'BACKUP_OVERLAPS_WORDPRESS_ROOT';
