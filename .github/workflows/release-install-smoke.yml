@@ -264,6 +264,18 @@ jobs:
             ));
             if (!$video || is_wp_error($video)) { throw new Exception("Synthetic video attachment was not created"); }
             update_post_meta($video, "_wp_attached_file", "2026/10/" . $filename);
+            // A forged Media Library row alone must not make missing media renderable.
+            if (ezb_find_attachment_by_basename($filename) !== 0) {
+              throw new Exception("Missing synthetic video file was accepted");
+            }
+            $uploads = wp_get_upload_dir();
+            $dir = $uploads["basedir"] . "/2026/10";
+            if (!wp_mkdir_p($dir)) { throw new Exception("Synthetic upload directory unavailable"); }
+            $path = $dir . "/" . $filename;
+            if (file_exists($path) || is_link($path) ||
+                file_put_contents($path, "synthetic video test fixture only") === false) {
+              throw new Exception("Cannot create isolated synthetic video fixture");
+            }
             if (ezb_find_attachment_by_basename($filename) !== $video ||
                 get_post_mime_type($video) !== "video/mp4" ||
                 !wp_get_attachment_url($video)) {
@@ -272,6 +284,7 @@ jobs:
             if (do_shortcode("[ezb_retractable_video]") !== "") {
               throw new Exception("Privacy-restricted video leaked into release mode");
             }
+            if (!unlink($path)) { throw new Exception("Synthetic video cleanup failed"); }
             wp_delete_post($video, true);
             echo "EZB_RELEASE_VIDEO_PRIVACY_PASS" . PHP_EOL;
           ' --allow-root | tee /tmp/release-video-privacy.log
