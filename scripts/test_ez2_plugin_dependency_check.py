@@ -85,5 +85,33 @@ with tempfile.TemporaryDirectory() as temp:
         raise AssertionError("Symlink accepted")
     except ValueError:
         cases += 1
-assert cases == 22, cases
+    path.write_text(json.dumps(sample()), encoding="utf-8")
+    linked_parent = root / "linked-parent"
+    linked_parent.symlink_to(root, target_is_directory=True)
+    try:
+        read(linked_parent / "manifest.json")
+        raise AssertionError("Linked parent accepted")
+    except ValueError:
+        cases += 1
+    hardlink = root / "hardlink.json"
+    hardlink.hardlink_to(path)
+    try:
+        read(hardlink)
+        raise AssertionError("Hardlinked manifest accepted")
+    except ValueError:
+        cases += 1
+    hardlink.unlink()
+    path.write_bytes(b"")
+    try:
+        read(path)
+        raise AssertionError("Empty manifest accepted")
+    except ValueError:
+        cases += 1
+    path.write_bytes(b"x" * 32769)
+    try:
+        read(path)
+        raise AssertionError("Oversized manifest accepted")
+    except ValueError:
+        cases += 1
+assert cases == 26, cases
 print(f"EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases={cases}")

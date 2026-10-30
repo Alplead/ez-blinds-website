@@ -442,7 +442,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_plugin_dependency_check.py scripts/test_ez2_plugin_dependency_check.py
           python3 scripts/test_ez2_plugin_dependency_check.py | tee /tmp/ez2-plugin-preflight.log
-          grep -q 'EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases=22' /tmp/ez2-plugin-preflight.log
+          grep -q 'EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases=26' /tmp/ez2-plugin-preflight.log
 
       - name: Verify pinned isolated EZ2 plugin archive structure (synthetic only)
         run: |
@@ -486,7 +486,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/ez2_release_delivery_bridge.py scripts/test_ez2_release_delivery_bridge.py
           python3 scripts/test_ez2_release_delivery_bridge.py | tee /tmp/ez2-release-bridge.log
-          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=37' /tmp/ez2-release-bridge.log
+          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=40' /tmp/ez2-release-bridge.log
 
       - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
         run: |

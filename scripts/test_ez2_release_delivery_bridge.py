@@ -253,6 +253,20 @@ with tempfile.TemporaryDirectory() as temp:
     assert drifted["transaction_preview"]["input_binding_sha256"] != observed["transaction_preview"]["input_binding_sha256"]
     CASES += 1
     reject(lambda: plan(release, SHA, lock, installed, snapshot_baseline=first))
+    linked_parent = root / "snapshot-link"
+    linked_parent.symlink_to(root, target_is_directory=True)
+    reject(lambda: plan(release, SHA, lock, installed,
+                        snapshot_baseline=linked_parent / "wp-before.json",
+                        snapshot_current=second))
+    hardlink = root / "snapshot-hardlink.json"
+    hardlink.hardlink_to(first)
+    reject(lambda: plan(release, SHA, lock, installed,
+                        snapshot_baseline=hardlink, snapshot_current=second))
+    hardlink.unlink()
+    oversized = root / "snapshot-oversized.json"
+    oversized.write_bytes(b"x" * 65537)
+    reject(lambda: plan(release, SHA, lock, installed,
+                        snapshot_baseline=oversized, snapshot_current=second))
     second.write_text(second.read_text().replace('"applied": false', '"applied": true'))
     reject(lambda: plan(release, SHA, lock, installed,
                         snapshot_baseline=first, snapshot_current=second))
@@ -281,5 +295,5 @@ with tempfile.TemporaryDirectory() as temp:
     installed.write_text(json.dumps({"schema_version": 1, "items": []}))
     (release / "ez2-content-candidate.zip").write_bytes(b"tampered")
     reject(lambda: plan(release, SHA, lock, installed))
-    assert CASES == 37, CASES
+    assert CASES == 40, CASES
 print(f"EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases={CASES}")

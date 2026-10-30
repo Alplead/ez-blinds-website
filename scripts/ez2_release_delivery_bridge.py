@@ -9,6 +9,7 @@ import io
 import json
 import re
 import stat
+from ez2_backup_preflight import checked_read
 import sys
 import zipfile
 from pathlib import Path
@@ -27,12 +28,21 @@ SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 def regular_input(path, max_bytes):
     path = Path(path)
-    if path.is_symlink():
-        raise ValueError("Linked planning input refused")
-    info = path.stat()
+    if path.resolve(strict=True) != path.absolute():
+        raise ValueError("Linked planning input or ancestor")
+    info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= max_bytes:
         raise ValueError("Unsafe planning input")
     return path
+
+
+def snapshot_json(path):
+    # Snapshot comparisons must use the same verified descriptor for checking
+    # and reading, rather than stat() followed by a replaceable read_text().
+    path = regular_input(path, 65536)
+    _, _, raw = checked_read(path, max_bytes=65536, collect=True)
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
+                      parse_constant=reject_nonfinite)
 
 
 
@@ -157,10 +167,8 @@ def plan(release_dir, exact_sha, plugin_lock, installed_snapshot, previous_diges
         raise ValueError("Both managed WordPress snapshots are required")
     comparison = None
     if snapshot_baseline is not None:
-        left = json.loads(regular_input(snapshot_baseline, 65536).read_text(encoding="utf-8"),
-                          object_pairs_hook=unique, parse_constant=reject_nonfinite)
-        right = json.loads(regular_input(snapshot_current, 65536).read_text(encoding="utf-8"),
-                           object_pairs_hook=unique, parse_constant=reject_nonfinite)
+        left = snapshot_json(snapshot_baseline)
+        right = snapshot_json(snapshot_current)
         comparison = compare_wp_snapshots(left, right)
     prior_proof = (verify_prior_release(prior_release_dir, prior_release_sha, exact_sha)
                    if prior_release_dir is not None else None)
@@ -273,6 +281,6 @@ if __name__ == "__main__":
         result = plan(*args, **kw)
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["status"] == "BLOCKED_PREFLIGHT" else 0)
-    except (OSError, ValueError, TypeError, KeyError, zipfile.BadZipFile) as exc:
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, zipfile.BadZipFile) as exc:
         print("EZ2_RELEASE_DELIVERY_BRIDGE_FAIL: " + str(exc), file=sys.stderr)
         sys.exit(1)

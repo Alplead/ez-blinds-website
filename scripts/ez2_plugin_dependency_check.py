@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from ez2_backup_preflight import checked_read
 
 VERSION = re.compile(r"[1-9][0-9]{0,2}\.[0-9]{1,3}\.[0-9]{1,3}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -28,9 +29,12 @@ def reject_constant(value):
 
 def read(path):
     path = Path(path)
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
-        raise ValueError("Unsafe manifest file")
-    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique,
+    # Bind the plugin lockfile to a verified regular-file descriptor.
+    # Linked ancestors, hardlinks and changed bytes are not trusted.
+    if path.resolve(strict=True) != path.absolute():
+        raise ValueError("Linked plugin manifest path")
+    _, _, raw = checked_read(path, max_bytes=32768, collect=True)
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
                       parse_constant=reject_constant)
 
 
@@ -83,6 +87,6 @@ if __name__ == "__main__":
         result = check(read(sys.argv[1]))
         print(json.dumps(result, sort_keys=True))
         sys.exit(2 if result["missing_checksums"] else 0)
-    except (OSError, ValueError, TypeError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError) as exc:
         print("EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_FAIL: " + str(exc), file=sys.stderr)
         sys.exit(1)
