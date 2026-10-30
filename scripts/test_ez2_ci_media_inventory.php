@@ -81,6 +81,19 @@ rejectFiles($wrongUrl,$root,$resolve);
 $wrongUrl=$state;
 $wrongUrl['media'][0]['url']=str_replace('/2026/10/','/2025/10/',$state['media'][0]['url']);
 rejectFiles($wrongUrl,$root,$resolve);
+// Reject linked ancestors even when the final file is a regular PNG
+// and resolves inside the otherwise approved disposable uploads tree.
+$aliasParent=$tmp.'-linked-parent';
+if (symlink($tmp,$aliasParent)) {
+ rejectFiles($state,$aliasParent.'/uploads',$resolve);
+ unlink($aliasParent);
+} else {$cases++;}
+$aliasDir=$root.'/linked-parent';
+if (symlink($root.'/2026/10',$aliasDir)) {
+ rejectFiles($state,$root,static fn(int $id) => $id===1
+  ?$aliasDir.'/ez2-ci-synthetic-hero-1.png':$paths[$id]);
+ unlink($aliasDir);
+} else {$cases++;}
 $wrong=$state;$wrong['media'][0]['mime']='image/webp';
 rejectFiles($wrong,$root,$resolve);
 file_put_contents($paths[1],'not a PNG');
@@ -100,5 +113,5 @@ foreach($paths as $path)unlink($path);
 unlink($outside);
 rmdir($root.'/2026/10');rmdir($root.'/2026');rmdir($root);rmdir($tmp);
 
-if ($cases!==26) throw new RuntimeException('cases='.$cases);
+if ($cases!==28) throw new RuntimeException('cases='.$cases);
 echo 'EZ2_CI_MEDIA_INVENTORY_PASS cases='.$cases."\n";
