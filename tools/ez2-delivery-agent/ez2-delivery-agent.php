@@ -27,6 +27,7 @@ final class EZ2_Isolated_Delivery_Agent {
         if (!is_string($host) || !preg_match(self::HOST_PATTERN, $host)) {
             $problems[] = 'ISOLATED_HOST_REQUIRED';
         }
+        $schemes = [];
         foreach (['home', 'siteurl'] as $field) {
             $value = $facts[$field] ?? null;
             if (!is_string($value) || preg_match('/[\x00-\x20\\\\]/', $value)) {
@@ -40,7 +41,15 @@ final class EZ2_Isolated_Delivery_Agent {
                 || isset($parts['query']) || isset($parts['fragment'])
                 || !in_array($parts['path'] ?? '', ['', '/'], true)) {
                 $problems[] = 'UNSAFE_' . strtoupper($field);
+            } else {
+                $schemes[$field] = $parts['scheme'];
             }
+        }
+        // The isolated update agent must never accept an ambiguous mixed-origin
+        // WordPress installation: admin and public URLs must use one scheme.
+        if (isset($schemes['home'], $schemes['siteurl'])
+            && $schemes['home'] !== $schemes['siteurl']) {
+            $problems[] = 'MIXED_SITE_SCHEMES';
         }
         if (($facts['identity'] ?? null) !== self::IDENTITY) {
             $problems[] = 'ISOLATED_SITE_IDENTITY_MISSING';
