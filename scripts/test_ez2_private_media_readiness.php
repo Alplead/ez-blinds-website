@@ -76,6 +76,16 @@ try {
               'ez2-review.local.evil.invalid'] as $badHost)
         $check($run(null, null, $badHost)['issues'] === ['ISOLATED_SITE_REQUIRED'], 'unsafe host');
     $check($run(null, null, null, $tmp)['issues'] === ['UNSAFE_UPLOAD_ROOT'], 'wrong upload root');
+    // The leaf "uploads" is a normal directory, but a linked parent
+    // redirects the entire path. This used to pass realpath containment.
+    $aliasParent = $tmp . '/alias-parent';
+    if (symlink($tmp, $aliasParent)) {
+        $aliasedRoot = $aliasParent . '/uploads';
+        $check(!is_link($aliasedRoot) && realpath($aliasedRoot) === realpath($root)
+            && $run(null, null, null, $aliasedRoot)['issues'] === ['UNSAFE_UPLOAD_ROOT'],
+            'reject symlinked parent of private upload root');
+        unlink($aliasParent);
+    }
     $check($run(null, [])['issues'] === ['PRIVATE_MEDIA_MAP_UNAVAILABLE_OR_INVALID'], 'no private map');
     $check($run(null, null, null, null, static fn($id) => null)['issues']
         === ['ATTACHMENT_MISSING_OR_MISMATCHED'], 'missing attachment');

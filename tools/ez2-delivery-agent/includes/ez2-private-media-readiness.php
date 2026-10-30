@@ -78,6 +78,22 @@ final class EZ2_Private_Media_Readiness {
         return true;
     }
 
+    /**
+     * Reject aliases anywhere above the upload root, not just a linked
+     * uploads directory. realpath() containment alone would accept
+     * /linked-parent/uploads even when the leaf is a real directory.
+     */
+    private static function hasLinkedPathComponent(string $path): bool {
+        $cursor = rtrim($path, DIRECTORY_SEPARATOR);
+        for ($depth = 0; $depth < 64; ++$depth) {
+            if (is_link($cursor)) return true;
+            $parent = dirname($cursor);
+            if ($parent === $cursor) return false;
+            $cursor = $parent;
+        }
+        return true;
+    }
+
     /** Callbacks supply local WordPress metadata; never fetch the public URL. */
     public static function evaluate($site, $mapping, $host, $uploadRoot, callable $attachment): array {
         if (!self::isolatedSite($site)
@@ -90,7 +106,7 @@ final class EZ2_Private_Media_Readiness {
             || !is_array($mapping['slots'])
             || count($mapping['slots']) < 1 || count($mapping['slots']) > 100)
             return self::blocked('PRIVATE_MEDIA_MAP_UNAVAILABLE_OR_INVALID');
-        if (!is_string($uploadRoot) || is_link($uploadRoot))
+        if (!is_string($uploadRoot) || self::hasLinkedPathComponent($uploadRoot))
             return self::blocked('UNSAFE_UPLOAD_ROOT');
         $root = realpath($uploadRoot);
         if ($root === false || !is_dir($root) || basename($root) !== 'uploads')
