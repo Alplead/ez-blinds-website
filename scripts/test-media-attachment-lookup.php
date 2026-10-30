@@ -135,6 +135,10 @@ foreach ( $wpdb->rows as $row ) {
     if ( in_array( $row['id'], array( 200, 203 ), true ) ) continue;
     ezb_fixture_file( $GLOBALS['ezb_test_uploads'] . '/' . $row['file'] );
 }
+if ( ! preg_match( '/function ezb_attachment_is_local_media\([^)]*\)\s*\{[\s\S]*?\n\}/', $source, $guard_match ) ) {
+    throw new RuntimeException( 'Cannot locate production attachment path guard.' );
+}
+eval( $guard_match[0] );
 eval( $match[0] );
 
 ezb_expect_id( 'test-case.jpg', 50 ); // Prefer approved derivative; ignore forged newer rows.
