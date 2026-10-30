@@ -115,6 +115,12 @@ def run(root, expected_sha):
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Unsafe contract directory")
+    # A regular-looking contract folder reached through a linked parent can
+    # redirect all verified JSON inputs outside the selected delivery root.
+    # Match the fail-closed ancestor policy used for private backup sets.
+    resolved_root = root.resolve(strict=True)
+    if resolved_root != root.absolute():
+        raise ValueError("Linked ancestor in delivery contract directory")
     root_identity = _identity(root.lstat())
     pinned = {}
     contract = load(root, "delivery.json", 32768, pinned)
@@ -145,6 +151,8 @@ def run(root, expected_sha):
     # Re-check the complete inventory after validation, including same-byte
     # replacements and additions that occur while the plan is computed.
     if (root.is_symlink() or not root.is_dir()
+            or root.resolve(strict=True) != resolved_root
+            or root.resolve(strict=True) != root.absolute()
             or _identity(root.lstat()) != root_identity
             or {entry.name for entry in root.iterdir()} != declared
             or any(_identity(regular_file(root / name)) != identity

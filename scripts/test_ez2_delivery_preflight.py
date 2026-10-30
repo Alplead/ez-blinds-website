@@ -209,5 +209,33 @@ with tempfile.TemporaryDirectory() as tmp:
             raise AssertionError("Post-plan inventory mutation accepted")
     (root/"undeclared-private.json").unlink()
 
-assert cases == 42, cases
+# A normal contract leaf reached through a symlinked ancestor must not be
+# accepted, even if every JSON file and byte is otherwise valid.
+with tempfile.TemporaryDirectory() as tmp:
+    real_parent = Path(tmp) / "real-parent"
+    real_parent.mkdir()
+    contract_root = real_parent / "delivery"
+    contract_root.mkdir()
+    c, i, p, e = fixture()
+    for name, doc in {"delivery.json": c, "installed.json": i,
+                      "plugins.json": p, **e}.items():
+        (contract_root / name).write_text(json.dumps(doc), encoding="utf-8")
+    alias_parent = Path(tmp) / "linked-parent"
+    alias_parent.symlink_to(real_parent, target_is_directory=True)
+    try:
+        run(alias_parent / "delivery", SHA)
+    except (OSError, ValueError):
+        cases += 1
+    else:
+        raise AssertionError("Linked contract ancestor was accepted")
+    alias_root = Path(tmp) / "linked-delivery"
+    alias_root.symlink_to(contract_root, target_is_directory=True)
+    try:
+        run(alias_root, SHA)
+    except (OSError, ValueError):
+        cases += 1
+    else:
+        raise AssertionError("Linked contract root was accepted")
+
+assert cases == 44, cases
 print(f"EZ2_DELIVERY_PREFLIGHT_PASS cases={cases}")
