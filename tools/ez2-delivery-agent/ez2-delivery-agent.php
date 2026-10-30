@@ -13,6 +13,7 @@ require_once __DIR__ . '/includes/ez2-plugin-runtime-readiness.php';
 require_once __DIR__ . '/includes/ez2-managed-inventory-diff.php';
 require_once __DIR__ . '/includes/ez2-installed-baseline-receipt.php';
 require_once __DIR__ . '/includes/ez2-transaction-readiness.php';
+require_once __DIR__ . '/includes/ez2-owner-readiness-receipt.php';
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -194,6 +195,14 @@ final class EZ2_Isolated_Delivery_Agent {
         echo '<p>No installer, private backup, restore rehearsal, media reconciliation, or trusted installed-release attestation is available. No update action is enabled.</p>';
         foreach ($transaction['issues'] as $issue)
             echo '<p>' . esc_html($issue) . '</p>';
+        $ownerReceipt = EZ2_Owner_Readiness_Receipt::build(
+            $report, $remote, $backup, $inventory, $baseline, $media, $plugin, $transaction);
+        echo '<h2>Owner review receipt (sanitised, read-only)</h2>';
+        echo '<p>Copy this evidence only after checking the isolated EZ2 site. It contains '
+            . 'no private media, page text or site paths, and is not proof of a LocalWP '
+            . 'installation, visual approval, or permission to publish.</p>';
+        echo '<textarea readonly rows="23" cols="95" aria-label="EZ2 read-only readiness receipt">'
+            . esc_textarea(wp_json_encode($ownerReceipt, JSON_PRETTY_PRINT)) . '</textarea>';
         echo '<p>Release verification, backup, media reconciliation, and rollback must pass before an apply control is implemented.</p>';
         echo '</div>';
     }

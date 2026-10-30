@@ -323,6 +323,13 @@ jobs:
           php scripts/test_ez2_ci_disposable_content_upgrade.php | tee /tmp/ez2-ci-content-upgrade.log
           grep -Fq 'EZ2_CI_CONTENT_UPGRADE_GUARD_PASS cases=22' /tmp/ez2-ci-content-upgrade.log
 
+      - name: Guard redacted Owner readiness receipt for isolated LocalWP review
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-owner-readiness-receipt.php
+          php -l scripts/test_ez2_owner_readiness_receipt.php
+          php scripts/test_ez2_owner_readiness_receipt.php | tee /tmp/ez2-owner-readiness-receipt.log
+          grep -Fq 'EZ2_OWNER_READINESS_RECEIPT_PASS cases=15 read_only=true private_bytes_exported=false can_apply=false' /tmp/ez2-owner-readiness-receipt.log
+
       - name: Check isolated EZ2 WordPress delivery runtime safety (no install)
         run: |
           php -l scripts/ez2_wp_delivery_runtime_gate.php
