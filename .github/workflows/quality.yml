@@ -69,7 +69,7 @@ jobs:
           php -l tools/ez2-delivery-agent/includes/ez2-private-media-readiness.php
           php -l scripts/test_ez2_private_media_readiness.php
           php scripts/test_ez2_private_media_readiness.php | tee /tmp/ez2-private-media-readiness.log
-          grep -Fq 'EZ2_PRIVATE_MEDIA_READINESS_PASS cases=73 read_only=true localwp_touched=false can_apply=false' /tmp/ez2-private-media-readiness.log
+          grep -Fq 'EZ2_PRIVATE_MEDIA_READINESS_PASS cases=75 read_only=true localwp_touched=false can_apply=false' /tmp/ez2-private-media-readiness.log
 
       - name: Check Visual QA JavaScript syntax
         run: node --check scripts/visual-qa.mjs

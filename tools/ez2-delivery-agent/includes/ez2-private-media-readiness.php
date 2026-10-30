@@ -160,25 +160,46 @@ final class EZ2_Private_Media_Readiness {
             $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($rootPrefix)));
             if (parse_url($url, PHP_URL_PATH) !== '/wp-content/uploads/' . $relative)
                 return self::blocked('MEDIA_URL_FILE_MISMATCH', $count, $verified);
-            $image = @getimagesize($real);
+            // Bind image decoding and hashing to ONE open file descriptor.
+            // Separate getimagesize(path) and hash_file(path) calls can read
+            // different files if the path is replaced between those calls.
+            $handle = @fopen($actual['file'], 'rb');
+            if ($handle === false)
+                return self::blocked('PRIVATE_MEDIA_FILE_CHANGED_DURING_READ', $count, $verified);
+            try {
+                $opened = @fstat($handle);
+                if ($opened === false || $opened['dev'] !== $stat['dev']
+                    || $opened['ino'] !== $stat['ino'] || $opened['size'] !== $stat['size']
+                    || ($opened['mode'] & 0170000) !== 0100000 || $opened['nlink'] !== 1)
+                    return self::blocked('PRIVATE_MEDIA_FILE_CHANGED_DURING_READ', $count, $verified);
+                // The size was already capped at 20 MiB. Read one extra byte
+                // to detect concurrent growth; do not load unbounded media.
+                $bytes = @stream_get_contents($handle, $stat['size'] + 1);
+                $readStat = @fstat($handle);
+                if (!is_string($bytes) || strlen($bytes) !== $stat['size']
+                    || $readStat === false || $readStat['dev'] !== $stat['dev']
+                    || $readStat['ino'] !== $stat['ino'] || $readStat['size'] !== $stat['size']
+                    || $readStat['mtime'] !== $stat['mtime']
+                    || $readStat['ctime'] !== $stat['ctime'])
+                    return self::blocked('PRIVATE_MEDIA_FILE_CHANGED_DURING_READ', $count, $verified);
+            } finally {
+                fclose($handle);
+            }
+            // Both the image parser and the digest now inspect exactly the
+            // same bounded private bytes; none are emitted to the report.
+            $image = @getimagesizefromstring($bytes);
             if ($image === false || ($image['mime'] ?? null) !== $item['mime']
                 || ($image[0] ?? 0) < 1 || ($image[1] ?? 0) < 1)
                 return self::blocked('INVALID_PRIVATE_MEDIA_IMAGE', $count, $verified);
-            // Reject oversized declared dimensions before accepting even a pinned
-            // image: extreme pixel counts can exhaust browser or editor memory.
             if ($image[0] > 12000 || $image[1] > 12000
                 || $image[0] * $image[1] > 50000000)
                 return self::blocked('PRIVATE_MEDIA_DIMENSIONS_UNSAFE', $count, $verified);
-            // Metadata and image headers alone cannot detect a replaced image.
-            // The expected digest is kept only in the isolated site's private map.
-            $digest = @hash_file('sha256', $real);
-            if (!is_string($digest) || !hash_equals($item['sha256'], $digest))
+            if (!hash_equals($item['sha256'], hash('sha256', $bytes)))
                 return self::blocked('PRIVATE_MEDIA_BYTES_MISMATCH', $count, $verified);
-            // Re-check the same regular file after hashing. A concurrent
-            // replacement is not an acceptable integrity observation.
             clearstatcache(true, $actual['file']);
             $after = @lstat($actual['file']);
-            if ($after === false || realpath($actual['file']) !== $real
+            if ($after === false || is_link($actual['file'])
+                || realpath($actual['file']) !== $real
                 || $after['dev'] !== $stat['dev'] || $after['ino'] !== $stat['ino']
                 || $after['size'] !== $stat['size'] || $after['mtime'] !== $stat['mtime']
                 || $after['ctime'] !== $stat['ctime'] || $after['nlink'] !== 1)

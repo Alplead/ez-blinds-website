@@ -173,6 +173,18 @@ try {
     file_put_contents($file, $pixel);
     file_put_contents($file, 'not an image but more than thirty-two bytes of synthetic data');
     $check($run()['issues'] === ['INVALID_PRIVATE_MEDIA_IMAGE'], 'corrupt bytes');
+    // Even when a corrupt image has a matching pinned digest, decoding must
+    // fail closed. A rejected audit must not reveal its private bytes.
+    $corrupt = 'not an image but more than thirty-two bytes of synthetic data';
+    file_put_contents($file, $corrupt);
+    $corruptMap = $map;
+    $corruptMap['slots']['home-hero-one']['sha256'] = hash('sha256', $corrupt);
+    $corruptResult = $run(null, $corruptMap);
+    $check($corruptResult['issues'] === ['INVALID_PRIVATE_MEDIA_IMAGE'],
+        'matching digest does not excuse invalid image bytes');
+    $check(!$corruptResult['byte_integrity_verified'] && !$corruptResult['can_apply']
+        && !str_contains(json_encode($corruptResult), $corrupt),
+        'corrupt private bytes never appear in readiness evidence');
     file_put_contents($file, $pixel);
     file_put_contents($file, $pixel . 'synthetic-trailing-bytes');
     $check($run()['issues'] === ['PRIVATE_MEDIA_BYTES_MISMATCH'],
