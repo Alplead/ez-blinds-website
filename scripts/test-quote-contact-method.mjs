@@ -132,4 +132,15 @@ emailFallback.enterPhone('call me');
 emailFallback.enterEmail('visitor@example.com');
 assert.equal(emailFallback.send(), false, 'a valid email remains a contact method even without a usable phone');
 
-console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=18');
+const mixedText = simulate();
+mixedText.enterPhone('call 0400 123 456');
+assert.equal(mixedText.send(), true, 'digits mixed with free text are not a phone-only callback');
+assert.equal(mixedText.phone.attributes['aria-invalid'], 'true');
+const mixedEmoji = simulate();
+mixedEmoji.enterPhone('0400 123 456 😀');
+assert.equal(mixedEmoji.send(), true, 'emoji mixed with digits cannot bypass the phone-only guard');
+const separators = simulate();
+separators.enterPhone('+61 (0) 400/123-456');
+assert.equal(separators.send(), false, 'common international phone separators remain accepted');
+
+console.log('EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=21');

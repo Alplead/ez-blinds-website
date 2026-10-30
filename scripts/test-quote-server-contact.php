@@ -36,6 +36,10 @@ $cases = array(
     array( 'twenty-digit phone', 'Alice', str_repeat( '1', 20 ), '', '', true ),
     array( 'twenty-one-digit phone', 'Alice', str_repeat( '1', 21 ), '', '', false ),
     array( 'email fallback with nonnumeric phone', 'Alice', 'call me', 'alice@example.com', 'alice@example.com', true ),
+    array( 'letters mixed with digits', 'Alice', 'call 0400 123 456', '', '', false ),
+    array( 'emoji mixed with digits', 'Alice', '0400 123 456 😀', '', '', false ),
+    array( 'newline in phone', 'Alice', "0400\n123456", '', '', false ),
+    array( 'international with separators', 'Alice', '+61 (0) 400/123-456', '', '', true ),
 );
 foreach ( $cases as $case ) {
     list( $label, $name, $phone, $input, $cleaned, $expected ) = $case;

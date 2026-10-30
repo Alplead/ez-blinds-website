@@ -289,6 +289,11 @@ function ezb_quote_contact_fields_valid( $name, $phone, $email_input, $email ) {
 	// Count digits rather than enforcing an Australian-only prefix: local,
 	// interstate and international numbers can all be entered naturally.
 	if ( ! $has_email ) {
+		// Digits alone are not sufficient: reject free text or emoji mixed
+		// into a callback number. Keep familiar AU/international separators.
+		if ( ! preg_match( '/\A[0-9+().\/\- ]+\z/', $phone ) ) {
+			return false;
+		}
 		$digits = preg_match_all( '/[0-9]/', $phone );
 		return false !== $digits && $digits >= 6 && $digits <= 20;
 	}

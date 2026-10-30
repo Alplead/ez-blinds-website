@@ -41,7 +41,9 @@
 			// plausible callback number. Email remains a valid alternative.
 			if (!email.value.trim()) {
 				var digits = (phone.value.match(/[0-9]/g) || []).length;
-				if (digits < 6 || digits > 20) {
+				// Mirror the server: a digit count must not accept free text
+				// or emoji pasted alongside an otherwise plausible number.
+				if (digits < 6 || digits > 20 || !/^[0-9+().\/\- ]+$/.test(phone.value.trim())) {
 					phone.setCustomValidity('Please enter a phone number with 6 to 20 digits, or provide an email address.');
 					phone.setAttribute('aria-invalid', 'true');
 					event.preventDefault();
