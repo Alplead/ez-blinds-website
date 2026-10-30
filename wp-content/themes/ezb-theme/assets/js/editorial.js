@@ -20,8 +20,10 @@
     // Without this, clicking Play with the pointer or focus still on the
     // control misleadingly labels it Pause while no timer can start.
     var explicitPlay = false;
-    var hovering = false;
-    var focusing = false;
+    // Deferred scripts may run after a visitor has already hovered or
+    // focused the hero. Do not start autoplay underneath that interaction.
+    var hovering = typeof hero.matches === 'function' && hero.matches(':hover');
+    var focusing = !!document.activeElement && hero.contains(document.activeElement);
     var inView = true;
     var pageSuspended = false;
     // A visible tab can belong to an unfocused browser window. Suspend the

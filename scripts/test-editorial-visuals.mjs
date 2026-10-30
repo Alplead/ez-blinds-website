@@ -50,7 +50,7 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true, initialSlideCount = 4) {
+function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true, initialSlideCount = 4, initialHover = false, initialFocusWithin = false) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
@@ -92,7 +92,8 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     classList: { toggle() {}, add(name) { heroFlags.add(name); } },
     handlers: {},
     addEventListener(event, callback) { this.handlers[event] = callback; },
-    contains() { return false; }
+    contains(target) { return initialFocusWithin && target === toggle; },
+    matches(selector) { assert.equal(selector, ':hover'); return initialHover; }
   };
   let timerStarts = 0;
   let timerStops = 0;
@@ -114,7 +115,8 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     }
   };
   const document = {
-    hidden: false, hasFocus() { return initialFocused; }, querySelector() { return hero; },
+    hidden: false, activeElement: initialFocusWithin ? toggle : null,
+    hasFocus() { return initialFocused; }, querySelector() { return hero; },
     querySelectorAll() { return []; },
     addEventListener(event, callback) {
       if (event === 'visibilitychange') this.visibility = callback;
@@ -133,6 +135,15 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
       assert.equal(slides[0].active, true, 'Single photo remains visible');
       assert.equal(progress.textContent, '01 / 01', 'Single photo counter remains accurate');
     }
+    return;
+  }
+  if (initialHover || initialFocusWithin) {
+    assert.equal(timerStarts, 0, 'Existing hover or keyboard focus must block initial autoplay');
+    assert.equal(toggle.textContent, 'Play slideshow', 'Visitor interaction initially offers Play');
+    if (initialHover) hero.handlers.mouseleave();
+    if (initialFocusWithin) hero.handlers.focusout({ relatedTarget: null });
+    assert.equal(timerStarts, initialReduced ? 0 : 1,
+      'Autoplay may resume only after the initial interaction ends');
     return;
   }
   if (!initialFocused) {
@@ -328,6 +339,9 @@ exerciseMotionPreference(false, false, true);
 exerciseMotionPreference(false, false, false, false);
 exerciseMotionPreference(false, false, false, true, 0);
 exerciseMotionPreference(false, false, false, true, 1);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=7');
+exerciseMotionPreference(false, false, false, true, 4, true, false);
+exerciseMotionPreference(false, false, false, true, 4, false, true);
+exerciseMotionPreference(false, false, false, true, 4, true, true);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=10');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
