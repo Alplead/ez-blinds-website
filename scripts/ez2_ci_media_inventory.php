@@ -32,7 +32,8 @@ final class Ez2CiMediaInventory {
   */
  public static function verifyFiles(array $snapshot, string $uploadRoot, callable $resolve): array {
   $root=realpath($uploadRoot);
-  if ($root===false || is_link($uploadRoot) || !is_dir($root) || basename($root)!=='uploads') {
+  if ($root===false || $root!==$uploadRoot || is_link($uploadRoot)
+      || !is_dir($root) || basename($root)!=='uploads') {
    throw new RuntimeException('UNSAFE_UPLOAD_ROOT');
   }
   $media=$snapshot['media']??null;
@@ -53,7 +54,7 @@ final class Ez2CiMediaInventory {
    }
    $real=realpath($file);
    $stat=lstat($file);
-   if ($real===false || $stat===false || !str_starts_with($real,$root.DIRECTORY_SEPARATOR)
+   if ($real===false || $real!==$file || $stat===false || !str_starts_with($real,$root.DIRECTORY_SEPARATOR)
        || ($stat['mode'] & 0170000)!==0100000 || $stat['nlink']!==1
        || basename($real)!=='ez2-ci-synthetic-hero-'.($index+1).'.png'
        || isset($seen[$real]) || $stat['size']<32 || $stat['size']>20971520) {
