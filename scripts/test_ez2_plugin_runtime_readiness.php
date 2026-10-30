@@ -26,9 +26,11 @@ $check($run(null,$b,$j)['status']==='LOCAL_PLUGIN_MATCH_UNATTESTED','pinned vers
 // A forged success status with any other failed site-identity field must
 // never cause even a read of local plugin metadata or site options.
 $GLOBALS['ez2_plugin_private_reads'] = 0;
+$GLOBALS['ez2_plugin_test_lock'] = $l;
 function get_option($name, $default = null) {
     ++$GLOBALS['ez2_plugin_private_reads'];
-    return $default;
+    return $name === 'ez2_candidate_dependency_lock'
+        ? $GLOBALS['ez2_plugin_test_lock'] : $default;
 }
 function get_plugins() {
     ++$GLOBALS['ez2_plugin_private_reads'];
