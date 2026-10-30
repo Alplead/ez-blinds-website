@@ -249,7 +249,7 @@ jobs:
         run: |
           php -l scripts/test-media-attachment-lookup.php
           php scripts/test-media-attachment-lookup.php | tee /tmp/media-attachment-lookup.log
-          grep -q 'EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=13' /tmp/media-attachment-lookup.log
+          grep -q 'EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=19' /tmp/media-attachment-lookup.log
 
       - name: Guard the 25 approved media registry filenames
         run: |

@@ -1902,6 +1902,44 @@ function ezb_featured_image_for_page_slug( $slug ) {
 	return $thumbnail_id ? (int) $thumbnail_id : 0;
 }
 
+/**
+ * A matching attachment record is not proof that its media is still local.
+ * Reject missing, linked, unreadable or out-of-uploads files before using a
+ * curated image or development-only video. Never read or publish media bytes.
+ */
+function ezb_attachment_is_local_media( $id ) {
+	$uploads = wp_get_upload_dir();
+	$file = get_attached_file( $id );
+	if ( ! is_array( $uploads ) || ! empty( $uploads['error'] ) ||
+		! isset( $uploads['basedir'] ) || ! is_string( $uploads['basedir'] ) ||
+		'' === $uploads['basedir'] || ! is_string( $file ) || '' === $file ) {
+		return false;
+	}
+	// realpath() alone follows symbolic links. Check the declared paths,
+	// including ancestors above uploads, before resolving either path.
+	foreach ( array( $uploads['basedir'], $file ) as $path ) {
+		$node = $path;
+		for ( $depth = 0; $depth < 64; $depth++ ) {
+			if ( is_link( $node ) ) {
+				return false;
+			}
+			$parent = dirname( $node );
+			if ( $parent === $node ) {
+				break;
+			}
+			$node = $parent;
+		}
+		if ( 64 === $depth ) {
+			return false;
+		}
+	}
+	$base = realpath( $uploads['basedir'] );
+	$actual = realpath( $file );
+	return false !== $base && false !== $actual &&
+		is_file( $actual ) && is_readable( $actual ) &&
+		0 === strpos( $actual, rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR );
+}
+
 function ezb_find_attachment_by_basename( $basename ) {
 	global $wpdb;
 	static $found_in_request = array();
@@ -1970,7 +2008,7 @@ function ezb_find_attachment_by_basename( $basename ) {
 			)
 		);
 
-		if ( $id ) {
+		if ( $id && ezb_attachment_is_local_media( (int) $id ) ) {
 			// Product heroes and gallery cards can request the same asset.
 			// Avoid repeating the expensive suffix-LIKE lookup on this request.
 			$found_in_request[ $basename ] = (int) $id;

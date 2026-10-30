@@ -65,6 +65,46 @@ function ezb_expect_id( $filename, $expected ) {
     }
 }
 
+// All paths below are synthetic temporary fixtures, never customer media.
+$fixture_root = sys_get_temp_dir() . '/ezb-media-lookup-' . bin2hex( random_bytes( 8 ) );
+$GLOBALS['ezb_test_uploads'] = $fixture_root . '/uploads';
+$GLOBALS['ezb_test_overrides'] = array();
+if ( ! mkdir( $GLOBALS['ezb_test_uploads'], 0700, true ) ) {
+    throw new RuntimeException( 'Cannot create isolated media fixture.' );
+}
+function wp_get_upload_dir() {
+    return array( 'basedir' => $GLOBALS['ezb_test_uploads'] );
+}
+function get_attached_file( $id ) {
+    if ( isset( $GLOBALS['ezb_test_overrides'][ $id ] ) ) {
+        return $GLOBALS['ezb_test_overrides'][ $id ];
+    }
+    foreach ( $GLOBALS['wpdb']->rows as $row ) {
+        if ( $row['id'] === $id ) {
+            return $GLOBALS['ezb_test_uploads'] . '/' . $row['file'];
+        }
+    }
+    return false;
+}
+function ezb_fixture_file( $path ) {
+    if ( ! is_dir( dirname( $path ) ) ) {
+        mkdir( dirname( $path ), 0700, true );
+    }
+    file_put_contents( $path, 'synthetic fixture' );
+}
+register_shutdown_function( function () use ( $fixture_root ) {
+    if ( ! is_dir( $fixture_root ) ) return;
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator( $fixture_root, FilesystemIterator::SKIP_DOTS ),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ( $files as $entry ) {
+        if ( $entry->isLink() || $entry->isFile() ) unlink( $entry->getPathname() );
+        else rmdir( $entry->getPathname() );
+    }
+    rmdir( $fixture_root );
+} );
+
 $GLOBALS['wpdb'] = new EZB_Fake_WPDB();
 $wpdb->rows = array(
     ezb_test_row( 50, '2026/10/test-case.webp', 'image/webp' ),
@@ -84,7 +124,17 @@ $wpdb->rows = array(
     ezb_test_row( 170, 'mixed.webp', 'image/webp' ),
     ezb_test_row( 180, '2026/10/mixed.webp', 'image/webp' ),
     ezb_test_row( 190, 'near-root-only.webp', 'image/webp' ),
+    ezb_test_row( 200, '2026/10/missing-on-disk.webp', 'image/webp' ),
+    ezb_test_row( 201, '2026/10/outside-root.webp', 'image/webp' ),
+    ezb_test_row( 202, '2026/10/linked-leaf.webp', 'image/webp' ),
+    ezb_test_row( 203, 'linked-dir/linked-parent.webp', 'image/webp' ),
+    ezb_test_row( 204, '2026/10/linked-base.webp', 'image/webp' ),
+    ezb_test_row( 205, '2026/10/missing-base.webp', 'image/webp' ),
 );
+foreach ( $wpdb->rows as $row ) {
+    if ( in_array( $row['id'], array( 200, 203 ), true ) ) continue;
+    ezb_fixture_file( $GLOBALS['ezb_test_uploads'] . '/' . $row['file'] );
+}
 eval( $match[0] );
 
 ezb_expect_id( 'test-case.jpg', 50 ); // Prefer approved derivative; ignore forged newer rows.
@@ -92,6 +142,7 @@ ezb_expect_id( 'only-jpg.jpg', 70 ); // Graceful legacy JPEG fallback.
 ezb_expect_id( 'clip.mp4', 80 ); // Never silently replace video with a still image.
 ezb_expect_id( 'ghost.jpg', 0 ); // Missing media must fail closed.
 $wpdb->rows[] = ezb_test_row( 150, '2026/10/ghost.webp', 'image/webp' );
+ezb_fixture_file( $GLOBALS['ezb_test_uploads'] . '/2026/10/ghost.webp' );
 ezb_expect_id( 'ghost.jpg', 150 ); // A miss must not be cached across a later import.
 ezb_expect_id( 'payload.svg', 0 ); // Unsupported requested extension is rejected.
 ezb_expect_id( 'space name.jpg', 120 ); // WordPress-sanitised filenames still resolve.
@@ -102,4 +153,38 @@ ezb_expect_id( 'root-only.jpg', 160 ); // WebP in upload root, without YYYY/MM p
 ezb_expect_id( 'root-jpg.jpg', 161 ); // Legacy JPEG in upload root.
 ezb_expect_id( 'mixed.jpg', 180 ); // Newest valid match across root and dated folders.
 ezb_expect_id( 'near-root-only.jpg', 190 ); // Exact near-name must resolve to itself.
-echo "EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=13\n";
+// A database row cannot make a missing or external file safe to render.
+ezb_expect_id( 'missing-on-disk.webp', 0 );
+$outside = $fixture_root . '/outside-root.webp';
+ezb_fixture_file( $outside );
+$GLOBALS['ezb_test_overrides'][201] = $outside;
+ezb_expect_id( 'outside-root.webp', 0 );
+
+// Linked leaf and linked ancestor must fail even when they point back inside
+// the approved uploads tree.
+$linked_leaf = $GLOBALS['ezb_test_uploads'] . '/2026/10/linked-leaf.webp';
+unlink( $linked_leaf );
+if ( ! symlink( $GLOBALS['ezb_test_uploads'] . '/2026/10/test-case.webp', $linked_leaf ) ) {
+    throw new RuntimeException( 'Cannot create symlink test fixture.' );
+}
+ezb_expect_id( 'linked-leaf.webp', 0 );
+$real_dir = $GLOBALS['ezb_test_uploads'] . '/real-dir';
+ezb_fixture_file( $real_dir . '/linked-parent.webp' );
+if ( ! symlink( $real_dir, $GLOBALS['ezb_test_uploads'] . '/linked-dir' ) ) {
+    throw new RuntimeException( 'Cannot create linked-parent fixture.' );
+}
+ezb_expect_id( 'linked-parent.webp', 0 );
+
+// An uploads-root alias must not bypass the guard. Missing roots fail closed.
+$original_uploads = $GLOBALS['ezb_test_uploads'];
+$linked_uploads = $fixture_root . '/linked-uploads';
+if ( ! symlink( $original_uploads, $linked_uploads ) ) {
+    throw new RuntimeException( 'Cannot create linked-uploads fixture.' );
+}
+$GLOBALS['ezb_test_uploads'] = $linked_uploads;
+ezb_expect_id( 'linked-base.webp', 0 );
+$GLOBALS['ezb_test_uploads'] = $fixture_root . '/missing-uploads';
+ezb_expect_id( 'missing-base.webp', 0 );
+$GLOBALS['ezb_test_uploads'] = $original_uploads;
+
+echo "EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=19\n";
