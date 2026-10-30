@@ -162,6 +162,51 @@ with tempfile.TemporaryDirectory() as temp:
         raise AssertionError('Linked archive ancestor accepted')
     alias.unlink()
 
+    # A malicious local replacement between stat and open must fail closed.
+    # A FIFO must never hang the verifier; a symlink must not be followed;
+    # replacing a regular file with identical bytes still changes identity.
+    real_open = os.open
+    def expect_preopen_swap(swap, label):
+        global cases
+        path.write_bytes(data)
+        triggered = False
+        def open_after_swap(name, flags, *args, **kwargs):
+            nonlocal triggered
+            if not triggered and os.fspath(name) == os.fspath(path):
+                triggered = True
+                swap()
+            return real_open(name, flags, *args, **kwargs)
+        try:
+            with patch('ez2_plugin_archive_verify.os.open', side_effect=open_after_swap):
+                try:
+                    verify(lock(data), archive_dir, repo_root=root / 'not-repo')
+                except (ValueError, OSError):
+                    pass
+                else:
+                    raise AssertionError(label + ' accepted')
+            assert triggered, label + ' did not reach descriptor open'
+            cases += 1
+        finally:
+            if path.is_symlink() or path.exists():
+                path.unlink()
+            path.write_bytes(data)
+
+    def replace_with_fifo():
+        path.unlink()
+        os.mkfifo(path)
+    expect_preopen_swap(replace_with_fifo, 'Pre-open FIFO swap')
+
+    def replace_with_symlink():
+        path.unlink()
+        path.symlink_to(root / 'not-repo' / 'outside.zip')
+    expect_preopen_swap(replace_with_symlink, 'Pre-open symlink swap')
+
+    def replace_with_identical_file():
+        alternate = archive_dir / 'identical-replacement.zip'
+        alternate.write_bytes(data)
+        os.replace(alternate, path)
+    expect_preopen_swap(replace_with_identical_file, 'Pre-open same-byte inode swap')
+
     # Swap after checksum verification, before ZIP parsing. Both operations
     # must be bound to the SAME pinned bytes; the original code missed this.
     original_zip = zipfile.ZipFile
@@ -204,5 +249,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert json.loads(completed.stdout)['plugin_installed'] is False
     cases += 1
 
-assert cases == 45, cases
+assert cases == 48, cases
 print(f'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases={cases}')

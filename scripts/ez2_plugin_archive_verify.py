@@ -48,7 +48,13 @@ def verify(lock, archive_dir, repo_root=None):
         # Hash and inspect one immutable byte snapshot. Previously the ZIP was
         # reopened by path after hashing, so a replacement could pass a digest
         # for different bytes than the ones checked for safe installation.
-        with archive_path.open('rb') as source:
+        # A path can be swapped after lstat but before open. O_NONBLOCK
+        # prevents a replacement FIFO from hanging the verifier; O_NOFOLLOW
+        # refuses a last-moment symlink. The descriptor identity below also
+        # rejects a same-byte replacement regular file.
+        flags = (os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
+                 | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
+        with os.fdopen(os.open(archive_path, flags), 'rb') as source:
             if file_identity(os.fstat(source.fileno())) != file_identity(before):
                 raise ValueError('Plugin ZIP changed before reading')
             raw = source.read(50 * 1024 * 1024 + 1)
