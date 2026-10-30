@@ -6,11 +6,20 @@ final class EZ2_Plugin_Runtime_Readiness {
             'checked_count'=>0,'matching_count'=>0,'mode'=>'read-only',
             'candidate_lock_attested'=>false,'can_apply'=>false,'site_modified'=>false];
     }
+    // A status string alone must never trigger a read of local WordPress
+    // plugin metadata. Share the full isolated-site gate between the pure
+    // evaluator and the live observer, before either touches private state.
+    private static function isolatedSite($site): bool {
+        return is_array($site)
+            && ($site['status']??null)==='READ_ONLY_PREVIEW_READY'
+            && ($site['target_site']??null)==='ez2-isolated-only'
+            && ($site['mode']??null)==='read-only'
+            && ($site['issues']??null)===[]
+            && ($site['can_apply']??null)===false
+            && ($site['site_modified']??null)===false;
+    }
     public static function evaluate($site,$lock,$installed): array {
-        if (!is_array($site) || ($site['status']??null)!=='READ_ONLY_PREVIEW_READY'
-            || ($site['target_site']??null)!=='ez2-isolated-only'
-            || ($site['mode']??null)!=='read-only' || ($site['issues']??null)!==[]
-            || ($site['can_apply']??null)!==false || ($site['site_modified']??null)!==false)
+        if (!self::isolatedSite($site))
             return self::blocked('ISOLATED_SITE_REQUIRED');
         if (!is_array($lock) || array_keys($lock)!==['schema_version','target_site','plugins']
             || ($lock['schema_version']??null)!==1
@@ -39,8 +48,9 @@ final class EZ2_Plugin_Runtime_Readiness {
             'candidate_lock_attested'=>false,'can_apply'=>false,'site_modified'=>false];
     }
     public static function observe(array $site): array {
-        if (($site['status']??null)!=='READ_ONLY_PREVIEW_READY'
-            || !function_exists('get_option') || !function_exists('get_plugins')
+        if (!self::isolatedSite($site))
+            return self::blocked('ISOLATED_SITE_REQUIRED');
+        if (!function_exists('get_option') || !function_exists('get_plugins')
             || !function_exists('is_plugin_active') || !function_exists('is_plugin_active_for_network'))
             return self::blocked('WORDPRESS_PLUGIN_READ_API_UNAVAILABLE');
         $all=get_plugins(); $key='elementor/elementor.php';
