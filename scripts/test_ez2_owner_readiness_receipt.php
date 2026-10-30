@@ -107,5 +107,49 @@ $check($build(null, null, null, null, null, $badMedia)['media_slot_count'] === n
 $blockedPlugin = $plugin; $blockedPlugin['status'] = 'BLOCKED_PLUGIN_RUNTIME';
 $check($build(null, null, null, null, null, null, $blockedPlugin)['plugin_matching_count'] === null,
     'blocked plugin count withheld');
+// A success status alone must never turn partial or contradictory observations
+// into an Owner-facing PASS or a supposedly verified release SHA.
+$badWorkflow = $release; $badWorkflow['workflow_count'] = 4;
+$probe = $build(null, $badWorkflow);
+$check($probe['release_status'] === 'UNAVAILABLE' && $probe['source_sha'] === null
+    && $probe['workflow_count'] === null && $probe['artifact_count'] === null,
+    'missing workflow suppresses release proof');
+$badArtifact = $release; $badArtifact['artifact_count'] = 5;
+$check($build(null, $badArtifact)['release_status'] === 'UNAVAILABLE'
+    && $build(null, $badArtifact)['source_sha'] === null,
+    'missing artifact suppresses release proof');
+$badWorkflow = $release; $badWorkflow['workflow_count'] = '5';
+$check($build(null, $badWorkflow)['release_status'] === 'UNAVAILABLE',
+    'string workflow count is not verified');
+$badArtifact = $release; $badArtifact['artifact_count'] = 999;
+$check($build(null, $badArtifact)['artifact_count'] === null,
+    'inflated artifact count is not verified');
+$zeroInventory = $inventory; $zeroInventory['managed_count'] = 0;
+$check($build(null, null, null, $zeroInventory)['managed_page_count'] === null
+    && $build(null, null, null, $zeroInventory)['managed_page_count'] !== 0,
+    'nonempty inventory status cannot claim zero pages');
+$hugeInventory = $inventory; $hugeInventory['managed_count'] = 101;
+$check($build(null, null, null, $hugeInventory)['managed_page_count'] === null,
+    'inventory count respects managed page limit');
+$badBaseline = $baseline; $badBaseline['status'] = 'AUTHENTICATED_RECEIPT_UNATTESTED';
+$check($build(null, null, null, null, $badBaseline)['baseline_status'] === 'UNAVAILABLE',
+    'contradictory baseline status is demoted');
+$partialMedia = $media; $partialMedia['verified_count'] = 3;
+$probe = $build(null, null, null, null, null, $partialMedia);
+$check($probe['media_status'] === 'UNAVAILABLE'
+    && $probe['media_slot_count'] === null && $probe['media_verified_count'] === null,
+    'partial media cannot be reported fully verified');
+$hugeMedia = $media; $hugeMedia['slot_count'] = 101; $hugeMedia['verified_count'] = 101;
+$check($build(null, null, null, null, null, $hugeMedia)['media_status'] === 'UNAVAILABLE',
+    'media slot count respects local probe limit');
+$badPlugin = $plugin; $badPlugin['checked_count'] = 2;
+$check($build(null, null, null, null, null, null, $badPlugin)['plugin_status'] === 'UNAVAILABLE',
+    'plugin check count must match single pinned dependency');
+$badPlugin = $plugin; $badPlugin['matching_count'] = 0;
+$check($build(null, null, null, null, null, null, $badPlugin)['plugin_matching_count'] === null,
+    'zero plugin matches cannot claim a local match');
+$badPlugin = $plugin; unset($badPlugin['checked_count']);
+$check($build(null, null, null, null, null, null, $badPlugin)['plugin_status'] === 'UNAVAILABLE',
+    'missing plugin check count is not verified');
 $check(count($receipt) === 26, 'strict allowlisted field count');
 echo "EZ2_OWNER_READINESS_RECEIPT_PASS cases={$cases} read_only=true private_bytes_exported=false can_apply=false\n";

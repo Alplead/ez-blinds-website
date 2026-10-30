@@ -33,12 +33,19 @@ final class EZ2_Owner_Readiness_Receipt {
 
     public static function build($site, $release, $backup, $inventory, $baseline,
                                  $media, $plugin, $transaction): array {
+        $releaseStatus = self::status($release, 'release');
+        // A success label with incomplete CI or artifact counts is not a
+        // verified release. Do not export its SHA or reassuring counts.
+        if ($releaseStatus === 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY'
+            && (self::count($release, 'workflow_count') !== 5
+                || self::count($release, 'artifact_count') !== 6)) {
+            $releaseStatus = 'UNAVAILABLE';
+        }
         $sha = is_array($release) ? ($release['source_sha'] ?? null) : null;
         if (!is_string($sha) || preg_match('/^[0-9a-f]{40}$/D', $sha) !== 1
-            || self::status($release, 'release') !== 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') {
+            || $releaseStatus !== 'CI_AND_ARTIFACTS_VERIFIED_READ_ONLY') {
             $sha = null;
         }
-        $releaseStatus = self::status($release, 'release');
         $inventoryStatus = self::status($inventory, 'inventory');
         $baselineStatus = self::status($baseline, 'baseline');
         $mediaStatus = self::status($media, 'media');
@@ -53,8 +60,11 @@ final class EZ2_Owner_Readiness_Receipt {
         $managedCount = in_array($inventoryStatus,
             ['MANAGED_DIGESTS_OBSERVED', 'NO_MANAGED_PAGES'], true)
             ? self::count($inventory, 'managed_count') : null;
-        if ($inventoryStatus === 'NO_MANAGED_PAGES' && $managedCount !== 0) {
+        if (($inventoryStatus === 'NO_MANAGED_PAGES' && $managedCount !== 0)
+            || ($inventoryStatus === 'MANAGED_DIGESTS_OBSERVED'
+                && ($managedCount === null || $managedCount < 1 || $managedCount > 100))) {
             $managedCount = null;
+            $inventoryStatus = 'UNAVAILABLE';
         }
         $localDrift = in_array($baselineStatus,
             ['AUTHENTICATED_RECEIPT_UNATTESTED', 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'], true)
@@ -63,18 +73,27 @@ final class EZ2_Owner_Readiness_Receipt {
             || ($baselineStatus === 'AUTHENTICATED_RECEIPT_LOCAL_DRIFT'
                 && ($localDrift === null || $localDrift === 0))) {
             $localDrift = null;
+            $baselineStatus = 'UNAVAILABLE';
         }
         $mediaSlots = $mediaStatus === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
             ? self::count($media, 'slot_count') : null;
         $mediaVerified = $mediaStatus === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY'
             ? self::count($media, 'verified_count') : null;
-        if ($mediaSlots === null || $mediaSlots === 0 || $mediaVerified === null
-            || $mediaVerified > $mediaSlots) {
+        if ($mediaSlots === null || $mediaSlots < 1 || $mediaSlots > 100
+            || $mediaVerified === null || $mediaVerified !== $mediaSlots) {
             $mediaSlots = null;
             $mediaVerified = null;
+            if ($mediaStatus === 'PRIVATE_MEDIA_REFERENCES_VERIFIED_READ_ONLY') {
+                $mediaStatus = 'UNAVAILABLE';
+            }
         }
         $pluginMatches = $pluginStatus === 'LOCAL_PLUGIN_MATCH_UNATTESTED'
             ? self::count($plugin, 'matching_count') : null;
+        if ($pluginStatus === 'LOCAL_PLUGIN_MATCH_UNATTESTED'
+            && (self::count($plugin, 'checked_count') !== 1 || $pluginMatches !== 1)) {
+            $pluginMatches = null;
+            $pluginStatus = 'UNAVAILABLE';
+        }
 
         return [
             'schema_version' => 1,
