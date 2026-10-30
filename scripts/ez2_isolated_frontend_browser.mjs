@@ -41,7 +41,8 @@ export function reviewEvidence(e) {
       e.contactActionHost !== HOST || !e.contactSubmitLabel || !e.contactPreviewNote ||
       e.contactMethod !== 'post') errors.push('contact form render');
   if (e.contactHorizontalOverflow) errors.push('contact horizontal overflow');
-  if (!e.contactEmptyRejected || !e.contactPhoneAccepted ||
+  if (!e.contactNameRejected || !e.contactNameCorrected ||
+      !e.contactEmptyRejected || !e.contactPhoneAccepted ||
       !e.contactEmailAccepted || !e.contactPostPrevented) {
     errors.push('contact client-side validation (no POST)');
   }
@@ -198,12 +199,15 @@ export async function run(env = process.env) {
         // all three probes entirely inside the disposable browser.
         const contactValidation = await page.evaluate(() => {
           const form = document.querySelector('.ezb-quote-form');
+          const name = form?.querySelector('input[name="name"]');
           const phone = form?.querySelector('input[name="phone"]');
           const email = form?.querySelector('input[name="email"]');
-          if (!form || !phone || !email) return {
+          if (!form || !name || !phone || !email) return {
+            contactNameRejected: false, contactNameCorrected: false,
             contactEmptyRejected: false, contactPhoneAccepted: false,
             contactEmailAccepted: false, contactPostPrevented: false
           };
+          const originalName = name.value;
           const originalPhone = phone.value, originalEmail = email.value;
           let intercepted = 0;
           const preventPost = event => { event.preventDefault(); intercepted++; };
@@ -211,6 +215,19 @@ export async function run(env = process.env) {
             new Event('submit', { bubbles: true, cancelable: true }));
           form.addEventListener('submit', preventPost, true);
           try {
+            // The real name field is required, but HTML required alone accepts
+            // whitespace. Exercise the new trimmed-name guard without POST.
+            name.value = '   ';
+            phone.value = '0000000000';
+            email.value = '';
+            sendSynthetic();
+            const contactNameRejected = !name.checkValidity() &&
+              name.getAttribute('aria-invalid') === 'true' &&
+              document.activeElement === name;
+            name.value = 'Synthetic Visitor';
+            name.dispatchEvent(new Event('input', { bubbles: true }));
+            const contactNameCorrected = name.checkValidity() &&
+              !name.hasAttribute('aria-invalid');
             phone.value = '';
             email.value = '';
             sendSynthetic();
@@ -229,10 +246,14 @@ export async function run(env = process.env) {
             sendSynthetic();
             const contactEmailAccepted = phone.checkValidity() &&
               !phone.hasAttribute('aria-invalid');
-            return { contactEmptyRejected, contactPhoneAccepted,
-              contactEmailAccepted, contactPostPrevented: intercepted === 3 };
+            return { contactNameRejected, contactNameCorrected,
+              contactEmptyRejected, contactPhoneAccepted,
+              contactEmailAccepted, contactPostPrevented: intercepted === 4 };
           } finally {
             form.removeEventListener('submit', preventPost, true);
+            name.value = originalName;
+            name.setCustomValidity('');
+            name.removeAttribute('aria-invalid');
             phone.value = originalPhone;
             email.value = originalEmail;
             phone.setCustomValidity('');

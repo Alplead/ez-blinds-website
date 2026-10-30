@@ -32,6 +32,7 @@ const good = { status: 200, host: HOST, hasMain: true, styleSheets: 2,
   contactActionHost: HOST, contactMethod: 'post', contactSubmitLabel: true,
   contactPreviewNote: true,
   contactHorizontalOverflow: false,
+  contactNameRejected: true, contactNameCorrected: true,
   contactEmptyRejected: true, contactPhoneAccepted: true,
   contactEmailAccepted: true, contactPostPrevented: true,
   draftRestDenied: true,
@@ -58,6 +59,7 @@ for (const change of [
   { contactMethod: 'get' }, { contactSubmitLabel: false },
   { contactPreviewNote: false },
   { contactHorizontalOverflow: true },
+  { contactNameRejected: false }, { contactNameCorrected: false },
   { contactEmptyRejected: false }, { contactPhoneAccepted: false },
   { contactEmailAccepted: false }, { contactPostPrevented: false },
   { draftRestDenied: false }, { draftDirectHidden: false },
@@ -79,7 +81,7 @@ assert.ok(source.includes('rest_route=/wp/v2/pages/')); cases++;
 assert.ok(source.includes('data-elementor-id')); cases++;
 assert.ok(source.includes("form.addEventListener('submit', preventPost, true)"));
 assert.ok(source.includes("form.removeEventListener('submit', preventPost, true)"));
-assert.ok(source.includes("contactPostPrevented: intercepted === 3"));
+assert.ok(source.includes("contactPostPrevented: intercepted === 4"));
 cases++;
-assert.equal(cases, 59);
+assert.equal(cases, 61);
 console.log('EZ2_ISOLATED_BROWSER_GUARD_PASS cases=' + cases);
