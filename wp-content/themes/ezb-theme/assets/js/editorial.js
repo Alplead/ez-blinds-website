@@ -40,7 +40,11 @@
       if (index < current) current -= 1;
       if (current >= slides.length) current = 0;
       if (announcement) announcement.textContent = '';
-      if (!slides.length) hero.classList.add('ezb-cinema--missing-media');
+      if (!slides.length) {
+        hero.classList.add('ezb-cinema--missing-media');
+        // Do not leave a stale slide counter after the last image fails.
+        if (progress) progress.textContent = '';
+      }
       var controls = hero.querySelector('.ezb-cinema__controls');
       if (controls) controls.hidden = slides.length < 2;
       if (!initialising) {
@@ -192,6 +196,12 @@
     } else if (reduced.addListener) {
       reduced.addListener(syncTimer);
     }
+    // Server-rendered controls normally exist only with multiple images,
+    // but an empty/one-photo DOM can also arrive after client-side changes.
+    // Keep the fallback and controls correct before image error listeners run.
+    var initialControls = hero.querySelector('.ezb-cinema__controls');
+    if (initialControls) initialControls.hidden = slides.length < 2;
+    if (!slides.length) hero.classList.add('ezb-cinema--missing-media');
     slides.slice().forEach(function (slide) {
       var image = slide.querySelector('img');
       if (!image) { discardFailedSlide(slide); return; }

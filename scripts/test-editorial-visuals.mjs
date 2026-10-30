@@ -50,7 +50,7 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true) {
+function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true, initialSlideCount = 4) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
@@ -61,7 +61,8 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const previous = control();
   const next = control();
   const status = { textContent: '' };
-  const slides = Array.from({ length: 4 }, (_, position) => {
+  const progress = { textContent: '' };
+  const slides = Array.from({ length: initialSlideCount }, (_, position) => {
     const image = {
       loading: 'lazy', complete: false, naturalWidth: 640, handlers: {},
       addEventListener(event, callback) { this.handlers[event] = callback; }
@@ -82,7 +83,8 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   const heroFlags = new Set();
   const selectors = {
     '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next,
-    '.ezb-cinema__controls': controls, '[data-ezb-announcement]': status
+    '.ezb-cinema__controls': controls, '[data-ezb-announcement]': status,
+    '[data-ezb-progress]': progress
   };
   const hero = {
     querySelectorAll() { return slides; },
@@ -119,6 +121,20 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     }
   };
   runInNewContext(js, { window, document });
+  if (initialSlideCount < 2) {
+    assert.equal(controls.hidden, true, 'Zero or one photo cannot expose slideshow controls');
+    assert.equal(timerStarts, 0, 'Zero or one photo cannot start autoplay');
+    assert.equal(toggle.disabled, true, 'Zero or one photo disables autoplay');
+    if (initialSlideCount === 0) {
+      assert.equal(heroFlags.has('ezb-cinema--missing-media'), true,
+        'Empty initial photo collection must reveal safe text fallback');
+      assert.equal(progress.textContent, '', 'Empty initial carousel has no photo counter');
+    } else {
+      assert.equal(slides[0].active, true, 'Single photo remains visible');
+      assert.equal(progress.textContent, '01 / 01', 'Single photo counter remains accurate');
+    }
+    return;
+  }
   if (!initialFocused) {
     assert.equal(timerStarts, 0, 'An initially unfocused browser must not start autoplay');
     assert.equal(toggle.textContent, 'Play slideshow', 'Initially unfocused window offers Play');
@@ -292,6 +308,8 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     slides[3].image.handlers.error();
     assert.equal(heroFlags.has('ezb-cinema--missing-media'), true, 'All failed photos reveal safe text hero');
     assert.equal(controls.hidden, true, 'No photos leaves controls hidden');
+    assert.equal(progress.textContent, '', 'Last broken image clears stale photo counter');
+    assert.equal(toggle.disabled, true, 'No remaining photo disables autoplay');
     return;
   }
   media.matches = !initialReduced;
@@ -308,6 +326,8 @@ exerciseMotionPreference(false);
 exerciseMotionPreference(false, true);
 exerciseMotionPreference(false, false, true);
 exerciseMotionPreference(false, false, false, false);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=5');
+exerciseMotionPreference(false, false, false, true, 0);
+exerciseMotionPreference(false, false, false, true, 1);
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=7');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
