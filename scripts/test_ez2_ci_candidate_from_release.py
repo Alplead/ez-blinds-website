@@ -134,12 +134,15 @@ with tempfile.TemporaryDirectory() as temp:
 # Linked ancestor directories must not redirect a trusted-looking release.
 with tempfile.TemporaryDirectory() as temp:
     parent = Path(temp)
-    actual = parent / 'actual'
-    actual.mkdir()
-    setup(actual)
-    linked = parent / 'linked'
-    linked.symlink_to(actual, target_is_directory=True)
-    reject(lambda: run(linked))
+    actual_parent = parent / 'actual'
+    actual_parent.mkdir()
+    release = actual_parent / 'release'
+    release.mkdir()
+    setup(release)
+    linked_parent = parent / 'linked'
+    linked_parent.symlink_to(actual_parent, target_is_directory=True)
+    assert not (linked_parent / 'release').is_symlink()
+    reject(lambda: run(linked_parent / 'release'))
 
 # Reject same-byte path replacements after a descriptor-bound read, even when
 # the ZIP digest and contents are unchanged.
