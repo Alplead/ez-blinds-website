@@ -174,6 +174,24 @@ for endpoint in ("runs", "artifacts"):
             raise AssertionError("Incomplete or malformed GitHub " + endpoint +
                                  " pagination accepted: " + repr(bad_count))
 
+# Malformed entries must fail with a controlled error, never crash with
+# AttributeError or silently count as usable release evidence.
+for endpoint in ("runs", "artifacts"):
+    def malformed_entry_fetch(url, endpoint=endpoint):
+        document = copy.deepcopy(fetch(url))
+        target = ("/actions/runs?" in url if endpoint == "runs"
+                  else "/actions/runs/103/artifacts?" in url)
+        if target:
+            items = document["workflow_runs"] if endpoint == "runs" else document["artifacts"]
+            items[0] = None
+        return document
+    try:
+        audit(malformed_entry_fetch)
+    except ValueError:
+        cases += 1
+    else:
+        raise AssertionError("Malformed " + endpoint + " entry accepted")
+
 # A matching count is mandatory even when every required workflow or
 # release artifact appears in the truncated page.
 for endpoint in ("runs", "artifacts"):
