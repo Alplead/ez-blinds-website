@@ -31,6 +31,13 @@
     var windowFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
     var initialising = true;
     var intervalMs = 7700; // four images rotate once in about 31 seconds.
+    // Honour the browser's explicit data-saving preference. A visitor can
+    // still select photos manually, but never start an automatic download
+    // sequence or eager-load the next frame while Save-Data is enabled.
+    var dataConnection = window.navigator && window.navigator.connection;
+    function dataSaverEnabled() {
+      return !!(dataConnection && dataConnection.saveData === true);
+    }
 
     // WordPress may still return markup for a missing media file. Fail closed
     // on actual browser load errors rather than cycling through blank frames.
@@ -60,7 +67,7 @@
       current = (index + slides.length) % slides.length;
       // Preload the next photo while the current frame is still on screen.
       var upcoming = slides[(current + 1) % slides.length].querySelector('img');
-      if (upcoming && upcoming.loading === 'lazy') upcoming.loading = 'eager';
+      if (upcoming && upcoming.loading === 'lazy' && !dataSaverEnabled()) upcoming.loading = 'eager';
       slides.forEach(function (slide, position) {
         var active = position === current;
         slide.classList.toggle('is-active', active);
@@ -88,7 +95,7 @@
     function shouldStop() {
       return slides.length < 2 || paused ||
         ((hovering || focusing) && !explicitPlay) ||
-        reduced.matches || document.hidden || pageSuspended || !inView || !windowFocused;
+        reduced.matches || dataSaverEnabled() || document.hidden || pageSuspended || !inView || !windowFocused;
     }
 
     function syncTimer() {
@@ -104,7 +111,7 @@
       hero.classList.toggle('is-paused', stopped);
       if (toggle) {
         // Manual navigation remains available when autoplay is disallowed.
-        var motionBlocked = reduced.matches || slides.length < 2;
+        var motionBlocked = reduced.matches || dataSaverEnabled() || slides.length < 2;
         toggle.disabled = motionBlocked;
         // The action label changes between Play and Pause. This is not a
         // fixed-label ARIA toggle button, so aria-pressed must not be used.
@@ -197,6 +204,13 @@
       reduced.addEventListener('change', syncTimer);
     } else if (reduced.addListener) {
       reduced.addListener(syncTimer);
+    }
+    // Chrome/Android NetworkInformation may change while a page is open.
+    // Unsupported browsers simply retain the existing motion behaviour.
+    if (dataConnection && typeof dataConnection.addEventListener === 'function') {
+      dataConnection.addEventListener('change', syncTimer);
+    } else if (dataConnection && typeof dataConnection.addListener === 'function') {
+      dataConnection.addListener(syncTimer);
     }
     // Server-rendered controls normally exist only with multiple images,
     // but an empty/one-photo DOM can also arrive after client-side changes.

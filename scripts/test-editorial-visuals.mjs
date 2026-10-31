@@ -50,8 +50,11 @@ import { runInNewContext } from 'node:vm';
 
 // Exercise the real carousel script against a small DOM simulation, not just
 // a substring assertion. Reduced-motion changes must update the control.
-function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true, initialSlideCount = 4, initialHover = false, initialFocusWithin = false) {
+function exerciseMotionPreference(initialReduced, failImages = false, missingImage = false, initialFocused = true, initialSlideCount = 4, initialHover = false, initialFocusWithin = false, initialSaveData = false) {
   const media = { matches: initialReduced, addEventListener(_event, callback) { this.change = callback; } };
+  const connection = { saveData: initialSaveData, addEventListener(event, callback) {
+    assert.equal(event, 'change'); this.change = callback;
+  } };
   const control = () => ({
     disabled: false, textContent: '', handlers: {}, attributes: {},
     addEventListener(event, callback) { this.handlers[event] = callback; },
@@ -105,6 +108,7 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   let observedHero = null;
   const lifecycle = {};
   const window = {
+    navigator: { connection },
     matchMedia() { return media; },
     addEventListener(event, callback) { lifecycle[event] = callback; },
     setInterval(callback) { lastTimerCallback = callback; return ++timerStarts; },
@@ -160,6 +164,25 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     assert.equal(slides[0].removed, true, 'Empty slide markup is discarded');
     assert.equal(slides[1].active, true, 'First valid image is shown');
     assert.equal(timerStarts, 1, 'Autoplay still works with three valid slides');
+    return;
+  }
+  if (initialSaveData) {
+    assert.equal(toggle.disabled, true, 'Save-Data disables automatic rotation');
+    assert.equal(timerStarts, 0, 'Save-Data must not start a timer');
+    assert.equal(slides[1].image.loading, 'lazy', 'Save-Data must not eager-load next photo');
+    next.handlers.click();
+    assert.equal(slides[1].active, true, 'Save-Data still permits manual navigation');
+    assert.equal(slides[2].image.loading, 'lazy', 'Manual navigation must not prefetch under Save-Data');
+    connection.saveData = false;
+    connection.change();
+    assert.equal(toggle.disabled, false, 'Disabling Save-Data restores Play control');
+    assert.equal(timerStarts, 0, 'A prior manual selection remains paused');
+    toggle.handlers.click();
+    assert.equal(timerStarts, 1, 'Explicit Play resumes when Save-Data is off');
+    connection.saveData = true;
+    connection.change();
+    assert.equal(timerStops, 1, 'Re-enabling Save-Data stops a running timer');
+    assert.equal(toggle.disabled, true, 'Re-enabling Save-Data disables Play');
     return;
   }
   assert.equal(toggle.disabled, initialReduced, 'Initial autoplay button must reflect motion preference');
@@ -375,6 +398,7 @@ exerciseMotionPreference(false, false, false, true, 1);
 exerciseMotionPreference(false, false, false, true, 4, true, false);
 exerciseMotionPreference(false, false, false, true, 4, false, true);
 exerciseMotionPreference(false, false, false, true, 4, true, true);
+exerciseMotionPreference(false, false, false, true, 4, false, false, true);
 // Older Safari exposes MediaQueryList.addListener but not addEventListener.
 // A live preference or viewport-width change must reset a previously applied
 // depth offset; otherwise reduced-motion users retain a moving backdrop.
@@ -420,6 +444,6 @@ function exerciseLegacyBandMediaQueries() {
 }
 exerciseLegacyBandMediaQueries();
 
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=11');
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=12');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
