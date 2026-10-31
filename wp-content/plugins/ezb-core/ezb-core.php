@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once __DIR__ . '/includes/ezb-quote-receipt.php';
+require_once __DIR__ . '/includes/ezb-preview-robots.php';
 
 /**
  * Make Page excerpts available to the Owner as the shared source for concise

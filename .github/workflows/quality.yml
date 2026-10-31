@@ -34,6 +34,13 @@ jobs:
         run: |
           find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Prevent unapproved preview content from being indexed
+        run: |
+          php -l wp-content/plugins/ezb-core/includes/ezb-preview-robots.php
+          php -l scripts/test-ezb-preview-robots.php
+          php scripts/test-ezb-preview-robots.php | tee /tmp/ezb-preview-robots.log
+          grep -Fq 'EZB_PREVIEW_ROBOTS_GUARD_PASS cases=6' /tmp/ezb-preview-robots.log
+
       - name: Protect Owner-cleared development page content
         run: |
           php -l scripts/test-ezb-development-seeding.php
