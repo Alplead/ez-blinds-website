@@ -203,17 +203,21 @@
     // Keep the fallback and controls correct before image error listeners run.
     var initialControls = hero.querySelector('.ezb-cinema__controls');
     if (initialControls) initialControls.hidden = slides.length < 2;
-    // Arrow keys on slideshow controls provide a keyboard-only way to browse
-    // photos without intercepting page scrolling or unrelated controls.
-    // Manual selection also stops rotation until the visitor presses Play.
+    // Carousel controls support arrows plus Home/End for first/last photo.
+    // Never capture shortcuts outside these buttons, or modified keys used
+    // for browser navigation. Manual selection persists until explicit Play.
     if (initialControls) initialControls.addEventListener('keydown', function (event) {
-      if (slides.length < 2 || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') ||
+      var key = event.key;
+      if (slides.length < 2 ||
+          (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') ||
           event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
           (event.target !== previous && event.target !== next && event.target !== toggle)) return;
       event.preventDefault();
       paused = true;
       explicitPlay = false;
-      showSlide(current + (event.key === 'ArrowRight' ? 1 : -1), true);
+      var destination = key === 'Home' ? 0 :
+        (key === 'End' ? slides.length - 1 : current + (key === 'ArrowRight' ? 1 : -1));
+      showSlide(destination, true);
       syncTimer();
     });
     if (!slides.length) hero.classList.add('ezb-cinema--missing-media');

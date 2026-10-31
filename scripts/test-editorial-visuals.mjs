@@ -345,6 +345,14 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
   assert.equal(status.textContent, 'Photo 2 of 4: Image 2', 'Keyboard selection is announced');
   assert.equal(press('ArrowLeft', previous), 1, 'Left arrow on Previous is handled');
   assert.equal(slides[0].active, true, 'Left arrow selects the previous photo');
+  assert.equal(press('End', {}), 0, 'Home/End cannot hijack unrelated page controls');
+  assert.equal(press('End', next, { metaKey: true }), 0, 'modified End stays with the browser');
+  assert.equal(press('End', toggle), 1, 'End on a carousel control selects the last photo');
+  assert.equal(slides[3].active, true, 'End selects the last photo');
+  assert.equal(status.textContent, 'Photo 4 of 4: Image 4', 'End announces the selected photo');
+  assert.equal(press('Home', previous), 1, 'Home on a carousel control selects the first photo');
+  assert.equal(slides[0].active, true, 'Home selects the first photo');
+  assert.equal(status.textContent, 'Photo 1 of 4: Image 1', 'Home announces the selected photo');
   assert.equal(timerStarts, beforeKeyboard, 'Keyboard selection must not restart autoplay');
   assert.equal(toggle.textContent, initialReduced ? 'Automatic slideshow unavailable' : 'Play slideshow',
     'Manual keyboard navigation never bypasses reduced motion or pause');
