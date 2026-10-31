@@ -35,6 +35,24 @@ final class EZ2_Backup_Readiness {
         return $child === $parent || str_starts_with($child, rtrim($parent, '/') . '/');
     }
 
+    /**
+     * Reject symbolic-link aliases anywhere in a declared WordPress source
+     * or private backup path, not only at the final directory. Resolving a
+     * path first would erase evidence of a linked parent directory.
+     */
+    public static function hasLinkedPathComponent($path): bool {
+        if (!is_string($path) || $path === '') return true;
+        $current = rtrim($path, DIRECTORY_SEPARATOR);
+        if ($current === '') $current = DIRECTORY_SEPARATOR;
+        for ($depth = 0; $depth < 64; ++$depth) {
+            if (is_link($current)) return true;
+            $parent = dirname($current);
+            if ($parent === $current) return false;
+            $current = $parent;
+        }
+        return true;
+    }
+
     /** Detect a Git checkout or linked worktree without running git or shell commands. */
     public static function gitCheckoutAncestor(string $directory): bool {
         $real = realpath($directory);
@@ -87,6 +105,11 @@ final class EZ2_Backup_Readiness {
                 $issues[] = 'BACKUP_OVERLAPS_WORDPRESS_ROOT';
             }
         }
+        // The canonical paths alone cannot reveal aliases through symlinked
+        // parents. observe() must inspect the original paths before realpath().
+        if (($facts['source_components_have_links'] ?? null) !== false) {
+            $issues[] = 'SOURCE_COMPONENT_SYMLINK_UNSAFE';
+        }
         if (($facts['backup_exists'] ?? null) !== true
             || ($facts['backup_is_link'] ?? null) !== false
             || ($facts['backup_writable'] ?? null) !== true) {
@@ -116,6 +139,20 @@ final class EZ2_Backup_Readiness {
         $db = $GLOBALS['wpdb'] ?? null;
         $dbh = is_object($db) ? ($db->dbh ?? null) : null;
         $backupReal = is_string($backup) ? realpath($backup) : false;
+        $sourcePaths = [
+            defined('ABSPATH') ? ABSPATH : null,
+            defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : null,
+            is_array($uploads) ? ($uploads['basedir'] ?? null) : null,
+            defined('WP_PLUGIN_DIR') ? WP_PLUGIN_DIR : null,
+            function_exists('get_theme_root') ? get_theme_root() : null,
+        ];
+        $sourceHasLinks = false;
+        foreach ($sourcePaths as $sourcePath) {
+            if (self::hasLinkedPathComponent($sourcePath)) {
+                $sourceHasLinks = true;
+                break;
+            }
+        }
         $facts = [
             'site_status' => $siteStatus, 'source_sha' => $sourceSha,
             'root' => realpath(ABSPATH) ?: null,
@@ -126,7 +163,8 @@ final class EZ2_Backup_Readiness {
             'themes' => function_exists('get_theme_root') ? (realpath(get_theme_root()) ?: null) : null,
             'backup' => $backupReal ?: null,
             'backup_exists' => $backupReal !== false && is_dir($backupReal),
-            'backup_is_link' => is_string($backup) && is_link($backup),
+            'backup_is_link' => self::hasLinkedPathComponent($backup),
+            'source_components_have_links' => $sourceHasLinks,
             'backup_writable' => $backupReal !== false && is_writable($backupReal),
             'backup_under_git_checkout' => $backupReal === false
                 ? true : self::gitCheckoutAncestor($backupReal),
