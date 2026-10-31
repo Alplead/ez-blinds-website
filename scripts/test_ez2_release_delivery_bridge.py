@@ -239,7 +239,10 @@ with tempfile.TemporaryDirectory() as temp:
     observed = plan(release, SHA, lock, installed, snapshot_baseline=first,
                     snapshot_current=second)
     assert observed["managed_snapshot_comparison"]["change_count"] == 0
+    assert observed["status"] == "BLOCKED_PREFLIGHT"
+    assert observed["transaction_preview"]["preflight_status"] == "BLOCKED_PREFLIGHT"
     assert "untrusted_managed_snapshot_baseline" in observed["transaction_preview"]["blocking_gates"]
+    assert "managed_content_drift_detected" not in observed["transaction_preview"]["blocking_gates"]
     assert observed["transaction_preview"]["can_apply"] is False
     CASES += 1
     edited = json.loads(second.read_text())
@@ -249,6 +252,7 @@ with tempfile.TemporaryDirectory() as temp:
                    snapshot_current=second)
     assert drifted["managed_snapshot_comparison"]["change_count"] == 1
     assert drifted["status"] == "BLOCKED_PREFLIGHT"
+    assert drifted["transaction_preview"]["preflight_status"] == "BLOCKED_PREFLIGHT"
     assert "managed_content_drift_detected" in drifted["transaction_preview"]["blocking_gates"]
     assert drifted["transaction_preview"]["input_binding_sha256"] != observed["transaction_preview"]["input_binding_sha256"]
     CASES += 1
