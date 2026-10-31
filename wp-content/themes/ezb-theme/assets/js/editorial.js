@@ -264,7 +264,17 @@
 
   window.addEventListener('scroll', requestUpdate, { passive: true });
   window.addEventListener('resize', requestUpdate, { passive: true });
-  if (compact.addEventListener) compact.addEventListener('change', requestUpdate);
-  if (reduced.addEventListener) reduced.addEventListener('change', requestUpdate);
+  // Legacy MediaQueryList implementations (including older Safari) only
+  // expose addListener. Without this fallback, toggling reduced motion or
+  // entering mobile width can leave a stale parallax offset on the page.
+  function onMediaChange(query) {
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', requestUpdate);
+    } else if (typeof query.addListener === 'function') {
+      query.addListener(requestUpdate);
+    }
+  }
+  onMediaChange(compact);
+  onMediaChange(reduced);
   requestUpdate();
 }());

@@ -375,6 +375,51 @@ exerciseMotionPreference(false, false, false, true, 1);
 exerciseMotionPreference(false, false, false, true, 4, true, false);
 exerciseMotionPreference(false, false, false, true, 4, false, true);
 exerciseMotionPreference(false, false, false, true, 4, true, true);
-console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=10');
+// Older Safari exposes MediaQueryList.addListener but not addEventListener.
+// A live preference or viewport-width change must reset a previously applied
+// depth offset; otherwise reduced-motion users retain a moving backdrop.
+function exerciseLegacyBandMediaQueries() {
+  const offsets = [];
+  const band = {
+    style: { setProperty(key, value) {
+      assert.equal(key, '--ezb-photo-offset');
+      offsets.push(value);
+    } },
+    getBoundingClientRect() { return { top: 100, bottom: 500, height: 400 }; }
+  };
+  const reducedQuery = { matches: false, addListener(callback) { this.notify = callback; } };
+  const compactQuery = { matches: false, addListener(callback) { this.notify = callback; } };
+  const window = {
+    innerHeight: 800,
+    matchMedia(query) {
+      return query === '(prefers-reduced-motion: reduce)' ? reducedQuery : compactQuery;
+    },
+    addEventListener() {},
+    requestAnimationFrame(callback) { callback(); }
+  };
+  const document = {
+    querySelector() { return null; },
+    querySelectorAll(selector) { return selector === '[data-ezb-editorial-band]' ? [band] : []; }
+  };
+  runInNewContext(js, { window, document });
+  assert.equal(offsets.at(-1), '3px', 'desktop depth starts at the calculated offset');
+  assert.equal(typeof reducedQuery.notify, 'function', 'legacy reduced-motion listener is attached');
+  assert.equal(typeof compactQuery.notify, 'function', 'legacy compact-width listener is attached');
+  compactQuery.matches = true;
+  compactQuery.notify();
+  assert.equal(offsets.at(-1), '0px', 'compact viewport clears existing parallax');
+  compactQuery.matches = false;
+  compactQuery.notify();
+  assert.equal(offsets.at(-1), '3px', 'desktop viewport can restore subtle depth');
+  reducedQuery.matches = true;
+  reducedQuery.notify();
+  assert.equal(offsets.at(-1), '0px', 'reduced motion clears existing parallax');
+  reducedQuery.matches = false;
+  reducedQuery.notify();
+  assert.equal(offsets.at(-1), '3px', 're-enabling motion restores normal depth');
+}
+exerciseLegacyBandMediaQueries();
+
+console.log('EZB_EDITORIAL_MOTION_RUNTIME_PASS cases=11');
 
 console.log('EZB_EDITORIAL_ART_DIRECTION_TEST_PASS checks=' + (required.length + 4));
