@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 
 const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/site.js', import.meta.url), 'utf8');
 
-function simulate({ reduced, observerSupported, initiallyFocused = true }) {
+function simulate({ reduced, observerSupported, initiallyFocused = true, saveData = false, legacyConnection = false }) {
   const rootClasses = new Set();
   const targetClasses = new Set();
   const video = { autoplay: false, paused: true, pauseCount: 0, playCount: 0,
@@ -15,12 +15,21 @@ function simulate({ reduced, observerSupported, initiallyFocused = true }) {
     style: { setProperty() {} }
   };
   let changeListener;
+  let connectionListener;
   let visibilityListener;
   let observerInstance;
   const preference = {
     matches: reduced,
     addEventListener(name, listener) { if (name === 'change') changeListener = listener; }
   };
+  const connection = { saveData };
+  if (legacyConnection) {
+    connection.addListener = listener => { connectionListener = listener; };
+  } else {
+    connection.addEventListener = (name, listener) => {
+      if (name === 'change') connectionListener = listener;
+    };
+  }
   const document = {
     hidden: false,
     hasFocus() { return initiallyFocused; },
@@ -36,6 +45,7 @@ function simulate({ reduced, observerSupported, initiallyFocused = true }) {
   };
   const lifecycle = {};
   const window = {
+    navigator: { connection },
     matchMedia() { return preference; },
     addEventListener(name, callback) { lifecycle[name] = callback; }
   };
@@ -53,6 +63,7 @@ function simulate({ reduced, observerSupported, initiallyFocused = true }) {
   return {
     rootClasses, targetClasses, video, get observerInstance() { return observerInstance; },
     setReduced(value) { preference.matches = value; changeListener?.({ matches: value }); },
+    setSaveData(value) { connection.saveData = value; connectionListener?.(); },
     setHidden(value) { document.hidden = value; visibilityListener?.(); },
     pagehide() { lifecycle.pagehide?.(); },
     pageshow() { lifecycle.pageshow?.(); },
@@ -197,10 +208,48 @@ initiallyUnfocused.focus();
 assert.equal(initiallyUnfocused.video.playCount, 1,
   'first focus can start eligible video');
 
+// Network data saving must stop automatic native video downloads without
+// disabling ordinary page reveals or blocking deliberate manual playback.
+const conserving = simulate({ reduced: false, observerSupported: true, saveData: true });
+assert.equal(conserving.video.playCount, 0, 'initial Save-Data blocks autoplay');
+assert.equal(conserving.video.autoplay, false);
+assert.equal(conserving.rootClasses.has('ezb-motion-ready'), true,
+  'Save-Data alone does not hide ordinary page content');
+conserving.setSaveData(false);
+assert.equal(conserving.video.playCount, 1, 'disabling Save-Data can start eligible video');
+conserving.setSaveData(true);
+assert.equal(conserving.video.autoplay, false, 'enabling Save-Data pauses automatic video');
+assert.equal(conserving.video.pauseCount, 2, 'active video is paused on Save-Data change');
+conserving.setSaveData(false);
+assert.equal(conserving.video.playCount, 2, 'eligible video resumes once');
+
+const conservingManualPause = simulate({ reduced: false, observerSupported: true });
+conservingManualPause.video.pause();
+conservingManualPause.setSaveData(true);
+conservingManualPause.setSaveData(false);
+assert.equal(conservingManualPause.video.playCount, 1,
+  'Save-Data changes must not override a visitor pause');
+
+const legacySaveData = simulate({
+  reduced: false, observerSupported: true, saveData: true, legacyConnection: true
+});
+legacySaveData.setSaveData(false);
+assert.equal(legacySaveData.video.playCount, 1,
+  'legacy NetworkInformation listeners also resume eligible playback');
+
+const hiddenSaveData = simulate({ reduced: false, observerSupported: true, saveData: true });
+hiddenSaveData.setHidden(true);
+hiddenSaveData.setSaveData(false);
+assert.equal(hiddenSaveData.video.playCount, 0,
+  'lifting Save-Data in a background tab cannot autoplay');
+hiddenSaveData.setHidden(false);
+assert.equal(hiddenSaveData.video.playCount, 1,
+  'returning to the foreground can start eligible video');
+
 const plugin = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
 const videoTag = plugin.match(/<video data-ezb-autoplay-video[^>]*>/)?.[0] || '';
 assert.ok(videoTag, 'development video shortcode must be present');
 assert.match(videoTag, /\scontrols(?:\s|>)/, 'manual video controls are required');
 assert.doesNotMatch(videoTag, /\sautoplay(?:\s|>)/, 'HTML must not start playing before JS checks preference');
 
-console.log('EZB_SITE_MOTION_TEST_PASS cases=14');
+console.log('EZB_SITE_MOTION_TEST_PASS cases=19');
