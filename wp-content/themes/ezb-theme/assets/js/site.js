@@ -83,6 +83,12 @@
 
 
 	var motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+	// Save-Data is independent of reduced motion: keep the page accessible,
+	// but do not initiate video downloads for visitors conserving data.
+	var dataConnection = window.navigator && window.navigator.connection;
+	function dataSaverEnabled() {
+		return !!(dataConnection && dataConnection.saveData === true);
+	}
 	var videos = document.querySelectorAll('[data-ezb-autoplay-video]');
 
 	// A visitor who paused the native video controls must not have playback
@@ -113,7 +119,7 @@
 	// Never autoplay from HTML before reduced-motion preference is known.
 	function startAutoplayVideos() {
 		// A background tab must not start or resume autoplay.
-		if (document.hidden || pageSuspended || !windowFocused) {
+		if (document.hidden || pageSuspended || !windowFocused || dataSaverEnabled()) {
 			stopAutoplayVideos();
 			return;
 		}
@@ -214,6 +220,13 @@
 		motionPreference.addEventListener('change', syncMotionPreference);
 	} else if (motionPreference.addListener) {
 		motionPreference.addListener(syncMotionPreference);
+	}
+	// NetworkInformation is optional and may change without a page reload.
+	// The same eligibility guard preserves a deliberate native-video pause.
+	if (dataConnection && typeof dataConnection.addEventListener === 'function') {
+		dataConnection.addEventListener('change', syncMotionPreference);
+	} else if (dataConnection && typeof dataConnection.addListener === 'function') {
+		dataConnection.addListener(syncMotionPreference);
 	}
 	syncMotionPreference();
 }());
