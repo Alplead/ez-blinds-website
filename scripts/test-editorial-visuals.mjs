@@ -79,7 +79,10 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     slide.classList = { toggle(_name, active) { slide.active = active; } };
     return slide;
   });
-  const controls = { hidden: false };
+  const controls = {
+    hidden: false, handlers: {},
+    addEventListener(event, callback) { this.handlers[event] = callback; }
+  };
   const heroFlags = new Set();
   const selectors = {
     '[data-ezb-toggle]': toggle, '[data-ezb-prev]': previous, '[data-ezb-next]': next,
@@ -321,8 +324,30 @@ function exerciseMotionPreference(initialReduced, failImages = false, missingIma
     assert.equal(controls.hidden, true, 'No photos leaves controls hidden');
     assert.equal(progress.textContent, '', 'Last broken image clears stale photo counter');
     assert.equal(toggle.disabled, true, 'No remaining photo disables autoplay');
+    let prevented = false;
+    controls.handlers.keydown({ key: 'ArrowRight', target: next, preventDefault() { prevented = true; } });
+    assert.equal(prevented, false, 'Empty slideshow never captures arrow keys');
     return;
   }
+  // Keyboard arrows only work on the actual slideshow buttons, keep focus
+  // in place, announce deliberate changes and never override reduced motion.
+  const press = (key, target = next, modifiers = {}) => {
+    let prevented = 0;
+    controls.handlers.keydown({ key, target, ...modifiers, preventDefault() { prevented++; } });
+    return prevented;
+  };
+  const beforeKeyboard = timerStarts;
+  assert.equal(press('ArrowRight', {}), 0, 'unrelated targets cannot hijack page arrows');
+  assert.equal(press('ArrowRight', next, { ctrlKey: true }), 0, 'modified shortcuts remain untouched');
+  assert.equal(press('ArrowLeft', previous, { shiftKey: true }), 0, 'selection shortcuts remain untouched');
+  assert.equal(press('ArrowRight', next), 1, 'Right arrow on Next is handled');
+  assert.equal(slides[1].active, true, 'Right arrow selects the next photo');
+  assert.equal(status.textContent, 'Photo 2 of 4: Image 2', 'Keyboard selection is announced');
+  assert.equal(press('ArrowLeft', previous), 1, 'Left arrow on Previous is handled');
+  assert.equal(slides[0].active, true, 'Left arrow selects the previous photo');
+  assert.equal(timerStarts, beforeKeyboard, 'Keyboard selection must not restart autoplay');
+  assert.equal(toggle.textContent, initialReduced ? 'Automatic slideshow unavailable' : 'Play slideshow',
+    'Manual keyboard navigation never bypasses reduced motion or pause');
   media.matches = !initialReduced;
   media.change();
   assert.equal(toggle.disabled, !initialReduced, 'Control must react to live preference changes');
