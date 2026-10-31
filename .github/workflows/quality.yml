@@ -39,7 +39,7 @@ jobs:
           php -l wp-content/plugins/ezb-core/includes/ezb-preview-robots.php
           php -l scripts/test-ezb-preview-robots.php
           php scripts/test-ezb-preview-robots.php | tee /tmp/ezb-preview-robots.log
-          grep -Fq 'EZB_PREVIEW_ROBOTS_GUARD_PASS cases=6' /tmp/ezb-preview-robots.log
+          grep -Fq 'EZB_PREVIEW_ROBOTS_GUARD_PASS cases=17' /tmp/ezb-preview-robots.log
 
       - name: Protect Owner-cleared development page content
         run: |
