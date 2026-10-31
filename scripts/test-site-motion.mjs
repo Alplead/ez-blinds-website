@@ -1,0 +1,255 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+
+const script = readFileSync(new URL('../wp-content/themes/ezb-theme/assets/js/site.js', import.meta.url), 'utf8');
+
+function simulate({ reduced, observerSupported, initiallyFocused = true, saveData = false, legacyConnection = false }) {
+  const rootClasses = new Set();
+  const targetClasses = new Set();
+  const video = { autoplay: false, paused: true, pauseCount: 0, playCount: 0,
+    pause() { this.pauseCount++; this.paused = true; },
+    play() { this.playCount++; this.paused = false; return Promise.resolve(); } };
+  const target = {
+    classList: { add(name) { targetClasses.add(name); } },
+    style: { setProperty() {} }
+  };
+  let changeListener;
+  let connectionListener;
+  let visibilityListener;
+  let observerInstance;
+  const preference = {
+    matches: reduced,
+    addEventListener(name, listener) { if (name === 'change') changeListener = listener; }
+  };
+  const connection = { saveData };
+  if (legacyConnection) {
+    connection.addListener = listener => { connectionListener = listener; };
+  } else {
+    connection.addEventListener = (name, listener) => {
+      if (name === 'change') connectionListener = listener;
+    };
+  }
+  const document = {
+    hidden: false,
+    hasFocus() { return initiallyFocused; },
+    addEventListener(name, listener) { if (name === 'visibilitychange') visibilityListener = listener; },
+    documentElement: { classList: {
+      add(name) { rootClasses.add(name); },
+      remove(name) { rootClasses.delete(name); }
+    } },
+    querySelectorAll(selector) {
+      if (selector === '.ezb-quote-form') return [];
+      return selector === '[data-ezb-autoplay-video]' ? [video] : [target];
+    }
+  };
+  const lifecycle = {};
+  const window = {
+    navigator: { connection },
+    matchMedia() { return preference; },
+    addEventListener(name, callback) { lifecycle[name] = callback; }
+  };
+  const context = { window, document };
+  if (observerSupported) {
+    class FakeObserver {
+      constructor(callback) { this.callback = callback; this.observed = []; observerInstance = this; }
+      observe(element) { this.observed.push(element); }
+      unobserve(element) { this.observed = this.observed.filter(item => item !== element); }
+    }
+    window.IntersectionObserver = FakeObserver;
+    context.IntersectionObserver = FakeObserver;
+  }
+  runInNewContext(script, context);
+  return {
+    rootClasses, targetClasses, video, get observerInstance() { return observerInstance; },
+    setReduced(value) { preference.matches = value; changeListener?.({ matches: value }); },
+    setSaveData(value) { connection.saveData = value; connectionListener?.(); },
+    setHidden(value) { document.hidden = value; visibilityListener?.(); },
+    pagehide() { lifecycle.pagehide?.(); },
+    pageshow() { lifecycle.pageshow?.(); },
+    blur() { lifecycle.blur?.(); },
+    focus() { lifecycle.focus?.(); },
+    target
+  };
+}
+
+const initiallyReduced = simulate({ reduced: true, observerSupported: true });
+assert.equal(initiallyReduced.video.autoplay, false);
+assert.equal(initiallyReduced.video.pauseCount, 1);
+assert.equal(initiallyReduced.video.playCount, 0, 'reduced motion must never autoplay');
+assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), false);
+assert.equal(initiallyReduced.observerInstance, undefined);
+initiallyReduced.setReduced(false);
+assert.equal(initiallyReduced.video.playCount, 1, 'lifting reduced motion starts video');
+assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), true,
+  'lifting reduced motion enables reveals without reloading');
+assert.equal(initiallyReduced.observerInstance.observed.length, 1,
+  'lifting reduced motion creates an observer');
+const firstObserver = initiallyReduced.observerInstance;
+initiallyReduced.setReduced(true);
+assert.equal(initiallyReduced.rootClasses.has('ezb-motion-ready'), false,
+  'reducing motion reveals unrevealed content');
+initiallyReduced.setReduced(false);
+assert.equal(initiallyReduced.observerInstance, firstObserver,
+  'repeated toggles must not create duplicate observers');
+
+const withoutObserver = simulate({ reduced: false, observerSupported: false });
+assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), true);
+assert.equal(withoutObserver.video.playCount, 1, 'normal motion may autoplay');
+assert.equal(withoutObserver.targetClasses.has('ezb-in-view'), true);
+withoutObserver.setReduced(true);
+assert.equal(withoutObserver.video.autoplay, false);
+assert.equal(withoutObserver.video.pauseCount, 1);
+assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), false);
+withoutObserver.setReduced(false);
+assert.equal(withoutObserver.rootClasses.has('ezb-motion-ready'), true,
+  'motion resumes without IntersectionObserver');
+assert.equal(withoutObserver.targetClasses.has('ezb-in-view'), true,
+  'fallback remains visible after toggling');
+
+const withObserver = simulate({ reduced: false, observerSupported: true });
+assert.equal(withObserver.observerInstance.observed.length, 1);
+assert.equal(withObserver.video.playCount, 1);
+withObserver.observerInstance.callback([{ isIntersecting: true, target: withObserver.target }], withObserver.observerInstance);
+assert.equal(withObserver.targetClasses.has('ezb-in-view'), true);
+withObserver.setReduced(true);
+assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), false);
+assert.equal(withObserver.video.pauseCount, 1);
+withObserver.setReduced(false);
+assert.equal(withObserver.rootClasses.has('ezb-motion-ready'), true);
+assert.equal(withObserver.video.autoplay, true);
+assert.equal(withObserver.video.playCount, 2, 'autoplay resumes after motion preference allows it');
+
+// Native controls can pause a video without changing the motion preference.
+// Returning to a tab must not silently override that explicit user choice.
+const manuallyPaused = simulate({ reduced: false, observerSupported: true });
+assert.equal(manuallyPaused.video.playCount, 1);
+manuallyPaused.video.pause();
+manuallyPaused.setHidden(true);
+manuallyPaused.setHidden(false);
+assert.equal(manuallyPaused.video.playCount, 1,
+  'a manually paused video must stay paused after tab visibility changes');
+assert.equal(manuallyPaused.video.autoplay, false);
+manuallyPaused.setReduced(true);
+manuallyPaused.setReduced(false);
+assert.equal(manuallyPaused.video.playCount, 1,
+  'a manually paused video must stay paused after motion preference changes');
+
+// An actually playing video may resume after an interruption; repeated
+// hidden-state notifications must not erase its prior playing state.
+const interrupted = simulate({ reduced: false, observerSupported: true });
+interrupted.setHidden(true);
+interrupted.setHidden(true);
+assert.equal(interrupted.video.autoplay, false);
+interrupted.setHidden(false);
+assert.equal(interrupted.video.playCount, 2,
+  'previously playing video resumes after tab becomes visible');
+
+// BFCache restore must respect manual pause, background tabs and reduced motion.
+const restored = simulate({ reduced: false, observerSupported: true });
+restored.pagehide();
+restored.pagehide();
+assert.equal(restored.video.playCount, 1);
+restored.pageshow();
+assert.equal(restored.video.playCount, 2);
+const pausedRestored = simulate({ reduced: false, observerSupported: true });
+pausedRestored.video.pause();
+pausedRestored.pagehide();
+pausedRestored.pageshow();
+assert.equal(pausedRestored.video.playCount, 1, 'manual pause survives page cache');
+const hiddenRestored = simulate({ reduced: false, observerSupported: true });
+hiddenRestored.pagehide();
+hiddenRestored.setHidden(true);
+hiddenRestored.pageshow();
+assert.equal(hiddenRestored.video.playCount, 1, 'background page must not autoplay');
+hiddenRestored.setHidden(false);
+assert.equal(hiddenRestored.video.playCount, 2);
+const reducedRestored = simulate({ reduced: false, observerSupported: true });
+reducedRestored.pagehide();
+reducedRestored.setReduced(true);
+reducedRestored.pageshow();
+assert.equal(reducedRestored.video.playCount, 1, 'reduced motion blocks restored autoplay');
+reducedRestored.setReduced(false);
+assert.equal(reducedRestored.video.playCount, 2);
+
+// Switching away from a visible browser window suspends background video.
+const unfocusedWindow = simulate({ reduced: false, observerSupported: true });
+assert.equal(unfocusedWindow.video.playCount, 1);
+unfocusedWindow.blur();
+assert.equal(unfocusedWindow.video.autoplay, false, 'window blur disables video autoplay');
+assert.equal(unfocusedWindow.video.pauseCount, 1, 'window blur pauses playing video');
+unfocusedWindow.setHidden(true);
+unfocusedWindow.focus();
+assert.equal(unfocusedWindow.video.playCount, 1, 'focused but hidden tab must stay paused');
+unfocusedWindow.setHidden(false);
+assert.equal(unfocusedWindow.video.playCount, 2, 'visible focused window resumes eligible video');
+
+const repeatedWindowBlur = simulate({ reduced: false, observerSupported: true });
+repeatedWindowBlur.blur();
+repeatedWindowBlur.blur();
+repeatedWindowBlur.focus();
+repeatedWindowBlur.focus();
+assert.equal(repeatedWindowBlur.video.playCount, 2,
+  'repeated focus changes must not create duplicate playback');
+
+const manuallyPausedWindow = simulate({ reduced: false, observerSupported: true });
+manuallyPausedWindow.video.pause();
+manuallyPausedWindow.blur();
+manuallyPausedWindow.focus();
+assert.equal(manuallyPausedWindow.video.playCount, 1,
+  'window focus must respect a visitor pause in native video controls');
+
+const initiallyUnfocused = simulate({
+  reduced: false, observerSupported: true, initiallyFocused: false
+});
+assert.equal(initiallyUnfocused.video.playCount, 0,
+  'initially unfocused window must not start background video');
+initiallyUnfocused.focus();
+assert.equal(initiallyUnfocused.video.playCount, 1,
+  'first focus can start eligible video');
+
+// Network data saving must stop automatic native video downloads without
+// disabling ordinary page reveals or blocking deliberate manual playback.
+const conserving = simulate({ reduced: false, observerSupported: true, saveData: true });
+assert.equal(conserving.video.playCount, 0, 'initial Save-Data blocks autoplay');
+assert.equal(conserving.video.autoplay, false);
+assert.equal(conserving.rootClasses.has('ezb-motion-ready'), true,
+  'Save-Data alone does not hide ordinary page content');
+conserving.setSaveData(false);
+assert.equal(conserving.video.playCount, 1, 'disabling Save-Data can start eligible video');
+conserving.setSaveData(true);
+assert.equal(conserving.video.autoplay, false, 'enabling Save-Data pauses automatic video');
+assert.equal(conserving.video.pauseCount, 2, 'active video is paused on Save-Data change');
+conserving.setSaveData(false);
+assert.equal(conserving.video.playCount, 2, 'eligible video resumes once');
+
+const conservingManualPause = simulate({ reduced: false, observerSupported: true });
+conservingManualPause.video.pause();
+conservingManualPause.setSaveData(true);
+conservingManualPause.setSaveData(false);
+assert.equal(conservingManualPause.video.playCount, 1,
+  'Save-Data changes must not override a visitor pause');
+
+const legacySaveData = simulate({
+  reduced: false, observerSupported: true, saveData: true, legacyConnection: true
+});
+legacySaveData.setSaveData(false);
+assert.equal(legacySaveData.video.playCount, 1,
+  'legacy NetworkInformation listeners also resume eligible playback');
+
+const hiddenSaveData = simulate({ reduced: false, observerSupported: true, saveData: true });
+hiddenSaveData.setHidden(true);
+hiddenSaveData.setSaveData(false);
+assert.equal(hiddenSaveData.video.playCount, 0,
+  'lifting Save-Data in a background tab cannot autoplay');
+hiddenSaveData.setHidden(false);
+assert.equal(hiddenSaveData.video.playCount, 1,
+  'returning to the foreground can start eligible video');
+
+const plugin = readFileSync(new URL('../wp-content/plugins/ezb-core/ezb-core.php', import.meta.url), 'utf8');
+const videoTag = plugin.match(/<video data-ezb-autoplay-video[^>]*>/)?.[0] || '';
+assert.ok(videoTag, 'development video shortcode must be present');
+assert.match(videoTag, /\scontrols(?:\s|>)/, 'manual video controls are required');
+assert.doesNotMatch(videoTag, /\sautoplay(?:\s|>)/, 'HTML must not start playing before JS checks preference');
+
+console.log('EZB_SITE_MOTION_TEST_PASS cases=19');

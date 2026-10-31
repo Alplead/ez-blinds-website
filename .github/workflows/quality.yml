@@ -1,0 +1,656 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'tools/ez2-delivery-agent/**'
+      - 'scripts/**'
+      - '.devcontainer/**'
+      - '.github/workflows/**'
+      - '.github/release-install/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Check PHP syntax
+        run: |
+          find wp-content/themes/ezb-theme wp-content/plugins/ezb-core -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Prevent unapproved preview content from being indexed
+        run: |
+          php -l wp-content/plugins/ezb-core/includes/ezb-preview-robots.php
+          php -l scripts/test-ezb-preview-robots.php
+          php scripts/test-ezb-preview-robots.php | tee /tmp/ezb-preview-robots.log
+          grep -Fq 'EZB_PREVIEW_ROBOTS_GUARD_PASS cases=17' /tmp/ezb-preview-robots.log
+
+      - name: Protect Owner-cleared development page content
+        run: |
+          php -l scripts/test-ezb-development-seeding.php
+          php scripts/test-ezb-development-seeding.php | tee /tmp/ezb-development-seeding.log
+          grep -Fq 'EZB_DEV_SEED_OWNER_EDIT_GUARD_PASS cases=10' /tmp/ezb-development-seeding.log
+
+      - name: Exercise synthetic crash recovery journal (no WordPress writes)
+        run: |
+          python3 scripts/test_ez2_scratch_durable_journal.py | tee /tmp/ez2-scratch-journal.log
+          grep -Fq 'EZ2_SYNTHETIC_DURABLE_JOURNAL_PASS scenarios=92 power_loss=54 localwp_touched=false can_apply=false' /tmp/ez2-scratch-journal.log
+
+      - name: Test exact-release durable scratch bridge (no site writes)
+        run: |
+          python3 scripts/test_ez2_ci_release_durable_recovery.py | tee /tmp/ez2-release-durable-bridge.log
+          grep -Fq 'EZ2_CI_RELEASE_DURABLE_BRIDGE_TEST_PASS cases=44 synthetic_only=true localwp_touched=false can_apply=false' /tmp/ez2-release-durable-bridge.log
+
+      - name: Check isolated Elementor runtime dependency (read-only)
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-plugin-runtime-readiness.php
+          php -l scripts/test_ez2_plugin_runtime_readiness.php
+          php scripts/test_ez2_plugin_runtime_readiness.php | tee /tmp/ez2-plugin-runtime.log
+          grep -Fq 'EZ2_PLUGIN_RUNTIME_READINESS_PASS' /tmp/ez2-plugin-runtime.log
+
+      - name: Guard isolated EZ2 transaction readiness and Owner-content safety
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-transaction-readiness.php
+          php -l scripts/test_ez2_transaction_readiness.php
+          php scripts/test_ez2_transaction_readiness.php | tee /tmp/ez2-transaction-readiness.log
+          grep -Fq 'EZ2_TRANSACTION_READINESS_PASS cases=54 read_only=true can_apply=false localwp_touched=false' /tmp/ez2-transaction-readiness.log
+
+      - name: Verify isolated private WordPress attachment integrity without exporting media
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-private-media-readiness.php
+          php -l scripts/test_ez2_private_media_readiness.php
+          php scripts/test_ez2_private_media_readiness.php | tee /tmp/ez2-private-media-readiness.log
+          grep -Fq 'EZ2_PRIVATE_MEDIA_READINESS_PASS cases=75 read_only=true localwp_touched=false can_apply=false' /tmp/ez2-private-media-readiness.log
+
+      - name: Check Visual QA JavaScript syntax
+        run: node --check scripts/visual-qa.mjs
+
+      - name: Validate Owner preview responsive and route coverage
+        run: |
+          node --check scripts/owner-preview-capture.mjs
+          node --check scripts/test-owner-preview-coverage.mjs
+          node scripts/test-owner-preview-coverage.mjs | tee /tmp/owner-preview-coverage.log
+          grep -q 'EZB_OWNER_PREVIEW_COVERAGE_PASS routes=14 viewports=4 captures=56' /tmp/owner-preview-coverage.log
+
+      - name: Reject unstyled Owner previews and leaked shortcode content
+        run: |
+          node --check scripts/preview-render-guard.mjs
+          node --check scripts/test-preview-render-guard.mjs
+          node scripts/test-preview-render-guard.mjs | tee /tmp/preview-render-guard.log
+          grep -q 'EZB_PREVIEW_RENDER_GUARD_PASS cases=48' /tmp/preview-render-guard.log
+
+      - name: Test reduced-motion preference changes
+        run: |
+          node --check wp-content/themes/ezb-theme/assets/js/site.js
+          node --check scripts/test-site-motion.mjs
+          node scripts/test-site-motion.mjs | tee /tmp/site-motion.log
+          grep -q 'EZB_SITE_MOTION_TEST_PASS cases=19' /tmp/site-motion.log
+
+      - name: Validate real-photo editorial design and motion safety
+        run: |
+          node --check wp-content/themes/ezb-theme/assets/js/editorial.js
+          node --check scripts/test-editorial-visuals.mjs
+          node scripts/test-editorial-visuals.mjs | tee /tmp/editorial-design.log
+          grep -q 'EZB_EDITORIAL_ART_DIRECTION_TEST_PASS' /tmp/editorial-design.log
+
+      - name: Test rendered editorial slideshow image selection and accessible labels
+        run: |
+          php -l scripts/test-editorial-rendered-slides.php
+          php scripts/test-editorial-rendered-slides.php | tee /tmp/editorial-rendered-slides.log
+          grep -q 'EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=15' /tmp/editorial-rendered-slides.log
+
+      - name: Verify background-tab video autoplay safety
+        run: |
+          node --check scripts/test-site-video-visibility.mjs
+          node scripts/test-site-video-visibility.mjs | tee /tmp/video-visibility.log
+          grep -q 'EZB_VIDEO_VISIBILITY_REGRESSION_PASS cases=3' /tmp/video-visibility.log
+
+      - name: Guard narrow mobile layout and deferred interaction script
+        run: |
+          node --check scripts/test-mobile-speed-guard.mjs
+          node scripts/test-mobile-speed-guard.mjs | tee /tmp/mobile-speed-guard.log
+          grep -q 'EZB_MOBILE_SPEED_GUARD_PASS cases=5' /tmp/mobile-speed-guard.log
+
+      - name: Verify five approved product-to-quote journeys (static)
+        run: |
+          node --check scripts/test-product-quote-journey.mjs
+          node scripts/test-product-quote-journey.mjs | tee /tmp/product-quote-static.log
+          grep -q 'EZB_PRODUCT_QUOTE_STATIC_PASS routes=5' /tmp/product-quote-static.log
+
+      - name: Fail closed on unapproved live enquiry mail
+        run: |
+          node --check scripts/test-quote-mail-authorization.mjs
+          node scripts/test-quote-mail-authorization.mjs | tee /tmp/quote-mail-auth.log
+          grep -q 'EZB_QUOTE_MAIL_AUTHORIZATION_GUARD_PASS cases=9' /tmp/quote-mail-auth.log
+
+      - name: Verify signed quote success receipts (offline PHP fixtures)
+        run: |
+          php -l wp-content/plugins/ezb-core/includes/ezb-quote-receipt.php
+          php -l scripts/test-quote-receipt.php
+          php scripts/test-quote-receipt.php | tee /tmp/quote-receipt.log
+          grep -q 'EZB_QUOTE_RECEIPT_PASS cases=21' /tmp/quote-receipt.log
+
+      - name: Reject whitespace-only contact details in the real PHP validator
+        run: |
+          php -l scripts/test-quote-server-contact.php
+          php scripts/test-quote-server-contact.php | tee /tmp/quote-server-contact.log
+          grep -Fq 'EZB_QUOTE_SERVER_CONTACT_VALIDATION_PASS cases=27' /tmp/quote-server-contact.log
+
+      - name: Test quote contact-method pre-submit validation
+        run: |
+          node --check scripts/test-quote-contact-method.mjs
+          node scripts/test-quote-contact-method.mjs | tee /tmp/quote-contact-method.log
+          grep -q 'EZB_QUOTE_CONTACT_METHOD_TEST_PASS cases=25' /tmp/quote-contact-method.log
+
+      - name: Check link crawler JavaScript syntax
+        run: node --check scripts/link-check.mjs
+
+      - name: Test bounded link crawler configuration
+        run: |
+          node --check scripts/test-link-check-budget.mjs
+          node scripts/test-link-check-budget.mjs | tee /tmp/link-budget.log
+          grep -q 'EZB_LINK_CHECK_BUDGET_TEST_PASS cases=7' /tmp/link-budget.log
+
+      - name: Guard redirect-registry checks against pipefail SIGPIPE
+        run: |
+          python3 scripts/test_ez2_redirect_pipefail.py | tee /tmp/ez2-redirect-pipefail.log
+          grep -Fq 'EZ2_REDIRECT_PIPEFAIL_REGRESSION_PASS cases=11' /tmp/ez2-redirect-pipefail.log
+
+      - name: Test internal-link fail-closed guard
+        run: |
+          node --check scripts/test-link-check-guard.mjs
+          node scripts/test-link-check-guard.mjs | tee /tmp/link-check-guard.log
+          grep -q 'EZB_LINK_CHECK_GUARD_TEST_PASS cases=37' /tmp/link-check-guard.log
+
+      - name: Enforce Owner-approved navigation A/B/C without expanding publication authority
+        run: |
+          node --check scripts/test-owner-approved-navigation.mjs
+          node scripts/test-owner-approved-navigation.mjs | tee /tmp/owner-navigation.log
+          grep -q 'EZB_OWNER_APPROVED_NAV_PASS cases=10' /tmp/owner-navigation.log
+
+      - name: Test keyboard focus visibility and navigation guard
+        run: |
+          node --check scripts/test-theme-focus-visibility.mjs
+          node scripts/test-theme-focus-visibility.mjs | tee /tmp/theme-focus.log
+          grep -q 'EZB_THEME_FOCUS_VISIBILITY_TEST_PASS cases=11' /tmp/theme-focus.log
+
+      - name: Test WordPress template skip-link targets
+        run: |
+          node --check scripts/test-theme-skip-link.mjs
+          node scripts/test-theme-skip-link.mjs | tee /tmp/skip-link.log
+          grep -q 'EZB_SKIP_LINK_TEST_PASS' /tmp/skip-link.log
+
+      - name: Verify home hero media slot remains wired
+        run: |
+          node --check scripts/test-home-hero-guard.mjs
+          node scripts/test-home-hero-guard.mjs | tee /tmp/home-hero-guard.log
+          grep -q 'EZB_HOME_HERO_GUARD_PASS' /tmp/home-hero-guard.log
+
+      - name: Check SEO audit JavaScript syntax
+        run: node --check scripts/seo-audit.mjs
+
+      - name: Reject SEO redirects and non-HTML route responses
+        run: |
+          node --check scripts/test-seo-audit-guard.mjs
+          node scripts/test-seo-audit-guard.mjs | tee /tmp/seo-audit-guard.log
+          grep -q 'EZB_SEO_AUDIT_GUARD_PASS cases=11' /tmp/seo-audit-guard.log
+
+      - name: Prevent unfinished photo-upload promises in public contact copy
+        run: |
+          if grep -Eiq 'Photo upload will be added|upload path is enabled|any useful photos' wp-content/plugins/ezb-core/ezb-core.php wp-content/themes/ezb-theme/templates/page-contact.html; then
+            echo "Customer-facing enquiry text must not promise an unapproved upload path."
+            exit 1
+          fi
+
+      - name: Keep homepage product comparison free of development labels
+        run: |
+          if grep -Eqi 'prototype|working copy|development preview' wp-content/themes/ezb-theme/patterns/core-solutions.php; then
+            echo "Homepage product navigation contains development-only wording."
+            exit 1
+          fi
+
+      - name: Check host readiness JavaScript syntax
+        run: node --check scripts/host-readiness.mjs
+
+      - name: Test host readiness fail-closed guard
+        run: |
+          node --check scripts/test-host-readiness-guard.mjs
+          node scripts/test-host-readiness-guard.mjs | tee /tmp/host-readiness-guard.log
+          grep -q 'EZB_HOST_READINESS_GUARD_TEST_PASS cases=64' /tmp/host-readiness-guard.log
+
+      - name: Check Owner UI acceptance checker syntax
+        run: bash -n scripts/check-owner-ui-acceptance.sh
+
+      - name: Check mail delivery probe syntax
+        run: bash -n scripts/mail-delivery-probe.sh
+
+      - name: Check media readiness PHP syntax
+        run: php -l scripts/media-library-readiness.php
+
+      - name: Check staging media acceptance syntax
+        run: bash -n scripts/staging-media-acceptance.sh
+
+      - name: Test staging media SHA guard
+        run: |
+          bash -n scripts/test-staging-media-sha-guard.sh
+          bash scripts/test-staging-media-sha-guard.sh | tee /tmp/media-sha-guard.log
+          grep -q 'EZB_STAGING_MEDIA_SHA_GUARD_TEST_PASS cases=7' /tmp/media-sha-guard.log
+
+      - name: Verify attachment-only exact-MIME media resolution
+        run: |
+          php -l scripts/test-media-attachment-lookup.php
+          php scripts/test-media-attachment-lookup.php | tee /tmp/media-attachment-lookup.log
+          grep -q 'EZB_MEDIA_ATTACHMENT_LOOKUP_PASS cases=19' /tmp/media-attachment-lookup.log
+
+      - name: Guard the 25 approved media registry filenames
+        run: |
+          node --check scripts/test-media-approved-registry.mjs
+          node scripts/test-media-approved-registry.mjs | tee /tmp/media-registry.log
+          grep -q 'EZB_MEDIA_APPROVED_REGISTRY_TEST_PASS files=25' /tmp/media-registry.log
+
+      - name: Check real-media visual QA JavaScript syntax
+        run: node --check scripts/real-media-visual-qa.mjs
+
+      - name: Test real-media QA route and reduced-motion coverage
+        run: |
+          node --check scripts/test-real-media-qa-coverage.mjs
+          node scripts/test-real-media-qa-coverage.mjs | tee /tmp/media-qa-coverage.log
+          grep -q 'EZB_MEDIA_QA_COVERAGE_TEST_PASS cases=14' /tmp/media-qa-coverage.log
+
+      - name: Test lazy-media visual QA readiness
+        run: |
+          node --check scripts/media-image-readiness.mjs
+          node --check scripts/test-media-image-readiness.mjs
+          node scripts/test-media-image-readiness.mjs | tee /tmp/media-image-readiness.log
+          grep -q 'EZB_MEDIA_IMAGE_READINESS_TEST_PASS cases=39' /tmp/media-image-readiness.log
+
+      - name: Reject uncommitted, untracked and symlinked release sources
+        run: |
+          bash -n scripts/test-release-source-guard.sh
+          bash scripts/test-release-source-guard.sh | tee /tmp/release-source-guard.log
+          grep -q 'EZB_RELEASE_SOURCE_GUARD_TEST_PASS cases=7' /tmp/release-source-guard.log
+
+      - name: Test exact-head release scope and tamper rejection
+        run: |
+          python3 -m py_compile scripts/verify_release_scope.py scripts/test_verify_release_scope.py
+          python3 scripts/test_verify_release_scope.py | tee /tmp/release-scope-regression.log
+          grep -q 'EZB_RELEASE_SCOPE_REGRESSION_PASS cases=27' /tmp/release-scope-regression.log
+
+      - name: Verify bounded disposable Elementor batch transaction and owner-edit safety
+        run: |
+          php -l scripts/ez2_ci_batch_content.php
+          php -l scripts/test_ez2_ci_batch_content.php
+          php scripts/test_ez2_ci_batch_content.php | tee /tmp/ez2-ci-batch-guard.log
+          grep -Fq 'EZ2_CI_BATCH_GUARD_PASS cases=23 max_pages=20 faults=3' /tmp/ez2-ci-batch-guard.log
+
+      - name: Guard disposable release-installed Elementor roundtrip
+        run: |
+          php -l scripts/ez2_release_candidate_ci.php
+          php -l scripts/test_ez2_release_candidate_ci.php
+          php scripts/test_ez2_release_candidate_ci.php | tee /tmp/ez2-release-candidate-ci-guard.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_GUARD_PASS cases=29' /tmp/ez2-release-candidate-ci-guard.log
+
+      - name: Test synthetic Elementor draft import fail-closed guards
+        run: |
+          php -l scripts/ez2_disposable_import.php
+          php -l scripts/test_ez2_disposable_import.php
+          php scripts/test_ez2_disposable_import.php | tee /tmp/ez2-disposable-import-guard.log
+          grep -q 'EZ2_DISPOSABLE_IMPORT_GUARD_PASS cases=25' /tmp/ez2-disposable-import-guard.log
+
+      - name: Test repeat-safe synthetic Elementor CI import fingerprint
+        run: |
+          php -l scripts/ez2_ci_import_reuse.php
+          php -l scripts/ez2_disposable_import_once.php
+          php -l scripts/test_ez2_ci_import_reuse.php
+          php scripts/test_ez2_ci_import_reuse.php | grep -Fq 'EZ2_CI_IMPORT_REUSE_PASS cases=26'
+          php -l scripts/ez2_ci_owner_edit_probe.php
+          php -l scripts/test_ez2_ci_owner_edit_probe.php
+          php scripts/test_ez2_ci_owner_edit_probe.php | grep -Fq 'EZ2_CI_OWNER_EDIT_PROBE_GUARD_PASS cases=22'
+
+      - name: Verify executable disposable Elementor content upgrade and rollback guards
+        run: |
+          php -l scripts/ez2_ci_disposable_content_upgrade.php
+          php -l scripts/test_ez2_ci_disposable_content_upgrade.php
+          php scripts/test_ez2_ci_disposable_content_upgrade.php | tee /tmp/ez2-ci-content-upgrade.log
+          grep -Fq 'EZ2_CI_CONTENT_UPGRADE_GUARD_PASS cases=22' /tmp/ez2-ci-content-upgrade.log
+
+      - name: Guard redacted Owner readiness receipt for isolated LocalWP review
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-owner-readiness-receipt.php
+          php -l scripts/test_ez2_owner_readiness_receipt.php
+          php scripts/test_ez2_owner_readiness_receipt.php | tee /tmp/ez2-owner-readiness-receipt.log
+          grep -Fq 'EZ2_OWNER_READINESS_RECEIPT_PASS cases=46 read_only=true private_bytes_exported=false can_apply=false' /tmp/ez2-owner-readiness-receipt.log
+
+      - name: Check isolated EZ2 WordPress delivery runtime safety (no install)
+        run: |
+          php -l scripts/ez2_wp_delivery_runtime_gate.php
+          php -l scripts/test_ez2_wp_delivery_runtime_gate.php
+          php scripts/test_ez2_wp_delivery_runtime_gate.php | tee /tmp/ez2-delivery-runtime-gate.log
+          grep -Fq 'EZ2_DELIVERY_RUNTIME_GATE_PASS cases=57' /tmp/ez2-delivery-runtime-gate.log
+
+      - name: Bind exact-head public release to verified private backup (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_release_binding.py scripts/test_ez2_backup_release_binding.py
+          python3 scripts/test_ez2_backup_release_binding.py | tee /tmp/ez2-backup-release-binding.log
+          grep -Fq 'EZ2_BACKUP_RELEASE_BINDING_PASS cases=17 release_and_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-backup-release-binding.log
+
+      - name: Guard verified envelope consumption as disposable WordPress install input
+        run: |
+          python3 -m py_compile scripts/ez2_ci_delivery_envelope_install_input.py scripts/test_ez2_ci_delivery_envelope_install_input.py
+          python3 scripts/test_ez2_ci_delivery_envelope_install_input.py | tee /tmp/ez2-envelope-consumer.log
+          grep -Fq 'EZ2_ENVELOPE_CONSUMER_GUARD_PASS cases=14 disposable_only=true localwp_touched=false' /tmp/ez2-envelope-consumer.log
+
+      - name: Verify release-before-private-capture checkpoint (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_wp_preinstall_checkpoint.py scripts/ez2_checkpoint_revalidation.py scripts/test_ez2_wp_preinstall_checkpoint.py
+          python3 scripts/test_ez2_wp_preinstall_checkpoint.py | tee /tmp/ez2-private-checkpoint.log
+          grep -Fq 'EZ2_PRIVATE_PREINSTALL_CHECKPOINT_PASS cases=38 private_backup_verified=true localwp_touched=false can_apply=false' /tmp/ez2-private-checkpoint.log
+
+      - name: Rehearse verified private checkpoint through candidate swap and rollback (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_checkpoint_upgrade_rehearsal.py scripts/test_ez2_checkpoint_upgrade_rehearsal.py
+          python3 scripts/test_ez2_checkpoint_upgrade_rehearsal.py | tee /tmp/ez2-checkpoint-upgrade.log
+          grep -Fq 'EZ2_CHECKPOINT_CANDIDATE_SCRATCH_ROLLBACK_PASS cases=13 private_backup_unchanged=true localwp_touched=false can_apply=false' /tmp/ez2-checkpoint-upgrade.log
+
+      - name: Guard real WordPress post-install integrity (offline fixtures)
+        run: |
+          php -l scripts/ez2_ci_postinstall_integrity.php
+          php -l scripts/test_ez2_ci_postinstall_integrity.php
+          php scripts/test_ez2_ci_postinstall_integrity.php | tee /tmp/ez2-postinstall-integrity-guard.log
+          grep -Fq 'EZ2_CI_POSTINSTALL_GUARD_PASS cases=27' /tmp/ez2-postinstall-integrity-guard.log
+
+      - name: Guard disposable combined files-and-SQL rollback rehearsal
+        run: |
+          python3 -m py_compile scripts/ez2_ci_combined_recovery.py scripts/test_ez2_ci_combined_recovery.py
+          python3 scripts/test_ez2_ci_combined_recovery.py | tee /tmp/ez2-ci-combined-rollback-guard.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_GUARD_PASS cases=53 file_fault_scenarios=4' /tmp/ez2-ci-combined-rollback-guard.log
+
+      - name: Verify synthetic WordPress attachment-to-Elementor media mapping
+        run: |
+          php -l scripts/ez2_ci_compiled_roundtrip.php
+          php -l scripts/test_ez2_ci_compiled_roundtrip.php
+          php scripts/test_ez2_ci_compiled_roundtrip.php | tee /tmp/ez2-ci-compiled-roundtrip.log
+          grep -Fq 'EZ2_CI_COMPILED_ROUNDTRIP_GUARD_PASS cases=15' /tmp/ez2-ci-compiled-roundtrip.log
+          php -l scripts/ez2_ci_media_inventory.php
+          php -l scripts/test_ez2_ci_media_inventory.php
+          php scripts/test_ez2_ci_media_inventory.php | tee /tmp/ez2-media-inventory.log
+          grep -Fq 'EZ2_CI_MEDIA_INVENTORY_PASS cases=28' /tmp/ez2-media-inventory.log
+
+      - name: Test isolated Elementor split Style-tab controls and missing overlay
+        run: |
+          php -l scripts/test_ez2_elementor_controls_probe.php
+          php scripts/test_ez2_elementor_controls_probe.php | tee /tmp/ez2-elementor-controls-regression.log
+          grep -q 'EZ2_ELEMENTOR_CONTROLS_PROBE_REGRESSION_PASS cases=2' /tmp/ez2-elementor-controls-regression.log
+
+      - name: Lint isolated Elementor control registration probe
+        run: php -l scripts/ez2_elementor_controls_probe.php
+
+      - name: Guard isolated Elementor CI scope and pinned version
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_ephemeral_guard.py
+          python3 scripts/ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-ephemeral-guard.log
+          grep -q 'EZ2_ELEMENTOR_EPHEMERAL_GUARD_PASS cases=30' /tmp/ez2-elementor-ephemeral-guard.log
+          python3 -m py_compile scripts/test_ez2_elementor_ephemeral_guard.py
+          python3 scripts/test_ez2_elementor_ephemeral_guard.py | tee /tmp/ez2-elementor-matrix-regression.log
+          grep -q 'EZ2_ELEMENTOR_MATRIX_REGRESSION_PASS cases=23' /tmp/ez2-elementor-matrix-regression.log
+
+      - name: Verify EZ2 managed-content conflict dry-run guard
+        run: |
+          python3 -m py_compile scripts/ez2_content_guard.py scripts/test_ez2_content_guard.py
+          python3 scripts/test_ez2_content_guard.py | tee /tmp/ez2-content-guard.log
+          grep -q 'EZ2_CONTENT_GUARD_TEST_PASS cases=22' /tmp/ez2-content-guard.log
+
+      - name: Verify public Elementor candidate package (offline only)
+        run: |
+          python3 -m py_compile scripts/ez2_content_candidate_bundle.py scripts/test_ez2_content_candidate_bundle.py
+          python3 scripts/test_ez2_content_candidate_bundle.py | tee /tmp/ez2-public-content.log
+          grep -q 'EZ2_PUBLIC_CONTENT_CANDIDATE_TEST_PASS cases=13' /tmp/ez2-public-content.log
+
+      - name: Verify cross-artifact catalog with real validators and synthetic files
+        run: |
+          python3 -m py_compile scripts/ez2_release_set.py scripts/test_ez2_release_set.py
+          python3 scripts/test_ez2_release_set.py | tee /tmp/ez2-release-set.log
+          grep -q 'EZ2_RELEASE_SET_TEST_PASS cases=23' /tmp/ez2-release-set.log
+
+      - name: Guard exact-head release candidate runtime input (offline only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_candidate_from_release.py scripts/test_ez2_ci_candidate_from_release.py
+          python3 scripts/test_ez2_ci_candidate_from_release.py | tee /tmp/ez2-runtime-candidate-regression.log
+          grep -q 'EZ2_RELEASE_RUNTIME_INPUT_REGRESSION_PASS cases=24' /tmp/ez2-runtime-candidate-regression.log
+
+      - name: Preflight controlled Elementor exports without importing them
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_export_check.py
+          python3 scripts/test_ez2_elementor_export_check.py | tee /tmp/ez2-elementor-export.log
+          grep -q 'EZ2_ELEMENTOR_EXPORT_PREFLIGHT_PASS cases=26' /tmp/ez2-elementor-export.log
+
+      - name: Reject unsafe Elementor URI schemes and non-finite values
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_hardening.py
+          python3 scripts/test_ez2_elementor_hardening.py | tee /tmp/ez2-elementor-hardening.log
+          grep -q 'EZ2_ELEMENTOR_HARDENING_PASS cases=12' /tmp/ez2-elementor-hardening.log
+
+      - name: Reject unsafe and encoded Elementor HTML markup
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_export_check.py scripts/test_ez2_elementor_html_guard.py
+          python3 scripts/test_ez2_elementor_html_guard.py | tee /tmp/ez2-elementor-html-guard.log
+          grep -q 'EZ2_ELEMENTOR_HTML_GUARD_PASS cases=16' /tmp/ez2-elementor-html-guard.log
+
+      - name: Check isolated EZ2 plugin lockfile metadata without installing
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_dependency_check.py scripts/test_ez2_plugin_dependency_check.py
+          python3 scripts/test_ez2_plugin_dependency_check.py | tee /tmp/ez2-plugin-preflight.log
+          grep -q 'EZ2_PLUGIN_DEPENDENCY_PREFLIGHT_PASS cases=26' /tmp/ez2-plugin-preflight.log
+
+      - name: Verify pinned isolated EZ2 plugin archive structure (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_archive_verify.py scripts/test_ez2_plugin_archive_verify.py
+          python3 scripts/test_ez2_plugin_archive_verify.py | tee /tmp/ez2-plugin-archive-verify.log
+          grep -q 'EZ2_PLUGIN_ARCHIVE_VERIFY_PASS cases=48' /tmp/ez2-plugin-archive-verify.log
+
+      - name: Test opt-in WordPress.org pinned plugin fetch (offline fixtures only)
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_official_fetch.py scripts/test_ez2_plugin_official_fetch.py
+          python3 scripts/test_ez2_plugin_official_fetch.py | tee /tmp/ez2-official-plugin-fetch.log
+          grep -q 'EZ2_OFFICIAL_PLUGIN_FETCH_PASS cases=14' /tmp/ez2-official-plugin-fetch.log
+
+      - name: Test checksum-pinned disposable Elementor installation (offline fixtures only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_pinned_plugin_install.py scripts/test_ez2_ci_pinned_plugin_install.py
+          python3 scripts/test_ez2_ci_pinned_plugin_install.py | tee /tmp/ez2-ci-pinned-plugin-test.log
+          grep -Fq 'EZ2_CI_PINNED_ELEMENTOR_INSTALL_GUARD_PASS cases=13' /tmp/ez2-ci-pinned-plugin-test.log
+
+      - name: Rehearse pinned third-party plugin rollback (offline scratch only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_pinned_plugin_recovery.py scripts/test_ez2_ci_pinned_plugin_recovery.py
+          python3 scripts/test_ez2_ci_pinned_plugin_recovery.py | tee /tmp/ez2-ci-plugin-recovery-guard.log
+          grep -Fq 'EZ2_CI_PINNED_PLUGIN_RECOVERY_GUARD_PASS cases=14' /tmp/ez2-ci-plugin-recovery-guard.log
+          python3 scripts/test_ez2_ci_three_component_recovery.py | tee /tmp/ez2-three-component-guard.log
+          grep -Fq 'EZ2_CI_THREE_COMPONENT_GUARD_PASS cases=23 scenarios=16 faults=13' /tmp/ez2-three-component-guard.log
+
+      - name: Observe plugin checksum candidates safely (offline fixtures only)
+        run: |
+          python3 -m py_compile scripts/ez2_plugin_checksum_probe.py scripts/test_ez2_plugin_checksum_probe.py
+          python3 scripts/test_ez2_plugin_checksum_probe.py | tee /tmp/ez2-checksum-probe.log
+          grep -q 'EZ2_PLUGIN_CHECKSUM_PROBE_PASS cases=16' /tmp/ez2-checksum-probe.log
+
+      - name: Plan isolated EZ2 full-delivery contract without site writes
+        run: |
+          python3 -m py_compile scripts/ez2_delivery_preflight.py scripts/test_ez2_delivery_preflight.py
+          python3 scripts/test_ez2_delivery_preflight.py | tee /tmp/ez2-delivery-preflight.log
+          grep -q 'EZ2_DELIVERY_PREFLIGHT_PASS cases=44' /tmp/ez2-delivery-preflight.log
+
+      - name: Verify exact-head release-to-delivery bridge (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_release_delivery_bridge.py scripts/test_ez2_release_delivery_bridge.py
+          python3 scripts/test_ez2_release_delivery_bridge.py | tee /tmp/ez2-release-bridge.log
+          grep -q 'EZ2_RELEASE_DELIVERY_BRIDGE_PASS cases=40' /tmp/ez2-release-bridge.log
+
+      - name: Guard isolated EZ2 WordPress and Elementor runtime (read-only)
+        run: |
+          php -l scripts/ez2_wp_runtime_probe.php
+          php -l scripts/test_ez2_wp_runtime_probe.php
+          php scripts/test_ez2_wp_runtime_probe.php | tee /tmp/ez2-wp-runtime-gate.log
+          grep -q 'EZ2_WP_RUNTIME_GATE_PASS cases=26' /tmp/ez2-wp-runtime-gate.log
+
+      - name: Test isolated EZ2 Elementor media compiler with synthetic fixtures
+        run: |
+          python3 -m py_compile scripts/ez2_elementor_media_compile.py scripts/test_ez2_elementor_media_compile.py
+          python3 scripts/test_ez2_elementor_media_compile.py | tee /tmp/ez2-elementor-media-compile.log
+          grep -q 'EZ2_ELEMENTOR_MEDIA_COMPILE_PASS cases=53' /tmp/ez2-elementor-media-compile.log
+
+      - name: Test isolated EZ2 WP-CLI private snapshot capture (fake WP only)
+        run: |
+          python3 -m py_compile scripts/ez2_wp_snapshot_capture.py scripts/test_ez2_wp_snapshot_capture.py
+          python3 scripts/test_ez2_wp_snapshot_capture.py | tee /tmp/ez2-wp-private-capture.log
+          grep -Fq 'EZ2_WP_PRIVATE_CAPTURE_GUARD_PASS cases=76 fake_wp_cli=true live_wp_touched=false' /tmp/ez2-wp-private-capture.log
+
+      - name: Validate isolated EZ2 rollback backup manifest and bytes (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_preflight.py scripts/test_ez2_backup_preflight.py
+          python3 scripts/test_ez2_backup_preflight.py | tee /tmp/ez2-backup-preflight.log
+          grep -q 'EZ2_BACKUP_PREFLIGHT_PASS cases=32' /tmp/ez2-backup-preflight.log
+
+      - name: Inspect isolated EZ2 rollback archives for unsafe paths and links (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_archive_guard.py scripts/test_ez2_backup_archive_guard.py
+          python3 scripts/test_ez2_backup_archive_guard.py | tee /tmp/ez2-backup-archive-guard.log
+          grep -q 'EZ2_BACKUP_ARCHIVE_GUARD_PASS cases=46' /tmp/ez2-backup-archive-guard.log
+
+      - name: Rehearse EZ2 rollback file extraction in disposable scratch (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_backup_scratch_replay.py scripts/test_ez2_backup_scratch_replay.py
+          python3 scripts/test_ez2_backup_scratch_replay.py | tee /tmp/ez2-backup-scratch-replay.log
+          grep -q 'EZ2_BACKUP_SCRATCH_REPLAY_PASS cases=13' /tmp/ez2-backup-scratch-replay.log
+
+      - name: Rehearse synthetic theme/core file swap and rollback (offline only)
+        run: |
+          python3 -m py_compile scripts/ez2_ci_file_upgrade.py scripts/test_ez2_ci_file_upgrade.py
+          python3 scripts/test_ez2_ci_file_upgrade.py | tee /tmp/ez2-file-upgrade-regression.log
+          grep -Fq 'EZ2_CI_FILE_UPGRADE_REGRESSION_PASS cases=21' /tmp/ez2-file-upgrade-regression.log
+
+      - name: Guard disposable WordPress database restore rehearsal (offline only)
+        run: |
+          bash -n scripts/ez2_ci_wordpress_db_restore.sh
+          bash scripts/test_ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-sql-restore-guard.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_GUARD_PASS cases=26' /tmp/ez2-ci-sql-restore-guard.log
+
+      - name: Link installed backup and candidate delivery without applying (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_upgrade_gate.py scripts/test_ez2_upgrade_gate.py
+          python3 scripts/test_ez2_upgrade_gate.py | tee /tmp/ez2-upgrade-gate.log
+          grep -Fq 'EZ2_UPGRADE_GATE_PASS cases=57 additional=18 total=75' /tmp/ez2-upgrade-gate.log
+
+      - name: Guard consolidated EZ2 delivery envelope (offline fixtures)
+        run: |
+          python3 -m py_compile scripts/ez2_delivery_envelope.py scripts/test_ez2_delivery_envelope.py
+          python3 scripts/test_ez2_delivery_envelope.py | tee /tmp/ez2-delivery-envelope.log
+          grep -Fq 'EZ2_DELIVERY_ENVELOPE_GUARD_PASS cases=18 installable=false private_media=false' /tmp/ez2-delivery-envelope.log
+
+      - name: Test exact-head release evidence auditor (offline fixtures)
+        run: |
+          python3 -m py_compile scripts/ez2_release_evidence.py scripts/test_ez2_release_evidence.py
+          python3 scripts/test_ez2_release_evidence.py | tee /tmp/ez2-release-evidence.log
+          grep -Fq 'EZ2_RELEASE_EVIDENCE_PASS cases=67 matrix=6 workflows=5' /tmp/ez2-release-evidence.log
+
+      - name: Test read-only installed first-party code parity (synthetic only)
+        run: |
+          python3 -m py_compile scripts/ez2_installed_code_parity.py scripts/ez2_ci_live_installed_parity.py scripts/test_ez2_installed_code_parity.py
+          python3 scripts/test_ez2_installed_code_parity.py | tee /tmp/ez2-code-parity.log
+          grep -Fq 'EZ2_INSTALLED_CODE_PARITY_PASS cases=21' /tmp/ez2-code-parity.log
+
+      - name: Test isolated EZ2 managed-content digest snapshot (offline only)
+        run: |
+          php -l scripts/ez2_wp_managed_snapshot.php
+          php -l scripts/test_ez2_wp_managed_snapshot.php
+          php scripts/test_ez2_wp_managed_snapshot.php | tee /tmp/ez2-managed-snapshot.log
+          grep -Fq 'EZ2_MANAGED_SNAPSHOT_PASS cases=24' /tmp/ez2-managed-snapshot.log
+
+      - name: Reject managed WordPress content drift without trusted baseline
+        run: |
+          python3 -m py_compile scripts/ez2_wp_snapshot_drift.py scripts/test_ez2_wp_snapshot_drift.py
+          python3 scripts/test_ez2_wp_snapshot_drift.py | tee /tmp/ez2-wp-snapshot-drift.log
+          grep -Fq 'EZ2_WP_SNAPSHOT_DRIFT_PASS cases=30' /tmp/ez2-wp-snapshot-drift.log
+
+      - name: Build and validate deployment bundle
+        run: |
+          bash -n scripts/build-release-bundle.sh
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+          test -s .release/ezb-theme.zip
+          test -s .release/ezb-core.zip
+          test -s .release/SHA256SUMS
+          test -s .release/RELEASE_CONTENTS.json
+          python3 scripts/verify_release_scope.py .release "$(git rev-parse HEAD)"
+          (cd .release && sha256sum -c SHA256SUMS)
+
+      - name: Prevent development query URLs in public theme source
+        run: |
+          if grep -R -n -F 'ezb_page=' wp-content/themes/ezb-theme; then
+            echo "Theme source must use pretty public URLs; ezb_page is development transport only."
+            exit 1
+          fi
+
+      - name: Guard disposable Elementor browser smoke (offline only)
+        run: |
+          node --check scripts/ez2_elementor_browser_smoke.mjs
+          node --check scripts/test_ez2_elementor_browser_smoke.mjs
+          node scripts/test_ez2_elementor_browser_smoke.mjs | tee /tmp/ez2-browser-guard.log
+          grep -q 'EZ2_SYNTHETIC_BROWSER_GUARD_PASS cases=26' /tmp/ez2-browser-guard.log
+
+      - name: Inspect isolated EZ2 backup destination without writing
+        run: |
+          php -l tools/ez2-delivery-agent/includes/ez2-backup-readiness.php
+          php -l scripts/test_ez2_backup_readiness.php
+          php scripts/test_ez2_backup_readiness.php | tee /tmp/ez2-backup-readiness.log
+          grep -Fq 'EZ2_BACKUP_READINESS_GUARD_PASS cases=51 backup_created=false apply_disabled=true' /tmp/ez2-backup-readiness.log
+
+      - name: Package and verify isolated synthetic EZ2 backup archives
+        run: |
+          python3 -m py_compile scripts/ez2_backup_snapshot_pack.py scripts/test_ez2_backup_snapshot_pack.py
+          python3 scripts/test_ez2_backup_snapshot_pack.py | tee /tmp/ez2-backup-snapshot-pack.log
+          grep -Fq 'EZ2_BACKUP_SNAPSHOT_PACK_PASS cases=38 backup_created=true wordpress_touched=false' /tmp/ez2-backup-snapshot-pack.log
+
+      - name: Guard isolated EZ2 delivery agent preview (no installation)
+        run: |
+          php -l tools/ez2-delivery-agent/ez2-delivery-agent.php
+          php -l scripts/test_ez2_delivery_agent.php
+          php scripts/test_ez2_delivery_agent.php | tee /tmp/ez2-delivery-agent.log
+          grep -Fq 'EZ2_DELIVERY_AGENT_GUARD_PASS cases=21 apply_disabled=true' /tmp/ez2-delivery-agent.log
+          php -l tools/ez2-delivery-agent/includes/ez2-managed-inventory.php
+          php -l scripts/test_ez2_managed_agent_inventory.php
+          php scripts/test_ez2_managed_agent_inventory.php | tee /tmp/ez2-managed-agent-inventory.log
+          grep -Fq 'EZ2_MANAGED_AGENT_INVENTORY_PASS cases=26 private_content_emitted=false can_apply=false' /tmp/ez2-managed-agent-inventory.log
+          php -l tools/ez2-delivery-agent/includes/ez2-managed-inventory-diff.php
+          php -l scripts/test_ez2_managed_agent_diff.php
+          php scripts/test_ez2_managed_agent_diff.php | tee /tmp/ez2-managed-agent-diff.log
+          php -l scripts/test_ez2_managed_three_way.php
+          php scripts/test_ez2_managed_three_way.php | grep -Fq 'EZ2_MANAGED_THREE_WAY_PASS cases=26'
+          php -l tools/ez2-delivery-agent/includes/ez2-installed-baseline-receipt.php
+          php -l scripts/test_ez2_installed_baseline_receipt.php
+          php scripts/test_ez2_installed_baseline_receipt.php | grep -Fq 'EZ2_BASELINE_RECEIPT_GUARD_PASS cases=31 authenticated_not_installed=true can_apply=false'
+          php -l tools/ez2-delivery-agent/includes/ez2-installed-baseline-prepare.php
+          php -l scripts/test_ez2_installed_baseline_prepare.php
+          php scripts/test_ez2_installed_baseline_prepare.php | grep -Fq 'EZ2_BASELINE_PREPARE_PASS cases='
+          grep -Fq 'EZ2_MANAGED_AGENT_DIFF_PASS cases=' /tmp/ez2-managed-agent-diff.log
+          grep -Fq 'read_only=true can_apply=false private_content_emitted=false' /tmp/ez2-managed-agent-diff.log
+          php -l tools/ez2-delivery-agent/includes/ez2-release-evidence.php
+          php -l scripts/test_ez2_release_evidence.php
+          php scripts/test_ez2_release_evidence.php | tee /tmp/ez2-release-evidence-agent.log
+          grep -Fq 'EZ2_RELEASE_EVIDENCE_GUARD_PASS cases=37 apply_disabled=true' /tmp/ez2-release-evidence-agent.log

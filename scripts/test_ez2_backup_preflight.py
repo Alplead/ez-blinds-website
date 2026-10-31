@@ -1,0 +1,217 @@
+"""Synthetic, no-network regression tests for read-only EZ2 backup verification."""
+import copy
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+from ez2_backup_preflight import ROLES, verify, regular_file
+
+SHA = "a" * 40
+cases = 0
+
+
+def fixture(root):
+    files = {}
+    for role, name in ROLES.items():
+        data = ("synthetic " + role + "\n").encode()
+        (root / name).write_bytes(data)
+        files[role] = {"name": name, "sha256": hashlib.sha256(data).hexdigest(),
+                       "size_bytes": len(data)}
+    manifest = {"schema_version": 1, "target_site": "ez2-isolated-only",
+                "source_sha": SHA, "files": files}
+    save(root, manifest)
+    return manifest
+
+
+def save(root, doc):
+    (root / "backup-manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+
+
+def reject(mutator):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "backup"
+        root.mkdir()
+        manifest = fixture(root)
+        mutator(root, manifest)
+        try:
+            verify(root, SHA)
+        except (OSError, ValueError, TypeError):
+            cases += 1
+            return
+        raise AssertionError("Unsafe backup was accepted")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    fixture(root)
+    result = verify(root, SHA)
+    assert result["status"] == "BACKUP_BYTES_VERIFIED_ONLY"
+    assert result["verified_components"] == sorted(ROLES)
+    assert not result["restore_rehearsed"] and not result["deployment_authorized"]
+    assert not result["site_identity_verified"] and not result["applied"]
+    cases += 1
+    cmd = [sys.executable, str(Path(__file__).with_name("ez2_backup_preflight.py")),
+           str(root), SHA]
+    run = subprocess.run(cmd, capture_output=True, text=True)
+    assert run.returncode == 0 and json.loads(run.stdout)["verified_bytes"] > 0
+    cases += 1
+    assert subprocess.run(cmd[:-1] + ["not-a-sha"], capture_output=True).returncode == 1
+    cases += 1
+
+reject(lambda root, m: (m.update(target_site="ez-bns-new-dev.local"), save(root, m)))
+reject(lambda root, m: (m.update(target_site="ezbns.com.au"), save(root, m)))
+reject(lambda root, m: (m.update(source_sha="b" * 40), save(root, m)))
+reject(lambda root, m: (m.update(schema_version=True), save(root, m)))
+reject(lambda root, m: (m.update(unapproved=True), save(root, m)))
+reject(lambda root, m: (m["files"].pop("database"), save(root, m)))
+reject(lambda root, m: (m["files"].update(extra={}), save(root, m)))
+reject(lambda root, m: (m["files"]["uploads"].update(name="../uploads.tar.gz"), save(root, m)))
+reject(lambda root, m: (m["files"]["database"].update(sha256="f" * 64), save(root, m)))
+reject(lambda root, m: (m["files"]["plugins"].update(size_bytes=0), save(root, m)))
+reject(lambda root, m: (m["files"]["theme"].update(size_bytes=True), save(root, m)))
+reject(lambda root, m: (m["files"]["uploads"].update(size_bytes=12345), save(root, m)))
+reject(lambda root, m: (root / ROLES["theme"]).write_bytes(b"changed"))
+reject(lambda root, m: (root / ROLES["database"]).unlink())
+reject(lambda root, m: (root / "undeclared.txt").write_text("synthetic"))
+reject(lambda root, m: (root / "undeclared-directory").mkdir())
+
+def external_hardlink_component(root, m):
+    os.link(root / ROLES["uploads"], root.parent / "outside-component")
+reject(external_hardlink_component)
+
+def external_hardlink_manifest(root, m):
+    os.link(root / "backup-manifest.json", root.parent / "outside-manifest")
+reject(external_hardlink_manifest)
+
+def symlink_component(root, m):
+    (root / ROLES["database"]).unlink()
+    (root / ROLES["database"]).symlink_to(root / ROLES["uploads"])
+reject(symlink_component)
+
+def hardlink_component(root, m):
+    (root / ROLES["database"]).unlink()
+    os.link(root / ROLES["uploads"], root / ROLES["database"])
+    m["files"]["database"] = copy.deepcopy(m["files"]["uploads"])
+    m["files"]["database"]["name"] = ROLES["database"]
+    save(root, m)
+reject(hardlink_component)
+
+def symlink_manifest(root, m):
+    (root / "backup-manifest.json").rename(root / "real-manifest.json")
+    (root / "backup-manifest.json").symlink_to(root / "real-manifest.json")
+reject(symlink_manifest)
+
+def duplicate_keys(root, m):
+    (root / "backup-manifest.json").write_text('{"schema_version":1,"schema_version":1}')
+reject(duplicate_keys)
+
+def nonfinite(root, m):
+    (root / "backup-manifest.json").write_text('{"schema_version":NaN}')
+reject(nonfinite)
+
+# Simulate a symlink substitution immediately AFTER lstat, preserving
+# identical bytes. Old path-based reads would silently accept this race.
+def reject_post_stat_symlink_swap(filename):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "backup"
+        root.mkdir()
+        fixture(root)
+        target = root / filename
+        external = root.parent / ("outside-" + filename)
+        swapped = False
+
+        def swap_after_stat(path):
+            nonlocal swapped
+            info = regular_file(path)
+            if Path(path) == target and not swapped:
+                target.rename(external)
+                target.symlink_to(external)
+                swapped = True
+            return info
+
+        with patch("ez2_backup_preflight.regular_file", side_effect=swap_after_stat):
+            try:
+                verify(root, SHA)
+            except (OSError, ValueError, TypeError):
+                assert swapped
+                cases += 1
+            else:
+                raise AssertionError("Post-stat symlink substitution was accepted")
+
+
+reject_post_stat_symlink_swap("backup-manifest.json")
+reject_post_stat_symlink_swap(ROLES["uploads"])
+
+# A post-stat regular-file-to-FIFO swap must fail immediately, rather than
+# block indefinitely in os.open(). The verifier never reads the FIFO.
+def reject_post_stat_fifo_swap(filename):
+    global cases
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "backup"
+        root.mkdir()
+        fixture(root)
+        target = root / filename
+        swapped = False
+
+        def swap_after_stat(path):
+            nonlocal swapped
+            info = regular_file(path)
+            if Path(path) == target and not swapped:
+                target.unlink()
+                os.mkfifo(target)
+                swapped = True
+            return info
+
+        with patch("ez2_backup_preflight.regular_file", side_effect=swap_after_stat):
+            try:
+                verify(root, SHA)
+            except (OSError, ValueError, TypeError):
+                assert swapped
+                cases += 1
+            else:
+                raise AssertionError("Post-stat FIFO substitution was accepted")
+
+
+reject_post_stat_fifo_swap("backup-manifest.json")
+reject_post_stat_fifo_swap(ROLES["uploads"])
+
+# A non-linked backup leaf can still be reached through a linked parent.
+# Never follow that alias to read a private backup set.
+with tempfile.TemporaryDirectory() as tmp:
+    parent = Path(tmp) / "real-parent"
+    parent.mkdir()
+    backup = parent / "backup"
+    backup.mkdir()
+    fixture(backup)
+    alias = Path(tmp) / "linked-parent"
+    alias.symlink_to(parent, target_is_directory=True)
+    try:
+        verify(alias / "backup", SHA)
+    except (OSError, ValueError, TypeError):
+        cases += 1
+    else:
+        raise AssertionError("Linked backup parent was accepted")
+
+# Keep rejecting a symlinked backup directory itself as well.
+with tempfile.TemporaryDirectory() as tmp:
+    actual = Path(tmp) / "actual-backup"
+    actual.mkdir()
+    fixture(actual)
+    alias = Path(tmp) / "linked-backup"
+    alias.symlink_to(actual, target_is_directory=True)
+    try:
+        verify(alias, SHA)
+    except (OSError, ValueError, TypeError):
+        cases += 1
+    else:
+        raise AssertionError("Linked backup root was accepted")
+
+assert cases == 32, cases
+print(f"EZ2_BACKUP_PREFLIGHT_PASS cases={cases}")

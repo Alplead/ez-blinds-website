@@ -1,0 +1,510 @@
+name: Release Install Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'wp-content/**'
+      - 'tools/ez2-delivery-agent/**'
+      - 'scripts/build-release-bundle.sh'
+      - 'scripts/verify_release_scope.py'
+      - 'scripts/test_verify_release_scope.py'
+      - 'scripts/release-install-smoke.sh'
+      - 'scripts/host-readiness.mjs'
+      - 'scripts/test-host-readiness-guard.mjs'
+      - '.github/release-install/**'
+      - 'scripts/ez2_content_guard.py'
+      - 'scripts/test_ez2_content_guard.py'
+      # Re-run clean installation whenever EZ2 delivery, dependency or template guards change.
+      - 'scripts/ez2_*'
+      - 'scripts/test_ez2_*'
+      - '.github/workflows/release-install-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-install:
+    runs-on: ubuntu-latest
+    # Cold image pulls plus pinned Elementor/rollback smoke can exceed 10 minutes.
+    # Preserve full fail-closed tests instead of cancelling before artifacts upload.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Build release bundle
+        run: |
+          bash scripts/build-release-bundle.sh | tee /tmp/release-bundle.log
+          grep -q 'EZB_RELEASE_BUNDLE_PASS' /tmp/release-bundle.log
+
+      - name: Verify exact-head release scope and checksums
+        run: |
+          python3 scripts/verify_release_scope.py .release "${{ github.event.pull_request.head.sha || github.sha }}"
+          (cd .release && sha256sum -c SHA256SUMS)
+
+      - name: Build and verify non-installable Elementor candidate
+        run: |
+          python3 scripts/ez2_content_candidate_bundle.py build . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
+          python3 scripts/ez2_content_candidate_bundle.py verify . "${{ github.event.pull_request.head.sha || github.sha }}" .release/ez2-content-candidate.zip
+
+      - name: Build and verify exact-head cross-artifact catalog (evidence only)
+        run: |
+          python3 scripts/ez2_release_set.py build .release "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 scripts/ez2_release_set.py verify .release "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Assemble and verify single public-safe EZ2 delivery envelope (no install)
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 scripts/ez2_delivery_envelope.py build .release "${{ github.event.pull_request.head.sha || github.sha }}" design/ez2-elementor-pinned-plugin.json .release/EZ2_DELIVERY_ENVELOPE.zip
+          python3 scripts/ez2_delivery_envelope.py verify .release/EZ2_DELIVERY_ENVELOPE.zip "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Consume verified delivery envelope as disposable WordPress install inputs
+        env:
+          EZ2_CI_ENVELOPE_INSTALL: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_delivery_envelope_install_input.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-envelope-install-input.log
+          grep -Fq 'DISPOSABLE_ENVELOPE_INSTALL_INPUT_VERIFIED' /tmp/ez2-envelope-install-input.log
+          (cd .release/ez2-envelope-install-input && sha256sum -c SHA256SUMS)
+
+      - name: Link exact-head release candidate to pinned Elementor delivery plan (no install)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from ez2_release_delivery_bridge import plan
+          version = json.loads(Path('design/ez2-home-hero-candidate.json').read_text())['version']
+          with tempfile.TemporaryDirectory(prefix='ez2-release-plan-') as tmp:
+              root = Path(tmp)
+              # Reuse the checksum-pinned dependency that the later disposable
+              # WordPress install actually downloads and verifies. Do not test
+              # an intentionally unpinned dummy manifest in the release path.
+              lock = Path('.release/ez2-envelope-install-input/dependency/elementor-pinned.json')
+              pinned = json.loads(lock.read_text())
+              assert len(pinned['plugins']) == 1
+              assert pinned['plugins'][0]['version'] == version
+              assert len(pinned['plugins'][0]['archive_sha256']) == 64
+              installed = root / 'installed.json'
+              installed.write_text(json.dumps({'schema_version': 1, 'items': []}))
+              result = plan(Path('.release'), os.environ['EZB_EXPECTED_SHA'], lock, installed)
+              assert result['status'] == 'READY_FOR_RUNTIME_TEST_ONLY'
+              assert result['missing_plugin_checksums'] == []
+              assert result['plugin_status'] == 'METADATA_ONLY'
+              assert result['elementor_version_pinned'] == version
+              assert result['release_catalog_verified'] and result['candidate_archive_verified']
+              assert result['content']['actions'][0]['action'] == 'create'
+              assert not result['plugin_archive_verified'] and not result['localwp_installed']
+              assert not result['transaction_preview']['can_apply']
+              assert not result['applied'] and not result['one_click_complete']
+              print('EZ2_EXACT_HEAD_DELIVERY_BRIDGE_PASS pinned_manifest=true runtime_test_only=true installed=false')
+          PY
+
+      - name: Rehearse exact-head theme/core file upgrade and injected rollback in private scratch
+        env:
+          EZ2_CI_FILE_SWAP: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_file_upgrade.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-file-upgrade.log
+          grep -Fq 'EZ2_CI_FILE_UPGRADE_ROLLBACK_PASS components=2 fault_recovered=true fault_scenarios=4' /tmp/ez2-file-upgrade.log
+
+      - name: Bind exact-head release ZIPs to crash-resumable scratch journal (no site writes)
+        env:
+          EZ2_CI_DURABLE_RELEASE: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_release_durable_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-release-durable.log
+          grep -Fq 'EZ2_CI_EXACT_RELEASE_DURABLE_ROLLBACK_PASS first_party=2 journal_components=3 fault_scenarios=6 elementor_installed=false localwp_touched=false can_apply=false' /tmp/ez2-release-durable.log
+
+      - name: Observe official Elementor Free ZIP checksum (unattested; no install)
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from ez2_plugin_checksum_probe import capture
+          version = json.loads(Path('design/ez2-home-hero-candidate.json').read_text())['version']
+          assert version == '4.3.4', 'Unexpected Elementor candidate version'
+          lock = {'schema_version': 1, 'target_site': 'ez2-isolated-only',
+                  'plugins': [{'slug': 'elementor', 'version': version,
+                               'entrypoint': 'elementor/elementor.php',
+                               'source': 'wordpress.org', 'archive_sha256': None,
+                               'activate': True}]}
+          observed = capture(lock)
+          assert observed['status'] == 'UNATTESTED_CHECKSUM_OBSERVATION'
+          assert not observed['installed'] and not observed['release_approved']
+          print('EZ2_ELEMENTOR_OFFICIAL_ARCHIVE_OBSERVED_SHA256=' +
+                observed['plugins'][0]['observed_sha256'])
+          print('EZ2_ELEMENTOR_CHECKSUM_OBSERVATION_PASS no_install=true untrusted_until_pinned=true')
+          PY
+
+      - name: Preload Docker Official Images from public ECR
+        run: |
+          set -euo pipefail
+          # GitHub-hosted runners share an unauthenticated Docker Hub pull quota.
+          # ECR's Docker Official Images mirror avoids relying on that quota.
+          for image in mariadb:11 wordpress:php8.3-apache wordpress:cli; do
+            loaded=0
+            for attempt in 1 2 3; do
+              if docker pull "public.ecr.aws/docker/library/$image"; then
+                docker tag "public.ecr.aws/docker/library/$image" "$image"
+                loaded=1
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep "$((attempt * 12))"; fi
+            done
+            if [ "$loaded" -ne 1 ]; then
+              echo "::warning::ECR unavailable for $image; trying Docker Hub"
+              docker pull "$image"
+            fi
+          done
+
+      - name: Start clean WordPress staging stack
+        run: docker compose -f .github/release-install/docker-compose.yml up -d --wait release-db release-wordpress
+
+      - name: Install release ZIPs into clean WordPress
+        run: |
+          docker compose -f .github/release-install/docker-compose.yml run --rm release-bootstrap | tee /tmp/release-install.log
+          grep -q 'EZB_RELEASE_INSTALL_PASS' /tmp/release-install.log
+
+      - name: Verify exact-head bytes copied from running disposable WordPress
+        env:
+          EZ2_CI_LIVE_PARITY: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_live_installed_parity.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-live-parity-before.log
+          grep -Fq 'EZ2_CI_LIVE_INSTALLED_PARITY_PASS' /tmp/ez2-ci-live-parity-before.log
+
+      - name: Rehearse isolated SQL restore of synthetic installed WordPress database
+        env:
+          EZ2_CI_SQL_RESTORE: YES_SYNTHETIC_RELEASE_STACK
+        run: |
+          bash scripts/ez2_ci_wordpress_db_restore.sh | tee /tmp/ez2-ci-wordpress-db-restore.log
+          grep -q 'EZ2_CI_WORDPRESS_DB_RESTORE_PASS' /tmp/ez2-ci-wordpress-db-restore.log
+
+      - name: Verify installed site responds
+        run: |
+          set -euo pipefail
+          code="$(curl -LsS -o /tmp/release-home.html -w '%{http_code}' http://127.0.0.1:8081/)"
+          test "$code" = "200"
+          grep -q 'ezb-theme-style-css' /tmp/release-home.html
+          grep -q 'Ready to talk through your windows?' /tmp/release-home.html
+          grep -q 'Free Measure &amp; Quote' /tmp/release-home.html
+          ! grep -q 'ezb_page=' /tmp/release-home.html
+
+      - name: Verify release-mode retired routes and truthful redirects
+        run: |
+          set -euo pipefail
+          for path in \
+            /roman-blinds/ \
+            /panel-guide-blinds/ \
+            /venetian-blinds/ \
+            /portfolio/venetian-blinds/ \
+            /2018/02/04/roman-blinds-showcase/ \
+            /2018/02/04/panel-guide-blinds-showcase/ \
+            /2018/02/04/venetian-blinds-showcase/; do
+            code="$(curl -sS -o /tmp/retired-route.html -w '%{http_code}' "http://127.0.0.1:8081$path")"
+            test "$code" = "410"
+          done
+          code="$(curl -sS -o /dev/null -D /tmp/legacy-redirect-headers.txt -w '%{http_code}' 'http://127.0.0.1:8081/retractable-fly-screen/')"
+          test "$code" = "301"
+          grep -qi 'location: .*retractable-flyscreens/' /tmp/legacy-redirect-headers.txt
+
+      - name: Verify public project query rejects malformed input before WordPress parses it
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/release-malformed-project-query.html -w '%{http_code}' 'http://127.0.0.1:8081/?ezb_project%5B%5D=unexpected')"
+          test "$code" = "400"
+          grep -q 'Invalid route request.' /tmp/release-malformed-project-query.html
+          ! grep -q 'Fatal error' /tmp/release-malformed-project-query.html
+          ! grep -q 'Uncaught TypeError' /tmp/release-malformed-project-query.html
+
+      - name: Verify quote status handles malformed array input safely
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = array("sent"); echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-array.html
+          grep -q 'class="ezb-quote-form"' /tmp/quote-status-array.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-array.html
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-sent.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-sent.html
+          grep -q 'We could not verify an enquiry from this link.' /tmp/quote-status-sent.html
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '$_GET["quote_status"] = "sent"; $_GET["quote_receipt"] = "forged"; echo do_shortcode("[ezb_quote_form]");' --allow-root > /tmp/quote-status-forged.html
+          ! grep -q 'Thanks — your enquiry has been sent.' /tmp/quote-status-forged.html
+          grep -q 'We could not verify an enquiry from this link.' /tmp/quote-status-forged.html
+
+      - name: Verify unapproved flyscreen video stays private in release mode
+        run: |
+          set -euo pipefail
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (!function_exists("is_plugin_active")) require_once ABSPATH . "wp-admin/includes/plugin.php";
+            if (wp_get_environment_type() !== "staging") {
+              throw new Exception("Synthetic privacy check must run in release staging mode");
+            }
+            $filename = "EZ_Retractable_Flyscreen_WEB_V1_720x1280_muted.mp4";
+            $video = wp_insert_post(array(
+              "post_type" => "attachment",
+              "post_status" => "inherit",
+              "post_title" => "Synthetic privacy-restricted clip",
+              "post_mime_type" => "video/mp4",
+            ));
+            if (!$video || is_wp_error($video)) { throw new Exception("Synthetic video attachment was not created"); }
+            update_post_meta($video, "_wp_attached_file", "2026/10/" . $filename);
+            // A forged Media Library row alone must not make missing media renderable.
+            if (ezb_find_attachment_by_basename($filename) !== 0) {
+              throw new Exception("Missing synthetic video file was accepted");
+            }
+            $uploads = wp_get_upload_dir();
+            $dir = $uploads["basedir"] . "/2026/10";
+            if (!wp_mkdir_p($dir)) { throw new Exception("Synthetic upload directory unavailable"); }
+            $path = $dir . "/" . $filename;
+            if (file_exists($path) || is_link($path) ||
+                file_put_contents($path, "synthetic video test fixture only") === false) {
+              throw new Exception("Cannot create isolated synthetic video fixture");
+            }
+            if (ezb_find_attachment_by_basename($filename) !== $video ||
+                get_post_mime_type($video) !== "video/mp4" ||
+                !wp_get_attachment_url($video)) {
+              throw new Exception("Synthetic private video fixture is not renderable");
+            }
+            if (do_shortcode("[ezb_retractable_video]") !== "") {
+              throw new Exception("Privacy-restricted video leaked into release mode");
+            }
+            if (!unlink($path)) { throw new Exception("Synthetic video cleanup failed"); }
+            wp_delete_post($video, true);
+            echo "EZB_RELEASE_VIDEO_PRIVACY_PASS" . PHP_EOL;
+          ' --allow-root | tee /tmp/release-video-privacy.log
+          grep -q 'EZB_RELEASE_VIDEO_PRIVACY_PASS' /tmp/release-video-privacy.log
+
+      - name: Prove release ZIPs and pinned Elementor coexist in disposable WordPress
+        run: |
+          set -euo pipefail
+          # This is the release ZIP-installed WordPress, not the source-mounted Elementor CI stack.
+          # Match the committed candidate version; never install into LocalWP or production.
+          test "$(python3 -c 'import json; print(json.load(open("design/ez2-home-hero-candidate.json"))["version"])')" = '4.3.4'
+          EZ2_CI_PINNED_PLUGIN_INSTALL=YES_DISPOSABLE_RELEASE_ONLY \
+            python3 scripts/ez2_ci_pinned_plugin_install.py "${{ github.event.pull_request.head.sha || github.sha }}" | tee /tmp/ez2-ci-pinned-plugin-install.log
+          grep -Fq 'EZ2_CI_PINNED_ELEMENTOR_INSTALL_PASS version=4.3.4' /tmp/ez2-ci-pinned-plugin-install.log
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap plugin is-active elementor --allow-root
+          docker compose -f .github/release-install/docker-compose.yml run --rm --entrypoint wp release-bootstrap eval '
+            if (wp_get_environment_type() !== "staging" ||
+                get_option("home") !== "http://localhost:8081" ||
+                get_option("siteurl") !== "http://localhost:8081" ||
+                is_multisite() ||
+                get_option("stylesheet") !== "ezb-theme" ||
+                !is_plugin_active("ezb-core/ezb-core.php") ||
+                !is_plugin_active("elementor/elementor.php") ||
+                !defined("ELEMENTOR_VERSION") ||
+                ELEMENTOR_VERSION !== "4.3.4" ||
+                did_action("elementor/loaded") < 1) {
+              throw new Exception("EZ2_RELEASE_ELEMENTOR_COEXISTENCE_GATE");
+            }
+            $front = get_post((int)get_option("page_on_front"));
+            if (!$front || $front->post_status !== "publish" ||
+                $front->post_title !== "Home" ||
+                (string)get_option("blog_public") !== "0") {
+              throw new Exception("EZ2_RELEASE_FRONT_PAGE_CHANGED");
+            }
+            $candidate = get_posts([
+              "post_type" => "page", "post_status" => "any",
+              "title" => "EZ2 Home Hero - Unpublished Owner Review Candidate",
+              "posts_per_page" => 2, "fields" => "ids"
+            ]);
+            $marked = get_posts([
+              "post_type" => "page", "post_status" => "any",
+              "meta_key" => "_ez2_ci_import_fingerprint",
+              "posts_per_page" => 2, "fields" => "ids"
+            ]);
+            if ($candidate || $marked) {
+              throw new Exception("EZ2_RELEASE_CANDIDATE_LEAK");
+            }
+            echo "EZ2_RELEASE_ELEMENTOR_COEXISTENCE_PASS version=4.3.4 packaged_theme_core=true staging_only=true candidate_published=false localwp_installed=false one_click_complete=false";
+          ' --allow-root | tee /tmp/ez2-release-elementor-coexistence.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_COEXISTENCE_PASS version=4.3.4' /tmp/ez2-release-elementor-coexistence.log
+
+      - name: Rehearse checksum-pinned Elementor install and rollback in disposable scratch
+        env:
+          EZ2_CI_PINNED_PLUGIN_RECOVERY: YES_DISPOSABLE_SCRATCH_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_pinned_plugin_recovery.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-pinned-plugin-recovery.log
+          grep -Fq 'EZ2_CI_PINNED_PLUGIN_RECOVERY_PASS scenarios=6 faults=4' /tmp/ez2-ci-pinned-plugin-recovery.log
+          grep -Fq 'EZ2_CI_THREE_COMPONENT_RECOVERY_PASS scenarios=9 faults=7 components=3' /tmp/ez2-ci-pinned-plugin-recovery.log
+
+      - name: Rehearse combined theme/core and Elementor-active SQL clone rollback after injected fault
+        env:
+          EZ2_CI_COMBINED_ROLLBACK: YES_DISPOSABLE_STACK_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_combined_recovery.py .release "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'EZ2_CI_COMBINED_ROLLBACK_PASS file_components=2 file_fault_scenarios=4 sql_clone_recovered=true uploads_preserved=true content_rows_recovered=true elementor_meta_recovered=true source_db_untouched=true localwp_touched=false one_click_complete=false' /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'elementor_active=true' /tmp/ez2-ci-combined-recovery.log
+          grep -Fq 'EZ2_CI_THREE_DOMAIN_ROLLBACK_PASS components=3 sql_clone_recovered=true after_content_fault_recovered=true pinned_elementor_verified=true' /tmp/ez2-ci-combined-recovery.log
+
+      - name: Exercise envelope-sourced Elementor candidate in release-installed WordPress (CI only)
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EZ2_CI_RELEASE_ENVELOPE_REQUIRED: YES_VERIFIED_ENVELOPE
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          python3 scripts/ez2_ci_candidate_from_release.py .release "$EZB_EXPECTED_SHA"
+          digest="$(sha256sum design/ez2-home-hero-candidate.json | cut -d" " -f1)"
+          # Real WordPress conflict probe: a synthetic draft renamed by an Owner
+          # remains protected by its source marker. Never overwrite or duplicate.
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap eval '
+              if (wp_get_environment_type() !== "staging" ||
+                  get_option("home") !== "http://localhost:8081" ||
+                  get_option("stylesheet") !== "ezb-theme") throw new Exception("CI_CONFLICT_SITE_GATE");
+              $post = wp_insert_post(["post_type"=>"page","post_status"=>"draft",
+                "post_title"=>"EZ2 synthetic Owner-renamed CI draft - KEEP"],true);
+              if (is_wp_error($post) || !$post ||
+                  !update_post_meta($post,"_ez2_ci_release_candidate_source_sha",getenv("EZ2_CI_RELEASE_SHA")))
+                throw new Exception("CI_CONFLICT_SETUP");
+              echo "EZ2_CI_RENAMED_DRAFT_PREPARED\n";
+            ' --allow-root
+          if docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root; then
+            echo "Owner-renamed synthetic draft was not protected" >&2; exit 1
+          fi
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap eval '
+              if (wp_get_environment_type() !== "staging" ||
+                  get_option("home") !== "http://localhost:8081") throw new Exception("CI_VERIFY_SITE_GATE");
+              $ids=get_posts(["post_type"=>"page","post_status"=>["draft","publish","pending","private","trash"],
+                "meta_key"=>"_ez2_ci_release_candidate_source_sha",
+                "posts_per_page"=>3,"fields"=>"ids"]);
+              if (count($ids)!==1) throw new Exception("CI_CONFLICT_DRAFT_COUNT");
+              $post=(int)$ids[0];
+              if (get_post_field("post_title",$post)!=="EZ2 synthetic Owner-renamed CI draft - KEEP" ||
+                  get_post_meta($post,"_ez2_ci_release_candidate_source_sha",true)!==getenv("EZ2_CI_RELEASE_SHA"))
+                throw new Exception("CI_OWNER_EDIT_OVERWRITTEN");
+              $attachments=get_posts(["post_type"=>"attachment","post_status"=>"inherit",
+                "posts_per_page"=>10,"fields"=>"ids"]);
+              if ($attachments) throw new Exception("CI_CONFLICT_CREATED_MEDIA");
+              if (!wp_delete_post($post,true) || get_post($post))
+                throw new Exception("CI_CONFLICT_CLEANUP");
+              echo "EZ2_CI_OWNER_RENAMED_RELEASE_CONFLICT_PASS preserved=true duplicate=false uploads_unchanged=true\n";
+            ' --allow-root | tee /tmp/ez2-release-owner-conflict.log
+          grep -Fq 'EZ2_CI_OWNER_RENAMED_RELEASE_CONFLICT_PASS preserved=true' /tmp/ez2-release-owner-conflict.log
+          for fault in AFTER_FIRST_ATTACHMENT AFTER_META; do
+            if docker compose -f .github/release-install/docker-compose.yml run --rm \
+              -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+              -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+              -e EZ2_CI_RELEASE_DIGEST="$digest" \
+              -e EZ2_CI_RELEASE_FAULT="$fault" \
+              --entrypoint wp release-bootstrap \
+              eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root; then
+              echo "Injected release CI fault unexpectedly succeeded" >&2; exit 1
+            fi
+          done
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_RELEASE_IMPORT=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_release_candidate_ci.php --allow-root \
+            | tee /tmp/ez2-release-candidate-roundtrip.log
+          grep -Fq 'EZ2_RELEASE_ELEMENTOR_ROUNDTRIP_PASS exact_head=true gallery=4 draft_cleaned=true uploads_cleaned=true publication=false localwp_touched=false one_click_complete=false' /tmp/ez2-release-candidate-roundtrip.log
+
+      - name: Exercise exact-head two-page Elementor content batch, conflict and rollback in disposable WordPress
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          digest="$(sha256sum design/ez2-home-hero-candidate.json | cut -d" " -f1)"
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_BATCH=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZ2_CI_RELEASE_SHA="$EZB_EXPECTED_SHA" \
+            -e EZ2_CI_RELEASE_DIGEST="$digest" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_ci_batch_content.php --allow-root \
+            | tee /tmp/ez2-ci-batch-content.log
+          grep -Fq 'EZ2_CI_BATCH_CONTENT_PASS pages=3 faults=3 owner_conflict_blocked=true idempotent=true restored=true exact_candidate=true distinct_synthetic_pages=true' /tmp/ez2-ci-batch-content.log
+
+      - name: Verify real WordPress post-install state and synthetic candidate cleanup
+        env:
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EZB_EXPECTED_SHA"
+          docker compose -f .github/release-install/docker-compose.yml run --rm \
+            -e EZ2_CI_POSTINSTALL=YES_DISPOSABLE_RELEASE_ONLY \
+            -e EZB_EXPECTED_SHA="$EZB_EXPECTED_SHA" \
+            --entrypoint wp release-bootstrap \
+            eval-file /opt/ezb-ci-scripts/ez2_ci_postinstall_integrity.php --allow-root \
+            | tee /tmp/ez2-ci-postinstall-integrity.log
+          grep -Fq 'EZ2_CI_POSTINSTALL_INTEGRITY_PASS runtime=real_wordpress candidate_cleanup=true' /tmp/ez2-ci-postinstall-integrity.log
+
+      - name: Recheck exact-head installed bytes after Elementor candidate roundtrip
+        env:
+          EZ2_CI_LIVE_PARITY: YES_DISPOSABLE_RELEASE_ONLY
+          EZB_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ez2_ci_live_installed_parity.py "$EZB_EXPECTED_SHA" | tee /tmp/ez2-ci-live-parity-after.log
+          grep -Fq 'EZ2_CI_LIVE_INSTALLED_PARITY_PASS' /tmp/ez2-ci-live-parity-after.log
+
+      - name: Publish verified release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezb-release-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .release/ezb-theme.zip
+            .release/ezb-core.zip
+            .release/RELEASE_METADATA.txt
+            .release/RELEASE_CONTENTS.json
+            .release/SHA256SUMS
+            .release/EZ2_DELIVERY_ENVELOPE.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload separate public Elementor candidate (not installable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-public-content-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .release/ez2-content-candidate.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload cross-artifact catalog (NOT installable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ez2-release-set-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .release/EZ2_RELEASE_SET.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Show release stack logs on failure
+        if: failure()
+        run: docker compose -f .github/release-install/docker-compose.yml logs --no-color release-db release-wordpress release-bootstrap
+
+      - name: Tear down release stack
+        if: always()
+        run: docker compose -f .github/release-install/docker-compose.yml down -v

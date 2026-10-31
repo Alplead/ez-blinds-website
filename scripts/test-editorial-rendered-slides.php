@@ -1,0 +1,197 @@
+<?php
+// Standalone synthetic test for missing WordPress image renditions.
+define('ABSPATH', '/');
+$GLOBALS['shortcodes'] = array();
+$GLOBALS['mode'] = 'first_missing';
+function add_shortcode($name, $callback) { $GLOBALS['shortcodes'][$name] = $callback; }
+function ezb_find_attachment_by_basename($name) {
+    static $ids = array();
+    if (!isset($ids[$name])) { $ids[$name] = count($ids) + 1; }
+    return $ids[$name];
+}
+$GLOBALS['mime_overrides'] = array();
+function get_post_mime_type($id) { return $GLOBALS['mime_overrides'][$id] ?? 'image/webp'; }
+$GLOBALS['missing_ids'] = array();
+$GLOBALS['file_overrides'] = array();
+$GLOBALS['uploads_override'] = null;
+function wp_get_upload_dir() {
+    return $GLOBALS['uploads_override'] ?? array('basedir' => __DIR__, 'error' => false);
+}
+function get_attached_file($id) {
+    if (in_array($id, $GLOBALS['missing_ids'], true)) return '/nonexistent/ez2-stale-media.webp';
+    return $GLOBALS['file_overrides'][$id] ?? __FILE__;
+}
+function wp_get_attachment_image($id, $size, $icon, $attributes) {
+    $mode = $GLOBALS['mode'];
+    if ($mode === 'all_missing' || ($mode === 'first_missing' && $id === 1) ||
+        ($mode === 'single' && $id !== 2)) { return ''; }
+    $alt = htmlspecialchars($attributes['alt'] ?? '', ENT_QUOTES, 'UTF-8');
+    return '<img alt="' . $alt . '">';
+}
+function esc_attr__($value, $domain) { return $value; }
+function esc_html__($value, $domain) { return $value; }
+function esc_attr($value) { return $value; }
+function esc_html($value) { return $value; }
+function esc_url($value) { return $value; }
+function home_url($path) { return $path; }
+require __DIR__ . '/../wp-content/plugins/ezb-core/includes/ezb-editorial-visuals.php';
+$render = $GLOBALS['shortcodes']['ezb_editorial_hero'];
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 3 ||
+    strpos($html, 'ezb-cinema__slide is-active" data-ezb-slide aria-hidden="false"') === false ||
+    strpos($html, '01 / 03') === false ||
+    substr_count($html, 'data-ezb-announcement') !== 1) {
+    throw new Exception('Partial media failure must preserve the first visible frame and accurate count.');
+}
+if (strpos($html, 'alt="Roller Blinds installation photograph"') === false ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('First successfully rendered image must describe its actual product.');
+}
+$GLOBALS['mode'] = 'all_available';
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 4 ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') === false ||
+    strpos($html, 'aria-pressed=') !== false) {
+    throw new Exception('Complete gallery must describe its first sheer curtain photo.');
+}
+// A stale attachment row must not produce a broken image or the wrong first-slide label.
+$GLOBALS['missing_ids'] = array(1);
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 3 ||
+    strpos($html, 'alt="Roller Blinds installation photograph"') === false ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('Missing local media must be excluded from the slideshow.');
+}
+$GLOBALS['missing_ids'] = array();
+$GLOBALS['mode'] = 'single';
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 1 ||
+    strpos($html, 'ezb-cinema__slide is-active" data-ezb-slide aria-hidden="false"') === false ||
+    strpos($html, 'data-ezb-toggle') !== false ||
+    strpos($html, 'alt="Roller Blinds installation photograph"') === false) {
+    throw new Exception('One rendered frame must not show autoplay controls.');
+}
+$GLOBALS['mode'] = 'all_missing';
+$html = $render();
+if (strpos($html, 'ezb-cinema--missing-media') === false ||
+    strpos($html, 'data-ezb-slide') !== false ||
+    strpos($html, 'data-ezb-toggle') !== false) {
+    throw new Exception('No images must display the safe text-only hero.');
+}
+// An attachment row pointing outside this site's uploads must not appear.
+$GLOBALS['mode'] = 'all_available';
+$GLOBALS['file_overrides'][1] = dirname(__DIR__) . '/wp-content/plugins/ezb-core/ezb-core.php';
+$html = $render();
+if (substr_count($html, 'data-ezb-slide') !== 3 ||
+    strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+    throw new Exception('An outside-uploads attachment must not render.');
+}
+unset($GLOBALS['file_overrides'][1]);
+
+// Even an in-uploads symlink is not an approved physical media file.
+$link = __DIR__ . '/.ezb-editorial-link-' . getmypid();
+if (file_exists($link) || is_link($link) || !symlink(__FILE__, $link)) {
+    throw new Exception('Cannot create synthetic media symlink fixture.');
+}
+try {
+    $GLOBALS['file_overrides'][1] = $link;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('An in-uploads symlink must not render.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    unlink($link);
+}
+
+// An image/* MIME prefix is insufficient: reject unapproved vector and
+// animated formats even if a stale Media Library lookup supplies their ID.
+foreach (array('image/svg+xml', 'image/gif') as $unsupported_mime) {
+    $GLOBALS['mime_overrides'][1] = $unsupported_mime;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('Unapproved image MIME must not render in curated hero.');
+    }
+}
+unset($GLOBALS['mime_overrides'][1]);
+
+// A directory symlink can point back INSIDE uploads: checking only the final
+// file for is_link() would incorrectly accept this aliased private image.
+$linked_parent = __DIR__ . '/.ezb-editorial-parent-' . getmypid();
+if (file_exists($linked_parent) || is_link($linked_parent) || !symlink(__DIR__, $linked_parent)) {
+    throw new Exception('Cannot create synthetic parent-directory symlink fixture.');
+}
+try {
+    $GLOBALS['file_overrides'][1] = $linked_parent . '/test-editorial-rendered-slides.php';
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 3 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') !== false) {
+        throw new Exception('A symlinked ancestor within uploads must not render.');
+    }
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = array('basedir' => $linked_parent, 'error' => false);
+    $html = $render();
+    if (strpos($html, 'ezb-cinema--missing-media') === false ||
+        strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('A symlinked uploads root must not render media.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = null;
+    unlink($linked_parent);
+}
+
+// A failed WordPress upload-directory lookup must fail closed.
+$GLOBALS['uploads_override'] = array('basedir' => __DIR__, 'error' => 'unavailable');
+$html = $render();
+if (strpos($html, 'ezb-cinema--missing-media') === false ||
+    strpos($html, 'data-ezb-slide') !== false) {
+    throw new Exception('Upload-directory errors must not render media.');
+}
+$GLOBALS['uploads_override'] = null;
+
+// A linked grandparent of uploads is not detected by is_link(uploads) or
+// by walking only as far as the resolved uploads root. Both the declared
+// upload root and an individual attachment path must reject that alias.
+$fixture_root = sys_get_temp_dir() . '/ezb-editorial-ancestor-' . bin2hex(random_bytes(8));
+$real_parent = $fixture_root . '/real';
+$real_uploads = $real_parent . '/uploads';
+$alias_parent = $fixture_root . '/linked-parent';
+$synthetic_file = $real_uploads . '/synthetic.webp';
+mkdir($real_uploads, 0700, true);
+file_put_contents($synthetic_file, 'synthetic fixture, not customer media');
+if (!symlink($real_parent, $alias_parent)) {
+    throw new Exception('Cannot create linked-grandparent fixture.');
+}
+try {
+    $GLOBALS['mode'] = 'all_available';
+    $GLOBALS['file_overrides'][1] = $alias_parent . '/uploads/synthetic.webp';
+    $GLOBALS['uploads_override'] = array('basedir' => $alias_parent . '/uploads', 'error' => false);
+    $html = $render();
+    if (strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('Linked parent of uploads must block all curated photos.');
+    }
+    $GLOBALS['uploads_override'] = array('basedir' => $real_uploads, 'error' => false);
+    $html = $render();
+    if (strpos($html, 'data-ezb-slide') !== false) {
+        throw new Exception('Linked parent of attachment path must block curated photo.');
+    }
+    $GLOBALS['file_overrides'][1] = $synthetic_file;
+    $html = $render();
+    if (substr_count($html, 'data-ezb-slide') !== 1 ||
+        strpos($html, 'alt="Sheer Curtains installation photograph"') === false) {
+        throw new Exception('Direct non-linked synthetic attachment must remain valid.');
+    }
+} finally {
+    unset($GLOBALS['file_overrides'][1]);
+    $GLOBALS['uploads_override'] = null;
+    unlink($alias_parent);
+    unlink($synthetic_file);
+    rmdir($real_uploads);
+    rmdir($real_parent);
+    rmdir($fixture_root);
+}
+
+echo "EZB_EDITORIAL_RENDERED_SLIDES_PASS cases=15\n";
